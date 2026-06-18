@@ -6,11 +6,17 @@ import { useListDatasets, getListDatasetsQueryKey } from "@workspace/api-client-
  * Returns the current datasetId from the URL query string.
  * If none is present but datasets exist, redirects to the same page
  * with the first dataset's id. If no datasets exist, redirects to /app/datasets.
+ *
+ * Uses wouter's location as the single source of truth so reading and
+ * writing the URL are always in sync (window.location.search can lag
+ * behind wouter's pushState on the same render cycle).
  */
 export function useRequireDataset(): { datasetId: string | null; isLoading: boolean } {
   const [location, setLocation] = useLocation();
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+
+  // Parse datasetId from wouter's location (includes query string)
+  const search = location.includes("?") ? location.slice(location.indexOf("?")) : "";
+  const datasetId = new URLSearchParams(search).get("datasetId") || null;
 
   const { data: datasets, isLoading } = useListDatasets({
     query: { enabled: !datasetId, queryKey: getListDatasetsQueryKey() },

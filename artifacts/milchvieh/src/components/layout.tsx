@@ -43,8 +43,9 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     });
   }
 
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+  // Use wouter's location (same source as useRequireDataset) to stay in sync
+  const search = location.includes("?") ? location.slice(location.indexOf("?")) : "";
+  const datasetId = new URLSearchParams(search).get("datasetId");
   const datasetQuery = datasetId ? `?datasetId=${datasetId}` : "";
 
   const currentPath = location.startsWith(basePath) 
