@@ -13,20 +13,27 @@ import {
   Database,
   Activity,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  ArrowLeftRight
 } from "lucide-react";
 
-export function AppLayout({ children, role, basePath }: { children: React.ReactNode, role: 'customer' | 'operator', basePath: string }) {
+interface AppLayoutProps {
+  children: React.ReactNode;
+  role: 'customer' | 'operator';
+  viewMode: 'customer' | 'operator';
+  onSwitchView?: (v: 'customer' | 'operator') => void;
+  basePath: string;
+}
+
+export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: AppLayoutProps) {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
 
-  // Extract datasetId from current URL so sidebar links preserve it
   const searchParams = new URLSearchParams(window.location.search);
   const datasetId = searchParams.get("datasetId");
   const datasetQuery = datasetId ? `?datasetId=${datasetId}` : "";
 
-  // Strip base for matching
   const currentPath = location.startsWith(basePath) 
     ? location.slice(basePath.length) || "/" 
     : location;
@@ -47,16 +54,36 @@ export function AppLayout({ children, role, basePath }: { children: React.ReactN
     { name: "Stammdaten", href: "/app/master-data", icon: Database, preserveDataset: false },
   ];
 
-  const navItems = role === 'operator' ? operatorNav : customerNav;
+  const navItems = viewMode === 'operator' ? operatorNav : customerNav;
+
+  const handleSwitchView = () => {
+    if (!onSwitchView) return;
+    const next = viewMode === 'operator' ? 'customer' : 'operator';
+    onSwitchView(next);
+    // Navigate to the default page for the new view
+    window.location.href = `${basePath}${next === 'operator' ? '/app/monitoring' : '/app/datasets'}`;
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
       <aside className="w-64 border-r bg-card flex flex-col">
         <div className="h-16 flex items-center px-6 border-b">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8 mr-3" />
           <span className="font-bold text-primary truncate">Milchvieh Assistent</span>
         </div>
+
+        {/* View toggle for operators */}
+        {role === 'operator' && onSwitchView && (
+          <div className="px-3 pt-3">
+            <button
+              onClick={handleSwitchView}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium bg-primary/5 border border-primary/20 text-primary hover:bg-primary/10 transition-colors"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" />
+              {viewMode === 'operator' ? 'Zur Kunden-Ansicht wechseln' : 'Zur Operator-Ansicht wechseln'}
+            </button>
+          </div>
+        )}
         
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-3">
@@ -107,11 +134,10 @@ export function AppLayout({ children, role, basePath }: { children: React.ReactN
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
         <header className="h-16 border-b bg-card flex items-center px-8 shrink-0">
           <div className="flex items-center text-sm text-muted-foreground">
-            {role === 'operator' ? 'Operator Dashboard' : 'Milchvieh Datenanalyse'}
+            {viewMode === 'operator' ? 'Operator Dashboard' : 'Milchvieh Datenanalyse'}
             <ChevronRight className="w-4 h-4 mx-2" />
             <span className="text-foreground font-medium">
               {navItems.find(i => currentPath.startsWith(i.href))?.name || "App"}

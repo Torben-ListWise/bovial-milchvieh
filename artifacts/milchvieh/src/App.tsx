@@ -6,7 +6,7 @@ import NotFound from "@/pages/not-found";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser, useAuth } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { deDE } from "@clerk/localizations";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGetCurrentUser, setAuthTokenGetter } from "@workspace/api-client-react";
 
 import { AppLayout } from "@/components/layout";
@@ -183,33 +183,38 @@ function LandingPage() {
 
 function AppPortal() {
   const { data: dbUser, isLoading } = useGetCurrentUser();
-
-  if (isLoading) return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
+  const [viewMode, setViewMode] = useState<'operator' | 'customer' | null>(null);
 
   const role = dbUser?.role || 'customer';
 
+  // Default view mode to the user's actual role on first load.
+  const effectiveView = viewMode ?? (role as 'operator' | 'customer');
+
+  if (isLoading) return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
+
   return (
-    <AppLayout role={role as any} basePath={basePath}>
+    <AppLayout
+      role={role as 'operator' | 'customer'}
+      viewMode={effectiveView}
+      onSwitchView={role === 'operator' ? (v) => setViewMode(v) : undefined}
+      basePath={basePath}
+    >
       <Switch>
-        {role === 'operator' ? (
-          <>
-            <Route path="/app/monitoring" component={OperatorDashboard} />
-            <Route path="/app/master-data" component={MasterDataPage} />
-            <Route path="/app"><Redirect to="/app/monitoring" /></Route>
-          </>
-        ) : (
-          <>
-            <Route path="/app/datasets" component={DatasetList} />
-            <Route path="/app/overview" component={DatasetOverview} />
-            <Route path="/app/upload" component={UploadPage} />
-            <Route path="/app/analyses" component={AnalysesPage} />
-            <Route path="/app/warnings" component={WarningsPage} />
-            <Route path="/app/reports" component={ReportsPage} />
-            <Route path="/app/rules" component={RulesPage} />
-            <Route path="/app/settings" component={SettingsPage} />
-            <Route path="/app"><Redirect to="/app/datasets" /></Route>
-          </>
-        )}
+        <Route path="/app/monitoring" component={OperatorDashboard} />
+        <Route path="/app/master-data" component={MasterDataPage} />
+        <Route path="/app/datasets" component={DatasetList} />
+        <Route path="/app/overview" component={DatasetOverview} />
+        <Route path="/app/upload" component={UploadPage} />
+        <Route path="/app/analyses" component={AnalysesPage} />
+        <Route path="/app/warnings" component={WarningsPage} />
+        <Route path="/app/reports" component={ReportsPage} />
+        <Route path="/app/rules" component={RulesPage} />
+        <Route path="/app/settings" component={SettingsPage} />
+        <Route path="/app">
+          {effectiveView === 'operator'
+            ? <Redirect to="/app/monitoring" />
+            : <Redirect to="/app/datasets" />}
+        </Route>
       </Switch>
     </AppLayout>
   );
