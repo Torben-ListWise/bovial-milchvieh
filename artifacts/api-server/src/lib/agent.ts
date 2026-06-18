@@ -5,7 +5,7 @@ import type {
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { and, eq } from "drizzle-orm";
-import { db, masterDataTable } from "@workspace/db";
+import { db, masterDataTable, sourceFilesTable } from "@workspace/db";
 import {
   getDatasetSchema,
   computeMetricStats,
@@ -219,6 +219,34 @@ interface RunOptions {
   onProgress?: (step: string | null) => Promise<void>;
 }
 
+async function fetchDocumentContext(datasetId: string): Promise<string> {
+  const docs = await db
+    .select({ name: sourceFilesTable.name, previewRows: sourceFilesTable.previewRows })
+    .from(sourceFilesTable)
+    .where(
+      and(
+        eq(sourceFilesTable.datasetId, datasetId),
+        eq(sourceFilesTable.kind, "document"),
+        eq(sourceFilesTable.status, "ready"),
+      ),
+    );
+  const parts = docs
+    .map((doc) => {
+      const rows = (doc.previewRows ?? []) as { text?: string }[];
+      const text = rows[0]?.text?.trim() ?? "";
+      if (!text) return null;
+      return `--- Dokument: ${doc.name} ---\n${text}`;
+    })
+    .filter((p): p is string => p !== null);
+  if (parts.length === 0) return "";
+  return (
+    `\n\nHOCHGELADENE DOKUMENTE (Berichte, PDFs):\n` +
+    `Die folgenden Dokument-Inhalte stehen für Fragen zur Verfügung. ` +
+    `Nutze diese Inhalte, wenn keine strukturierten Datenzeilen vorhanden sind.\n\n` +
+    parts.join("\n\n")
+  );
+}
+
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const client = getClient();
   const charts: Chart[] = [];
@@ -229,6 +257,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     role: m.role,
     content: m.content,
   }));
+
+  const docContext = await fetchDocumentContext(datasetId);
 
   async function execTool(block: ToolUseBlock): Promise<unknown> {
     const input = (block.input ?? {}) as Record<string, unknown>;
@@ -396,9 +426,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 8192,
-      system: opts.systemExtra
-        ? `${SYSTEM_PROMPT}\n\n${opts.systemExtra}`
-        : SYSTEM_PROMPT,
+      system: [SYSTEM_PROMPT, opts.systemExtra, docContext]
+        .filter(Boolean)
+        .join("\n\n"),
       tools: TOOLS,
       // Force at least one tool call on the first turn so the agent always
       // grounds its response in actual data (prevents hallucination on turn 0).
