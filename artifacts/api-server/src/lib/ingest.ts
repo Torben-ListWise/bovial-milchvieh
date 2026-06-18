@@ -149,13 +149,12 @@ function parseSpreadsheet(buf: Buffer, name: string): string[][] {
 
 async function extractPdfText(buf: Buffer): Promise<string> {
   try {
-    // pdf-parse is a CommonJS module; use createRequire to bypass ESM export
-    // restrictions that block the internal subpath import.
-    const { createRequire } = await import("module");
-    const req = createRequire(import.meta.url);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfParse = req("pdf-parse") as (b: Buffer) => Promise<{ text: string }>;
-    const result = await pdfParse(buf);
+    // pdf-parse v2: class-based API. PDFParse({ data: Buffer }) auto-converts
+    // the Buffer to Uint8Array internally.
+    const { PDFParse } = await import("pdf-parse");
+    // @ts-expect-error - PDFParse constructor accepts { data: Buffer }
+    const parser = new PDFParse({ data: buf });
+    const result = await parser.getText();
     return result.text ?? "";
   } catch (err) {
     logger.warn({ err }, "PDF-Textextraktion fehlgeschlagen");
