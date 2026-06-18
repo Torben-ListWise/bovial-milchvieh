@@ -1,0 +1,48 @@
+#1 - Milchvieh Datenanalyse-Assistent
+
+What & Why
+
+Eine Web-Anwendung, in die sich Kunden einloggen, ihre landwirtschaftlichen Datensätze hochladen und anschließend in normaler Sprache Fragen stellen. Die Anwendung wertet die Daten aus und antwortet mit verständlichem Text und passenden Grafiken (Diagrammen) – fachlich zugeschnitten auf Milchvieh und Landwirtschaft (Milchleistung, Fütterung, Tiergesundheit, Fruchtbarkeit, Wirtschaftlichkeit).
+
+Ziel ist ein einfaches, fokussiertes Werkzeug für Datenauswertung – nicht eine komplexe Entwicklungsumgebung. Der Kunde lädt Daten hoch, fragt, bekommt eine Auswertung mit Grafik.
+
+Zusätzlich arbeitet die KI im Hintergrund automatisch (Auswertung bei Upload, regelmäßige Berichte, Warnungen), und der Betreiber pflegt gesicherte Stammdaten zur Produktionstechnik, die als verlässlicher Fachkontext in jede Auswertung einfließen.
+
+Done looks like
+
+Kunden können ein Konto anlegen und sich einloggen; jeder Kunde sieht nur seine eigenen Daten und Auswertungen.
+Kunden können Dateien hochladen: Excel (.xlsx), CSV, Exporte aus Herdenmanagement-Software (als CSV/Excel), sowie PDF und PowerPoint.
+Hochgeladene Tabellendaten werden im Hintergrund eingelesen und für die Auswertung vorbereitet; der Kunde sieht den Verarbeitungsstatus.
+Der Kunde stellt eine Frage in normaler Sprache (z. B. „Wie hat sich die durchschnittliche Milchleistung über die letzten Monate entwickelt?") und erhält eine fachlich passende Antwort in Textform plus mindestens eine dazu passende Grafik.
+Die Antworten beziehen sich auf die tatsächlich hochgeladenen Daten, nicht auf erfundene Werte.
+Frühere Fragen und Auswertungen bleiben pro Datensatz erhalten und sind wieder aufrufbar.
+Sobald ein Kunde Daten hochlädt, erstellt die KI automatisch eine erste Auswertung – ohne dass jemand eine Frage tippen muss.
+Es werden regelmäßig (z. B. wöchentlich/monatlich) automatisch Berichte erzeugt und bereitgestellt.
+Die Anwendung gibt automatische Warnungen aus, wenn Kennzahlen auffällig werden (z. B. Milchleistung fällt, Zellzahl steigt).
+Der Betreiber kann gesicherte Stammdaten zur Produktionstechnik pflegen; diese fließen als verlässlicher Fachkontext in alle Auswertungen ein.
+Die Oberfläche ist deutschsprachig und auf den Bereich Milchvieh/Landwirtschaft abgestimmt.
+Out of scope
+
+Direkte automatische Anbindung an Herdenmanagement-Software per Schnittstelle (Daten werden als Datei-Export hochgeladen, nicht live synchronisiert).
+Bearbeiten/Korrigieren der Rohdaten innerhalb der Anwendung.
+Tiefe inhaltliche Auswertung von Bildern oder Diagrammen innerhalb von PDF/PowerPoint – bei diesen Formaten wird zunächst der enthaltene Text für die Beantwortung genutzt; die grafische Auswertung stützt sich primär auf Tabellendaten (Excel/CSV).
+Abrechnung/Bezahlfunktionen (kann später ergänzt werden).
+Steps
+
+Anmeldung für Kunden — Login/Registrierung einrichten, sodass jeder Kunde ein eigenes, getrenntes Konto hat und nur eigene Daten sieht (über die verfügbare Auth-Integration).
+Datei-Upload & Speicherung — Upload für Excel, CSV, Herdenmanagement-Exporte, PDF und PowerPoint; Dateien sicher und pro Kunde getrennt speichern (Object Storage).
+Datenverarbeitung im Hintergrund — Hochgeladene Tabellen (Excel/CSV) einlesen, Spalten/Struktur erkennen und für Auswertungen vorbereiten; aus PDF/PowerPoint den Text extrahieren. Verarbeitungsstatus pro Datei anzeigen.
+Frage-Antwort mit KI — Eingabe einer Frage in normaler Sprache; eine KI-Auswertung erzeugt eine fachlich passende Antwort auf Basis der echten Daten, inklusive Vorschlag passender Kennzahlen und Grafiken. Fachlicher Kontext: Milchvieh/Landwirtschaft.
+Grafische Auswertung — Die zur Antwort passenden Diagramme (z. B. Verläufe, Vergleiche, Verteilungen) aus den echten Daten berechnen und anzeigen.
+Gesicherte Stammdaten (Produktionstechnik) — Bereich, in dem der Betreiber verlässliche Informationen zur Produktionstechnik pflegt (anlegen, bearbeiten, löschen). Diese Stammdaten werden bei jeder KI-Auswertung als verlässlicher Fachkontext mitgegeben, damit die Analysen genauer werden.
+Automatische Auswertung beim Upload — Sobald eine Datei verarbeitet ist, erstellt die KI im Hintergrund automatisch eine erste Auswertung mit den wichtigsten Kennzahlen und Grafiken, ohne dass eine Frage getippt werden muss.
+Regelmäßige automatische Berichte — Zeitgesteuert (z. B. wöchentlich/monatlich) werden je Kunde automatisch Berichte erzeugt und in der Anwendung bereitgestellt.
+Automatische Warnungen — Auffällige Kennzahlen werden automatisch erkannt (z. B. fallende Milchleistung, steigende Zellzahl) und dem Kunden als Hinweis angezeigt.
+Verlauf & Verwaltung — Datensätze auflisten, Verarbeitungsstatus sehen, frühere Fragen, Auswertungen, Berichte und Warnungen je Datensatz wieder aufrufen.
+Oberfläche & Auftritt — Durchgängig deutschsprachige, aufgeräumte Oberfläche mit Bezug zu Milchvieh/Landwirtschaft; inklusive ansprechender Login-, Leer- und Ladezustände.
+Relevant files
+
+lib/api-spec/openapi.yaml
+lib/db/src/schema/index.ts
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/app.ts
