@@ -136,6 +136,10 @@ export const ChartType = {
 export interface ChartSeries {
   key: string;
   label: string;
+  /** @nullable */
+  yAxisId?: string | null;
+  /** @nullable */
+  unit?: string | null;
 }
 
 export type ChartDataItem = { [key: string]: unknown };

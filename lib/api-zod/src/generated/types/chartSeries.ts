@@ -9,4 +9,8 @@
 export interface ChartSeries {
   key: string;
   label: string;
+  /** @nullable */
+  yAxisId?: string | null;
+  /** @nullable */
+  unit?: string | null;
 }

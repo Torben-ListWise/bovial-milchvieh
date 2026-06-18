@@ -210,10 +210,15 @@ const TOOLS: Tool[] = [
         xKey: { type: "string", description: "Schlüssel für die X-Achse im data-Array, z.B. 'name'" },
         series: {
           type: "array",
-          description: "Datenreihen, z.B. [{key:'wert', label:'%'}]",
+          description: "Datenreihen, z.B. [{key:'wert', label:'kg ECM', yAxisId:'left', unit:'kg'}, {key:'zellzahl', label:'Zellzahl', yAxisId:'right', unit:'Tsd./ml'}]. yAxisId 'left'|'right' aktiviert zwei separate Achsen.",
           items: {
             type: "object",
-            properties: { key: { type: "string" }, label: { type: "string" } },
+            properties: {
+              key: { type: "string" },
+              label: { type: "string" },
+              yAxisId: { type: "string", enum: ["left", "right"], description: "Weglassen für Einzelachse; 'right' für zweite Achse" },
+              unit: { type: "string", description: "Einheit für Tooltip und Achsenbeschriftung dieser Reihe" },
+            },
           },
         },
         unit: { type: "string" },
@@ -240,7 +245,10 @@ WENN get_schema 0 FELDER ZEIGT UND dokumentAvailable: true:
 - Beantworte die Frage direkt und vollständig aus dem Dokumentinhalt.
 - Kein get_kpis, get_timeseries oder andere DB-Werkzeuge aufrufen — die Daten liegen als Text vor, nicht als Datenbankzeilen.
 - Zahlen und Werte aus dem PDF-Text dürfen zitiert werden (sie stammen aus dem Dokument, nicht aus der Datenbank).
-- emit_chart DARF und SOLL verwendet werden: Lies die relevanten Kennzahlen aus dem Dokumenttext, baue das data-Array manuell und übergib es mit source='document'. Beispiel: emit_chart({ title: "Kennzahlen Übersicht", chartType: "bar", source: "document", data: [{ name: "Remontierungsrate", wert: 28 }, { name: "Abgangsrate", wert: 14 }], xKey: "name", series: [{ key: "wert", label: "%" }] }). Verwende chartType:"bar" für Vergleiche, chartType:"pie" für Anteile, chartType:"line" nur wenn Zeitreihenpunkte im Dokument stehen.
+- emit_chart DARF und SOLL verwendet werden: Lies die relevanten Kennzahlen aus dem Dokumenttext, baue das data-Array manuell und übergib es mit source='document'.
+  Beispiel Balkendiagramm: emit_chart({ title: "Kennzahlen Übersicht", chartType: "bar", source: "document", data: [{ name: "Remontierungsrate", wert: 28 }, { name: "Abgangsrate", wert: 14 }], xKey: "name", series: [{ key: "wert", label: "%", unit: "%" }] })
+  Beispiel Doppelachsen-Liniendiagramm (zwei Kennzahlen mit unterschiedlichen Einheiten): emit_chart({ title: "Milchleistung und Zellzahl", chartType: "line", source: "document", data: [{ quartal: "Q2 24", ecm: 40.5, zz: 185 }, { quartal: "Q3 24", ecm: 46.6, zz: 125 }], xKey: "quartal", series: [{ key: "ecm", label: "ECM (kg)", yAxisId: "left", unit: "kg" }, { key: "zz", label: "Zellzahl (Tsd./ml)", yAxisId: "right", unit: "Tsd./ml" }] })
+  Verwende chartType:"bar" für Vergleiche, chartType:"pie" für Anteile, chartType:"line" wenn Zeitreihenpunkte vorhanden. Bei zwei Kennzahlen mit unterschiedlichen Skalen immer yAxisId:"left"/"right" verwenden.
 - Erstelle nur Grafiken, wenn mindestens 2 Datenpunkte im Dokumenttext vorhanden sind.
 
 WICHTIG — GÜLTIGE DATENQUELLEN:

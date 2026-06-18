@@ -192,7 +192,9 @@ export const GetDatasetOverviewResponse = zod.object({
   "xKey": zod.string().nullish(),
   "series": zod.array(zod.object({
   "key": zod.string(),
-  "label": zod.string()
+  "label": zod.string(),
+  "yAxisId": zod.string().nullish(),
+  "unit": zod.string().nullish()
 })).optional(),
   "data": zod.array(zod.record(zod.string(), zod.unknown())),
   "unit": zod.string().nullish(),
@@ -399,7 +401,9 @@ export const GetAnalysisResponse = zod.object({
   "xKey": zod.string().nullish(),
   "series": zod.array(zod.object({
   "key": zod.string(),
-  "label": zod.string()
+  "label": zod.string(),
+  "yAxisId": zod.string().nullish(),
+  "unit": zod.string().nullish()
 })).optional(),
   "data": zod.array(zod.record(zod.string(), zod.unknown())),
   "unit": zod.string().nullish(),
@@ -623,7 +627,9 @@ export const ListReportsResponseItem = zod.object({
   "xKey": zod.string().nullish(),
   "series": zod.array(zod.object({
   "key": zod.string(),
-  "label": zod.string()
+  "label": zod.string(),
+  "yAxisId": zod.string().nullish(),
+  "unit": zod.string().nullish()
 })).optional(),
   "data": zod.array(zod.record(zod.string(), zod.unknown())),
   "unit": zod.string().nullish(),
@@ -673,7 +679,9 @@ export const GetReportResponse = zod.object({
   "xKey": zod.string().nullish(),
   "series": zod.array(zod.object({
   "key": zod.string(),
-  "label": zod.string()
+  "label": zod.string(),
+  "yAxisId": zod.string().nullish(),
+  "unit": zod.string().nullish()
 })).optional(),
   "data": zod.array(zod.record(zod.string(), zod.unknown())),
   "unit": zod.string().nullish(),
