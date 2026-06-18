@@ -219,7 +219,7 @@ function HomeRedirect() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/app" />
+        <Redirect to="/app/datasets" />
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -282,6 +282,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route path="/app" component={ProtectedApp} />
             <Route path="/app/*" component={ProtectedApp} />
             <Route component={NotFound} />
           </Switch>
