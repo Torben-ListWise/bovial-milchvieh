@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
-  MessageParam,
-  Tool,
-  ToolUseBlock,
-} from "@anthropic-ai/sdk/resources/messages";
+  BetaMessageParam,
+  BetaTool,
+  BetaToolUseBlock,
+} from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { and, eq } from "drizzle-orm";
 import { db, masterDataTable, sourceFilesTable } from "@workspace/db";
 import {
@@ -96,7 +96,7 @@ function chartFromGroup(g: GroupAggregateResult, title: string, type: Chart["typ
   };
 }
 
-const TOOLS: Tool[] = [
+const TOOLS: BetaTool[] = [
   {
     name: "get_schema",
     description:
@@ -225,6 +225,7 @@ const TOOLS: Tool[] = [
       },
       required: ["title", "chartType", "source"],
     },
+    cache_control: { type: "ephemeral" },
   },
 ];
 
@@ -300,14 +301,22 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const citations: Citation[] = [];
   const { datasetId } = opts;
 
-  const messages: MessageParam[] = opts.conversation.map((m) => ({
+  const messages: BetaMessageParam[] = opts.conversation.map((m) => ({
     role: m.role,
     content: m.content,
   }));
 
   const docContext = await fetchDocumentContext(datasetId);
 
-  async function execTool(block: ToolUseBlock): Promise<unknown> {
+  function buildSystemBlocks(docCtx: string, extra?: string) {
+    return [
+      { type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } },
+      docCtx ? { type: "text" as const, text: docCtx, cache_control: { type: "ephemeral" as const } } : null,
+      extra ? { type: "text" as const, text: extra } : null,
+    ].filter((b): b is NonNullable<typeof b> => b !== null);
+  }
+
+  async function execTool(block: BetaToolUseBlock): Promise<unknown> {
     const input = (block.input ?? {}) as Record<string, unknown>;
     const metric = input.metric as string | undefined;
     switch (block.name) {
@@ -508,18 +517,21 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const response = await client.messages.create({
+    const response = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 8192,
-      system: [SYSTEM_PROMPT, opts.systemExtra, docContext]
-        .filter(Boolean)
-        .join("\n\n"),
+      system: buildSystemBlocks(docContext, opts.systemExtra),
       tools: TOOLS,
       // Force at least one tool call on the first turn so the agent always
       // grounds its response in actual data (prevents hallucination on turn 0).
       tool_choice: turn === 0 ? { type: "any" } : { type: "auto" },
       messages,
     });
+    logger.debug({
+      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+      input_tokens: response.usage.input_tokens,
+    }, "Anthropic usage");
 
     const textParts = response.content
       .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
@@ -528,7 +540,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
     if (response.stop_reason === "tool_use") {
       const toolUses = response.content.filter(
-        (b): b is ToolUseBlock => b.type === "tool_use",
+        (b): b is BetaToolUseBlock => b.type === "tool_use",
       );
       // emit_chart is valid when:
       // - follow-up turn (numbers already grounded in prior turn), OR
@@ -597,15 +609,17 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       // Do NOT pass tools — verification is a pure text review.
       // Include docContext so the verifier can see PDF content and won't
       // incorrectly flag document-sourced numbers as ungrounded.
-      const verifySystem = [SYSTEM_PROMPT, opts.systemExtra, docContext]
-        .filter(Boolean)
-        .join("\n\n");
-      const verifyResponse = await client.messages.create({
+      const verifyResponse = await client.beta.messages.create({
         model: MODEL,
         max_tokens: 4096,
-        system: verifySystem,
+        system: buildSystemBlocks(docContext, opts.systemExtra),
         messages: verifyMessages,
       });
+      logger.debug({
+        cache_creation_input_tokens: verifyResponse.usage.cache_creation_input_tokens ?? 0,
+        cache_read_input_tokens: verifyResponse.usage.cache_read_input_tokens ?? 0,
+        input_tokens: verifyResponse.usage.input_tokens,
+      }, "Anthropic usage (verify)");
       const verifiedText = verifyResponse.content
         .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
         .map((b) => b.text)
