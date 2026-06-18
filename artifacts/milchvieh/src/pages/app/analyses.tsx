@@ -761,6 +761,10 @@ export function AnalysesPage() {
             queryClient.invalidateQueries({
               queryKey: getListFilesQueryKey(datasetId),
             });
+            // Auto-dismiss the success message so the starter chips reappear
+            setTimeout(() => {
+              setSystemMessages((prev) => prev.filter((s) => s.id !== m.id));
+            }, 2000);
           }
         }}
       />
