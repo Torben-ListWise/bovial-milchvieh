@@ -1,4 +1,5 @@
 import { useListWarnings, getListWarningsQueryKey, useUpdateWarning } from "@workspace/api-client-react";
+import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,8 +9,7 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
 export function WarningsPage() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+  const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
 
   const { data: warnings, isLoading } = useListWarnings(
@@ -25,8 +25,8 @@ export function WarningsPage() {
     }
   });
 
-  if (!datasetId) {
-    return <div className="p-8">Bitte wählen Sie einen Betrieb aus der Liste.</div>;
+  if (datasetLoading || !datasetId) {
+    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
   }
 
   if (isLoading) {

@@ -7,10 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { useRequireDataset } from "@/hooks/use-require-dataset";
 
 export function UploadPage() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+  const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const requestUrl = useRequestUploadUrl();
@@ -22,8 +22,8 @@ export function UploadPage() {
     { query: { enabled: !!datasetId, queryKey: getListFilesQueryKey(datasetId ?? "") } }
   );
 
-  if (!datasetId) {
-    return <div className="p-8">Bitte wählen Sie einen Betrieb aus der Liste.</div>;
+  if (datasetLoading || !datasetId) {
+    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

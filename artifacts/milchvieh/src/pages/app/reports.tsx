@@ -1,4 +1,5 @@
 import { useListReports, getListReportsQueryKey, useGenerateReport } from "@workspace/api-client-react";
+import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Plus, Calendar, Download } from "lucide-react";
@@ -11,8 +12,7 @@ import { useAuth } from "@clerk/react";
 const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
 
 export function ReportsPage() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+  const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
   const { getToken } = useAuth();
 
@@ -44,16 +44,8 @@ export function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (!datasetId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center gap-4">
-        <FileText className="w-12 h-12 text-muted-foreground/40" />
-        <p className="text-muted-foreground">
-          Bitte wählen Sie zuerst einen Betrieb aus der{" "}
-          <a href="/app/datasets" className="underline text-primary">Betriebsliste</a>.
-        </p>
-      </div>
-    );
+  if (datasetLoading || !datasetId) {
+    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
   }
 
   const handleGenerate = () => {

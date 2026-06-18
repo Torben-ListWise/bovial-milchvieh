@@ -1,21 +1,19 @@
 import { useGetDatasetOverview, getGetDatasetOverviewQueryKey } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { DynamicChart } from "@/components/DynamicChart";
+import { useRequireDataset } from "@/hooks/use-require-dataset";
 
 export function DatasetOverview() {
-  const [location] = useLocation();
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+  const { datasetId, isLoading: datasetLoading } = useRequireDataset();
 
   const { data: overview, isLoading } = useGetDatasetOverview(datasetId!, {
     query: { enabled: !!datasetId, queryKey: getGetDatasetOverviewQueryKey(datasetId!) }
   });
 
-  if (!datasetId) {
-    return <div className="p-8">Bitte wählen Sie einen Betrieb aus der Liste.</div>;
+  if (datasetLoading || !datasetId) {
+    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
   }
 
   if (isLoading) {

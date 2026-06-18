@@ -7,6 +7,7 @@ import {
   getGetAnalysisQueryKey,
   useAskQuestion,
 } from "@workspace/api-client-react";
+import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { type AnalysisMessage } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare, Search, ChevronLeft, Send, Bot, User, AlertCircle } from "lucide-react";
@@ -196,8 +197,7 @@ function AnalysisDetail({
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export function AnalysesPage() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const datasetId = searchParams.get("datasetId");
+  const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
   const [question, setQuestion] = useState("");
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
@@ -219,16 +219,8 @@ export function AnalysesPage() {
     },
   });
 
-  if (!datasetId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center gap-4">
-        <MessageSquare className="w-12 h-12 text-muted-foreground/40" />
-        <p className="text-muted-foreground">
-          Bitte wählen Sie zuerst einen Betrieb aus der{" "}
-          <a href="/app/datasets" className="underline text-primary">Betriebsliste</a>.
-        </p>
-      </div>
-    );
+  if (datasetLoading || !datasetId) {
+    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
   }
 
   if (selectedAnalysisId) {
