@@ -216,6 +216,7 @@ interface RunOptions {
   datasetId: string;
   conversation: { role: "user" | "assistant"; content: string }[];
   systemExtra?: string;
+  onProgress?: (step: string | null) => Promise<void>;
 }
 
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {
@@ -364,13 +365,37 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     }
   }
 
+  function progressLabel(toolName: string, input: Record<string, unknown>): string {
+    const metric = (input.metric as string | undefined) ?? "";
+    switch (toolName) {
+      case "get_schema": return "Lese Datenschema";
+      case "get_kpis": return "Berechne alle Kennzahlen";
+      case "get_metric_stats": return `Berechne Statistik${metric ? ` für ${metric}` : ""}`;
+      case "get_timeseries": return `Berechne Zeitreihe${metric ? ` für ${metric}` : ""}`;
+      case "get_group_aggregate": return `Aggregiere${metric ? ` ${metric}` : ""} nach Gruppe`;
+      case "get_animal_ranking": return `Erstelle Rangliste${metric ? ` für ${metric}` : ""}`;
+      case "detect_anomalies": return `Erkenne Ausreißer${metric ? ` bei ${metric}` : ""}`;
+      case "get_master_data": return "Lade Stammdaten";
+      case "emit_chart": return `Erstelle Diagramm`;
+      default: return "Verarbeite Daten";
+    }
+  }
+
   let finalText = "";
   let toolWasCalled = false;
-  const maxTurns = 12;
+  const maxTurns = 20;
+
+  // Grounding: tools that prove real data was accessed
+  const groundedTools = new Set([
+    "get_schema",
+    "get_metric_stats", "get_kpis", "get_timeseries",
+    "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
+  ]);
+
   for (let turn = 0; turn < maxTurns; turn++) {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: 8192,
       system: opts.systemExtra
         ? `${SYSTEM_PROMPT}\n\n${opts.systemExtra}`
         : SYSTEM_PROMPT,
@@ -387,20 +412,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const toolUses = response.content.filter(
         (b): b is ToolUseBlock => b.type === "tool_use",
       );
-      // Mark that at least one data/compute tool has been called so the
-      // grounding guarantee is satisfied. get_dataset_schema also counts:
-      // if the schema is empty the agent legitimately reports no data.
-      const groundedTools = new Set([
-        "get_dataset_schema",
-        "get_metric_stats", "get_kpis", "get_timeseries",
-        "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
-      ]);
       if (toolUses.some((t) => groundedTools.has(t.name))) {
         toolWasCalled = true;
       }
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const tu of toolUses) {
+        const label = progressLabel(tu.name, (tu.input ?? {}) as Record<string, unknown>);
+        await opts.onProgress?.(label);
         let result: unknown;
         try {
           result = await execTool(tu);
@@ -431,6 +450,45 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     finalText =
       "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
       "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
+    return { text: finalText, charts, citations };
+  }
+
+  // Self-verification: agent checks its own numbers against tool results.
+  // This runs inside runAgent where the full messages array (including all
+  // tool_use / tool_result blocks) is still in memory.
+  if (finalText) {
+    await opts.onProgress?.("Überprüfe Ergebnisse");
+    const verifyMessages = [
+      ...messages,
+      {
+        role: "user" as const,
+        content:
+          "Überprüfungsschritt: Kontrolliere deine Antwort. Stimmen alle genannten " +
+          "Zahlen exakt mit den oben stehenden Tool-Ergebnissen überein? " +
+          "Falls ja, gib die Antwort unverändert zurück. " +
+          "Falls nein, korrigiere ausschließlich die fehlerhaften Stellen und " +
+          "gib die vollständige korrigierte Antwort zurück.",
+      },
+    ];
+    try {
+      // Do NOT pass tools — verification is a pure text review.
+      const verifyResponse = await client.messages.create({
+        model: MODEL,
+        max_tokens: 4096,
+        system: opts.systemExtra
+          ? `${SYSTEM_PROMPT}\n\n${opts.systemExtra}`
+          : SYSTEM_PROMPT,
+        messages: verifyMessages,
+      });
+      const verifiedText = verifyResponse.content
+        .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+      if (verifiedText) finalText = verifiedText;
+    } catch (err) {
+      logger.warn({ err }, "Verification-Schritt fehlgeschlagen — Originalantwort wird verwendet");
+    }
   }
 
   return { text: finalText, charts, citations };

@@ -40,9 +40,9 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
 
   const customerNav = [
     { name: "Betriebe", href: "/app/datasets", icon: Home, preserveDataset: false },
+    { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true },
     { name: "Übersicht", href: "/app/overview", icon: BarChart2, preserveDataset: true },
     { name: "Dateien & Upload", href: "/app/upload", icon: Upload, preserveDataset: true },
-    { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true },
     { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle, preserveDataset: true },
     { name: "Berichte", href: "/app/reports", icon: FileText, preserveDataset: true },
     { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true },

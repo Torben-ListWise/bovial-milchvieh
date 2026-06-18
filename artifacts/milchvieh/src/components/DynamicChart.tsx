@@ -16,9 +16,10 @@ const COLORS = [
 interface DynamicChartProps {
   chart: ChartType;
   height?: number;
+  fillContainer?: boolean;
 }
 
-export function DynamicChart({ chart, height = 300 }: DynamicChartProps) {
+export function DynamicChart({ chart, height = 300, fillContainer = false }: DynamicChartProps) {
   const { type, xKey, series, data, unit } = chart;
 
   const renderTooltip = useMemo(() => {
@@ -151,7 +152,7 @@ export function DynamicChart({ chart, height = 300 }: DynamicChartProps) {
   };
 
   return (
-    <div style={{ width: '100%', height: height }}>
+    <div style={{ width: '100%', height: fillContainer ? '100%' : height }}>
       {type === 'table' ? (
         renderChart()
       ) : (

@@ -382,6 +382,8 @@ export interface AnalysisDetail {
   tags?: string[];
   /** @nullable */
   source?: AnalysisDetailSource;
+  /** @nullable */
+  agentProgress?: string | null;
   createdAt: string;
   messages: AnalysisMessage[];
 }

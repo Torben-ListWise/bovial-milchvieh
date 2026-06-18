@@ -382,6 +382,7 @@ export const GetAnalysisResponse = zod.object({
   "pinned": zod.boolean().optional(),
   "tags": zod.array(zod.string()).optional(),
   "source": zod.union([zod.literal('user'),zod.literal('auto'),zod.literal('report'),zod.literal(null)]).nullish(),
+  "agentProgress": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "messages": zod.array(zod.object({
   "id": zod.string(),

@@ -61,6 +61,7 @@ function serializeAnalysis(a: Analysis, messageCount?: number) {
     source: (["user", "auto", "report"].includes(a.source ?? "")
       ? (a.source as "user" | "auto" | "report")
       : null),
+    agentProgress: (a as any).agentProgress ?? null,
     messageCount: messageCount ?? 0,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt ?? null,
@@ -131,6 +132,12 @@ export async function processQuestion(
       datasetId: analysis.datasetId,
       conversation,
       systemExtra: rulesContext || undefined,
+      onProgress: async (step: string | null) => {
+        await db
+          .update(analysesTable)
+          .set({ agentProgress: step } as any)
+          .where(eq(analysesTable.id, analysis.id));
+      },
     });
     content = result.text || "Es konnte keine Antwort erzeugt werden.";
     charts = result.charts;
@@ -143,6 +150,13 @@ export async function processQuestion(
         "Bei der Analyse ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.";
     }
     error = err instanceof Error ? err.message : "Unbekannter Fehler";
+  } finally {
+    // Always clear progress indicator, even on error
+    await db
+      .update(analysesTable)
+      .set({ agentProgress: null } as any)
+      .where(eq(analysesTable.id, analysis.id))
+      .catch(() => {});
   }
 
   const [assistant] = await db
