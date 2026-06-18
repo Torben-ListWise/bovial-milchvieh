@@ -225,16 +225,16 @@ WENN get_schema 0 FELDER ZEIGT UND dokumentAvailable: true:
 - Beantworte die Frage direkt und vollständig aus dem Dokumentinhalt.
 - Kein get_kpis, get_timeseries oder andere DB-Werkzeuge aufrufen — die Daten liegen als Text vor, nicht als Datenbankzeilen.
 - Zahlen und Werte aus dem PDF-Text dürfen zitiert werden (sie stammen aus dem Dokument, nicht aus der Datenbank).
-- emit_chart ist in diesem Fall nicht verfügbar (keine strukturierten Zeitreihen).
+- emit_chart DARF verwendet werden: Lies die relevanten Kennzahlen aus dem Dokumenttext und baue das data-Array manuell. Beispiel für einen Vergleich mehrerer Werte: emit_chart({ type: "bar", title: "Kennzahlen Übersicht", data: [{ name: "Remontierungsrate", wert: 28 }, { name: "Abgangsrate", wert: 14 }], xKey: "name", series: [{ key: "wert", label: "%" }] }). Verwende type:"bar" für Vergleiche, type:"pie" für Anteile, type:"line" nur wenn Zeitreihenpunkte im Dokument stehen.
+- Erstelle nur Grafiken, wenn mindestens 2 Datenpunkte im Dokumenttext vorhanden sind.
 
 WICHTIG — GÜLTIGE DATENQUELLEN:
 - Der Abschnitt "HOCHGELADENE DOKUMENTE" im System-Prompt ist eine vollwertige Datenquelle. Zahlen daraus sind genauso belegt wie Zahlen aus einem read_document-Ergebnis.
 - Wenn in einem vorherigen Gesprächsschritt Zahlen aus diesem Abschnitt oder aus read_document zitiert wurden, sind diese Zahlen korrekt belegt. Behaupte NIEMALS im Nachhinein, sie seien erfunden oder unbelegt.
 
-WENN IN EINEM FOLGEGESPRÄCH EINE GRAFIK GEWÜNSCHT WIRD, ABER NUR PDF-DATEN VORHANDEN SIND:
-- Sage klar: "Diagramme sind nur mit strukturierten Datenbankdaten möglich. Da Ihre Daten als PDF-Dokument vorliegen, kann ich keine Grafik erstellen."
-- Stell NICHT in Frage, ob die Zahlen aus der vorherigen Antwort korrekt waren — sie sind korrekt belegt (aus dem Dokument).
-- Biete stattdessen an, die Kennzahlen aus dem Dokument tabellarisch oder als Text zusammenzufassen.`;
+WENN IN EINEM FOLGEGESPRÄCH EINE GRAFIK GEWÜNSCHT WIRD UND NUR PDF-DATEN VORHANDEN SIND:
+- Extrahiere die relevanten Zahlen direkt aus dem Dokumenttext und rufe emit_chart mit einem manuell konstruierten data-Array auf.
+- Stell NICHT in Frage, ob die Zahlen aus der vorherigen Antwort korrekt waren — sie sind korrekt belegt (aus dem Dokument).`;
 
 interface RunOptions {
   datasetId: string;
@@ -484,10 +484,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const toolUses = response.content.filter(
         (b): b is ToolUseBlock => b.type === "tool_use",
       );
-      // For follow-up questions the data is already in the conversation context;
-      // emit_chart alone is valid since numbers were grounded in a prior turn.
+      // emit_chart is valid when:
+      // - follow-up turn (numbers already grounded in prior turn), OR
+      // - document context is available (agent reads PDF numbers and builds chart manually)
       const isFollowUp = opts.conversation.length > 0;
-      if (toolUses.some((t) => groundedTools.has(t.name) || (isFollowUp && t.name === "emit_chart"))) {
+      const hasDocContext = docContext.length > 0;
+      if (toolUses.some((t) => groundedTools.has(t.name) || ((isFollowUp || hasDocContext) && t.name === "emit_chart"))) {
         toolWasCalled = true;
       }
       messages.push({ role: "assistant", content: response.content });
