@@ -102,14 +102,14 @@ export function DynamicChart({ chart, height = 300 }: DynamicChartProps) {
               cx="50%"
               cy="50%"
               outerRadius={height / 2 - 40}
-              label={({ cx, cy, midAngle, innerRadius, outerRadius, value, index }) => {
+              label={({ cx, cy, midAngle, innerRadius, outerRadius, index }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; value: number; index: number }) => {
                 const RADIAN = Math.PI / 180;
                 const radius = 25 + innerRadius + (outerRadius - innerRadius);
                 const x = cx + radius * Math.cos(-midAngle * RADIAN);
                 const y = cy + radius * Math.sin(-midAngle * RADIAN);
                 return (
                   <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
-                    {data[index][xKey || 'name']}
+                    {String(data[index]?.[xKey || 'name'] ?? '')}
                   </text>
                 );
               }}

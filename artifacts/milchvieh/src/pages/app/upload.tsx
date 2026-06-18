@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
-import { useListFiles, getListFilesQueryKey, useRequestUploadUrl } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useListFiles, getListFilesQueryKey, useRequestUploadUrl, useRegisterFile } from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UploadCloud, File, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -15,11 +14,12 @@ export function UploadPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const requestUrl = useRequestUploadUrl();
+  const registerFile = useRegisterFile();
   const [isUploading, setIsUploading] = useState(false);
 
   const { data: files, isLoading } = useListFiles(
-    { datasetId },
-    { query: { enabled: !!datasetId, queryKey: getListFilesQueryKey({ datasetId }) } }
+    datasetId ?? "",
+    { query: { enabled: !!datasetId, queryKey: getListFilesQueryKey(datasetId ?? "") } }
   );
 
   if (!datasetId) {
@@ -48,9 +48,18 @@ export function UploadPage() {
 
       if (!uploadRes.ok) throw new Error("Upload fehlgeschlagen");
 
-      // Ideally call useRegisterFile here.
+      await registerFile.mutateAsync({
+        datasetId,
+        data: {
+          objectPath,
+          name: file.name,
+          contentType: file.type || "application/octet-stream",
+          size: file.size,
+        }
+      });
+
       toast({ title: "Erfolg", description: "Datei wurde erfolgreich hochgeladen und wird nun verarbeitet." });
-      queryClient.invalidateQueries({ queryKey: getListFilesQueryKey({ datasetId }) });
+      queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(datasetId) });
     } catch (error) {
       console.error(error);
       toast({ variant: "destructive", title: "Fehler", description: "Beim Upload ist ein Fehler aufgetreten." });
@@ -78,9 +87,9 @@ export function UploadPage() {
             <Button disabled={isUploading} className="relative z-10 pointer-events-none">
               {isUploading ? 'Wird hochgeladen...' : 'Durchsuchen'}
             </Button>
-            <input 
-              type="file" 
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
+            <input
+              type="file"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
               onChange={handleFileSelect}
               disabled={isUploading}
             />
@@ -118,7 +127,7 @@ export function UploadPage() {
                   <div className="flex items-center gap-2">
                     {f.status === 'ready' && <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Bereit</span>}
                     {f.status === 'error' && <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Fehler</span>}
-                    {(f.status === 'uploaded' || f.status === 'parsing' || f.status === 'mapping') && 
+                    {(f.status === 'uploaded' || f.status === 'parsing' || f.status === 'mapping') &&
                       <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center gap-1"><Clock className="w-3 h-3"/> {f.status}</span>
                     }
                   </div>

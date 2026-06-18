@@ -13,14 +13,14 @@ export function WarningsPage() {
   const queryClient = useQueryClient();
 
   const { data: warnings, isLoading } = useListWarnings(
-    { datasetId },
-    { query: { enabled: !!datasetId, queryKey: getListWarningsQueryKey({ datasetId }) } }
+    datasetId ?? "",
+    { query: { enabled: !!datasetId, queryKey: getListWarningsQueryKey(datasetId ?? "") } }
   );
 
   const updateWarning = useUpdateWarning({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListWarningsQueryKey({ datasetId }) });
+        queryClient.invalidateQueries({ queryKey: getListWarningsQueryKey(datasetId ?? "") });
       }
     }
   });

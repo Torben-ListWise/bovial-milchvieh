@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Trash2, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -27,9 +27,8 @@ export function SettingsPage() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = await exportData.mutateAsync({});
-      
-      // Create a blob and download
+      const data = await exportData.mutateAsync();
+
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -39,9 +38,9 @@ export function SettingsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       toast({ title: "Erfolg", description: "Ihre Daten wurden erfolgreich exportiert." });
-    } catch (e) {
+    } catch {
       toast({ variant: "destructive", title: "Fehler", description: "Der Export ist fehlgeschlagen." });
     } finally {
       setIsExporting(false);
@@ -50,11 +49,10 @@ export function SettingsPage() {
 
   const handleDelete = async () => {
     try {
-      await deleteData.mutateAsync({});
+      await deleteData.mutateAsync();
       toast({ title: "Daten gelöscht", description: "Alle Ihre Daten wurden unwiderruflich gelöscht." });
-      // Sign out since data is gone
       signOut({ redirectUrl: "/" });
-    } catch (e) {
+    } catch {
       toast({ variant: "destructive", title: "Fehler", description: "Beim Löschen ist ein Fehler aufgetreten." });
     }
   };
@@ -93,7 +91,7 @@ export function SettingsPage() {
               <h3 className="font-medium text-destructive">Konto löschen</h3>
               <p className="text-sm text-muted-foreground">Löscht alle Ihre Daten unwiderruflich. Dies kann nicht rückgängig gemacht werden.</p>
             </div>
-            
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" className="gap-2">

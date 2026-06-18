@@ -1,7 +1,7 @@
 import { useListReports, getListReportsQueryKey, useGenerateReport } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Calendar, AlertCircle } from "lucide-react";
+import { FileText, Plus, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -13,14 +13,14 @@ export function ReportsPage() {
   const queryClient = useQueryClient();
 
   const { data: reports, isLoading } = useListReports(
-    { datasetId },
-    { query: { enabled: !!datasetId, queryKey: getListReportsQueryKey({ datasetId }) } }
+    datasetId ?? "",
+    { query: { enabled: !!datasetId, queryKey: getListReportsQueryKey(datasetId ?? "") } }
   );
 
   const generateReport = useGenerateReport({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListReportsQueryKey({ datasetId }) });
+        queryClient.invalidateQueries({ queryKey: getListReportsQueryKey(datasetId ?? "") });
       }
     }
   });
@@ -31,6 +31,7 @@ export function ReportsPage() {
 
   const handleGenerate = () => {
     generateReport.mutate({
+      datasetId,
       data: {
         period: "monthly",
         title: `Monatsbericht ${format(new Date(), "MMMM yyyy", { locale: de })}`
