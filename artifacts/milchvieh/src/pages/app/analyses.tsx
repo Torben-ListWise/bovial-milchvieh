@@ -287,18 +287,16 @@ function AgentStepsTimeline({
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
   return (
-    <ReactMarkdown
-      className="prose prose-sm max-w-none
+    <div className="prose prose-sm max-w-none
         prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-3 prose-headings:mb-1
         prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed
         prose-strong:text-foreground prose-strong:font-semibold
         prose-li:text-foreground prose-li:my-0.5
         prose-ul:my-1 prose-ol:my-1
         prose-ul:pl-4 prose-ol:pl-4
-        [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-    >
-      {text}
-    </ReactMarkdown>
+        [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+      <ReactMarkdown>{text}</ReactMarkdown>
+    </div>
   );
 });
 
@@ -505,6 +503,7 @@ export function AnalysesPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const askIsPendingRef = useRef(false);
+  const pendingQuestionRef = useRef("");
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);
   const chatWidthRef = useRef(chatWidth);
@@ -573,16 +572,21 @@ export function AnalysesPage() {
       queryKey: getGetAnalysisQueryKey(activeAnalysisId ?? ""),
       staleTime: 0,
       refetchInterval: (query) => {
-        if (askIsPendingRef.current) return 2000;
+        if (askIsPendingRef.current) return 500;
         const data = query.state.data as AnalysisDetail | undefined;
-        if (data?.agentProgress != null) return 2000;
+        if (data?.agentProgress != null) return 500;
+        // Poll while messages haven't arrived yet (background processing started)
+        if ((data?.messages?.length ?? 0) === 0) return 500;
         return false;
       },
     },
   });
 
   const isAgentWorking =
-    (ask.isPending && !!activeAnalysisId) || analysis?.agentProgress != null;
+    (ask.isPending && !!activeAnalysisId) ||
+    analysis?.agentProgress != null ||
+    // Background agent started but no messages in DB yet
+    (!!activeAnalysisId && (analysis?.messages?.length ?? 0) === 0 && !!pendingQuestionRef.current);
 
   const currentStep = analysis?.agentProgress ?? null;
   const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
@@ -642,6 +646,8 @@ export function AnalysesPage() {
   async function handleSubmit(q?: string) {
     const text = (q ?? question).trim();
     if (!text) return;
+
+    pendingQuestionRef.current = text;
 
     if (!activeAnalysisId) {
       createAnalysis.mutate({
@@ -750,7 +756,7 @@ export function AnalysesPage() {
           ))}
           <div className="flex gap-3 justify-end">
             <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
-              {question}
+              {pendingQuestionRef.current || question}
             </div>
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
               <User className="w-3.5 h-3.5 text-primary-foreground" />
@@ -779,7 +785,19 @@ export function AnalysesPage() {
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : (
-          msgs.map((msg, idx) => (
+          <>
+          {/* Show pending question bubble while background agent hasn't written messages yet */}
+          {msgs.length === 0 && isAgentWorking && pendingQuestionRef.current && (
+            <div className="flex gap-3 justify-end">
+              <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
+                {pendingQuestionRef.current}
+              </div>
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
+                <User className="w-3.5 h-3.5 text-primary-foreground" />
+              </div>
+            </div>
+          )}
+          {msgs.map((msg, idx) => (
             <div key={msg.id}>
               <MessageBubble msg={msg} isNew={isNewMessage(msg)} />
               {/* Follow-up chips after last assistant message, only when idle */}
@@ -795,7 +813,8 @@ export function AnalysesPage() {
                   </div>
                 )}
             </div>
-          ))
+          ))}
+          </>
         )}
 
         {isAgentWorking && (

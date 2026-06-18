@@ -292,20 +292,30 @@ router.post(
       .returning();
 
     if (question) {
-      await processQuestion(analysis, question);
+      // Signal that processing has started so the frontend starts polling immediately
+      await db
+        .update(analysesTable)
+        .set({ agentProgress: "Wird gestartet…" } as any)
+        .where(eq(analysesTable.id, analysis.id));
     }
 
-    const msgs = await db
-      .select()
-      .from(messagesTable)
-      .where(eq(messagesTable.analysisId, analysis.id))
-      .orderBy(asc(messagesTable.createdAt));
+    // Return immediately so the client can start polling for live steps
     res.status(201).json(
       GetAnalysisResponse.parse({
-        ...serializeAnalysis(analysis, msgs.length),
-        messages: msgs.map(serializeMessage),
+        ...serializeAnalysis(analysis, 0),
+        agentProgress: question ? "Wird gestartet…" : null,
+        messages: [],
       }),
     );
+
+    // Run the agent in the background after the response is sent
+    if (question) {
+      setImmediate(() => {
+        processQuestion(analysis, question).catch((err) => {
+          logger.error({ err }, "Background processQuestion failed");
+        });
+      });
+    }
   },
 );
 
@@ -382,8 +392,20 @@ router.post(
       res.status(404).json({ error: "Analyse nicht gefunden" });
       return;
     }
-    const assistant = await processQuestion(a, parsed.data.question);
-    res.status(200).json(AskQuestionResponse.parse(serializeMessage(assistant)));
+    // Signal that processing has started so the frontend polls immediately
+    await db
+      .update(analysesTable)
+      .set({ agentProgress: "Wird gestartet…" } as any)
+      .where(eq(analysesTable.id, a.id));
+
+    // Return immediately — agent runs in background
+    res.status(200).json(AskQuestionResponse.parse({ accepted: true }));
+
+    setImmediate(() => {
+      processQuestion(a, parsed.data.question).catch((err) => {
+        logger.error({ err }, "Background ask processQuestion failed");
+      });
+    });
   },
 );
 

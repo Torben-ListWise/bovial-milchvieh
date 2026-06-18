@@ -467,31 +467,7 @@ export const AskQuestionBody = zod.object({
 })
 
 export const AskQuestionResponse = zod.object({
-  "id": zod.string(),
-  "analysisId": zod.string(),
-  "role": zod.enum(['user', 'assistant']),
-  "content": zod.string().nullish(),
-  "charts": zod.array(zod.object({
-  "id": zod.string(),
-  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),
-  "title": zod.string(),
-  "description": zod.string().nullish(),
-  "xKey": zod.string().nullish(),
-  "series": zod.array(zod.object({
-  "key": zod.string(),
-  "label": zod.string()
-})).optional(),
-  "data": zod.array(zod.record(zod.string(), zod.unknown())),
-  "unit": zod.string().nullish(),
-  "basis": zod.string().nullish()
-})).optional(),
-  "citations": zod.array(zod.object({
-  "label": zod.string(),
-  "value": zod.string(),
-  "basis": zod.string().nullish()
-})).optional(),
-  "error": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "accepted": zod.boolean()
 })
 
 
