@@ -846,23 +846,6 @@ export function AnalysesPage() {
 
         {/* Chat zone */}
         <div className="w-[300px] shrink-0 flex flex-col border-r border-border">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-background">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="h-8 w-8"
-            >
-              <PanelLeft className="w-4 h-4" />
-            </Button>
-            {activeAnalysisId && analysis ? (
-              <span className="text-sm font-medium text-foreground truncate">
-                {analysis.title}
-              </span>
-            ) : (
-              <span className="text-sm font-medium text-foreground">Analysen</span>
-            )}
-          </div>
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {renderChatContent()}
           </div>
