@@ -179,6 +179,14 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "read_document",
+    description:
+      "Gibt den extrahierten Volltext aller hochgeladenen PDF-Dokumente zurück. " +
+      "Aufrufen, wenn get_schema 0 strukturierte Felder zeigt aber Dokumente vorhanden sind (dokumentAvailable: true). " +
+      "Anschließend die Frage direkt aus dem Dokumentinhalt beantworten — keine DB-Werkzeuge nötig.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "emit_chart",
     description:
       "Erstellt ein interaktives Diagramm aus deterministisch berechneten Daten und hängt es an die Antwort an. Die Daten werden serverseitig berechnet.",
@@ -203,14 +211,21 @@ const TOOLS: Tool[] = [
 const SYSTEM_PROMPT = `Du bist ein vertrauenswürdiger Datenanalyse-Assistent für Milchviehbetriebe. Du antwortest ausschließlich auf Deutsch in klarer, fachlich korrekter Sprache für Landwirtinnen und Landwirte.
 
 STRIKTE REGELN:
-- Alle Zahlen stammen AUSSCHLIESSLICH aus den Werkzeug-Ergebnissen. Erfinde NIEMALS Zahlen, Mittelwerte oder Trends.
-- Wenn du eine Zahl nennst, muss sie zuvor von einem Werkzeug berechnet worden sein.
-- Beginne immer mit get_schema, um zu wissen, welche Felder verfügbar sind. Verwende nur vorhandene Felder.
+- Alle Zahlen stammen AUSSCHLIESSLICH aus den Werkzeug-Ergebnissen oder dem extrahierten Dokumenttext. Erfinde NIEMALS Zahlen, Mittelwerte oder Trends.
+- Wenn du eine Zahl nennst, muss sie aus einem Werkzeug oder einem Dokumenttext stammen.
+- Beginne immer mit get_schema, um zu wissen, welche Felder verfügbar sind.
 - Wenn ein Wert nicht berechnet werden kann oder Daten fehlen, sage das ehrlich.
-- Nutze emit_chart, um zentrale Aussagen mit einem passenden Diagramm zu untermauern (meist 1–3 Diagramme).
+- Nutze emit_chart, um zentrale Aussagen mit einem passenden Diagramm zu untermauern (meist 1–3 Diagramme) — aber nur wenn strukturierte Daten (get_schema > 0 Felder) vorhanden sind.
 - Vergleiche Werte bei Bedarf mit den geprüften Stammdaten (get_master_data), falls vorhanden.
 - Fasse am Ende die wichtigsten Erkenntnisse verständlich zusammen. Nenne konkrete Zahlen mit Einheiten.
-- Sei präzise und vermeide Spekulation. Lieber weniger, aber belastbare Aussagen.`;
+- Sei präzise und vermeide Spekulation. Lieber weniger, aber belastbare Aussagen.
+
+WENN get_schema 0 FELDER ZEIGT UND dokumentAvailable: true:
+- Rufe sofort read_document auf, um den vollständigen extrahierten PDF-Text zu erhalten.
+- Beantworte die Frage direkt und vollständig aus dem Dokumentinhalt.
+- Kein get_kpis, get_timeseries oder andere DB-Werkzeuge aufrufen — die Daten liegen als Text vor, nicht als Datenbankzeilen.
+- Zahlen und Werte aus dem PDF-Text dürfen zitiert werden (sie stammen aus dem Dokument, nicht aus der Datenbank).
+- emit_chart ist in diesem Fall nicht verfügbar (keine strukturierten Zeitreihen).`;
 
 interface RunOptions {
   datasetId: string;
@@ -264,8 +279,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     const input = (block.input ?? {}) as Record<string, unknown>;
     const metric = input.metric as string | undefined;
     switch (block.name) {
-      case "get_schema":
-        return getDatasetSchema(datasetId);
+      case "get_schema": {
+        const schema = await getDatasetSchema(datasetId);
+        // Hint at documents so the agent knows to call read_document
+        return docContext
+          ? { ...schema, dokumentAvailable: true }
+          : schema;
+      }
       case "get_kpis":
         return computeKpis(datasetId);
       case "get_metric_stats": {
@@ -334,6 +354,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               .where(eq(masterDataTable.category, cat))
           : await db.select().from(masterDataTable);
         return rows;
+      }
+      case "read_document": {
+        if (!docContext) return { text: "Keine Dokumente vorhanden." };
+        // Strip the header prefix — return only the raw document text
+        const rawText = docContext
+          .replace(/^\n\nHOCHGELADENE DOKUMENTE.*?:\n/s, "")
+          .trim();
+        return { text: rawText };
       }
       case "emit_chart": {
         const title = (input.title as string) ?? "Diagramm";
@@ -406,6 +434,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_animal_ranking": return `Erstelle Rangliste${metric ? ` für ${metric}` : ""}`;
       case "detect_anomalies": return `Erkenne Ausreißer${metric ? ` bei ${metric}` : ""}`;
       case "get_master_data": return "Lade Stammdaten";
+      case "read_document": return "Lese Dokumententext";
       case "emit_chart": return `Erstelle Diagramm`;
       default: return "Verarbeite Daten";
     }
@@ -420,6 +449,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "get_schema",
     "get_metric_stats", "get_kpis", "get_timeseries",
     "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
+    "read_document",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
