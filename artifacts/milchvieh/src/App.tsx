@@ -183,12 +183,26 @@ function LandingPage() {
 
 function AppPortal() {
   const { data: dbUser, isLoading } = useGetCurrentUser();
-  const [viewMode, setViewMode] = useState<'operator' | 'customer' | null>(null);
 
-  const role = dbUser?.role || 'customer';
+  const role = (dbUser?.role || 'customer') as 'operator' | 'customer';
 
-  // Default view mode to the user's actual role on first load.
-  const effectiveView = viewMode ?? (role as 'operator' | 'customer');
+  // Persist view mode across page reloads via sessionStorage.
+  // Operators default to operator view; customers are always customer.
+  const [viewMode, setViewModeState] = useState<'operator' | 'customer'>(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      const stored = sessionStorage.getItem('milchvieh_viewMode');
+      if (stored === 'operator' || stored === 'customer') return stored;
+    }
+    return role;
+  });
+
+  const setViewMode = (v: 'operator' | 'customer') => {
+    sessionStorage.setItem('milchvieh_viewMode', v);
+    setViewModeState(v);
+  };
+
+  // Once the user's role is loaded, enforce that non-operators can't stay in operator view.
+  const effectiveView = role !== 'operator' ? 'customer' : viewMode;
 
   if (isLoading) return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
 

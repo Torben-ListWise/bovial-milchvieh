@@ -26,7 +26,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: AppLayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
 
@@ -60,8 +60,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     if (!onSwitchView) return;
     const next = viewMode === 'operator' ? 'customer' : 'operator';
     onSwitchView(next);
-    // Navigate to the default page for the new view
-    window.location.href = `${basePath}${next === 'operator' ? '/app/monitoring' : '/app/datasets'}`;
+    setLocation(next === 'operator' ? '/app/monitoring' : '/app/datasets');
   };
 
   return (
