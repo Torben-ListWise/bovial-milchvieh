@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { useUser, useClerk } from "@clerk/react";
 import { 
@@ -43,8 +43,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     });
   }
 
-  // Use wouter's location (same source as useRequireDataset) to stay in sync
-  const search = location.includes("?") ? location.slice(location.indexOf("?")) : "";
+  const search = useSearch(); // reactive to query-string changes
   const datasetId = new URLSearchParams(search).get("datasetId");
   const datasetQuery = datasetId ? `?datasetId=${datasetId}` : "";
 

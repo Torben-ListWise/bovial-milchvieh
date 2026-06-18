@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useListDatasets, getListDatasetsQueryKey } from "@workspace/api-client-react";
 
 /**
@@ -7,15 +7,13 @@ import { useListDatasets, getListDatasetsQueryKey } from "@workspace/api-client-
  * If none is present but datasets exist, redirects to the same page
  * with the first dataset's id. If no datasets exist, redirects to /app/datasets.
  *
- * Uses wouter's location as the single source of truth so reading and
- * writing the URL are always in sync (window.location.search can lag
- * behind wouter's pushState on the same render cycle).
+ * useSearch() is reactive to query-string changes (unlike useLocation which
+ * only tracks the pathname). window.location.search can lag behind on the
+ * same render cycle after setLocation().
  */
 export function useRequireDataset(): { datasetId: string | null; isLoading: boolean } {
   const [location, setLocation] = useLocation();
-
-  // Parse datasetId from wouter's location (includes query string)
-  const search = location.includes("?") ? location.slice(location.indexOf("?")) : "";
+  const search = useSearch(); // reactive to ?foo=bar changes
   const datasetId = new URLSearchParams(search).get("datasetId") || null;
 
   const { data: datasets, isLoading } = useListDatasets({
