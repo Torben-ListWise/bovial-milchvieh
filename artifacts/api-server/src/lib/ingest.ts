@@ -18,6 +18,8 @@ import {
   CANONICAL_FIELD_MAP,
 } from "./canonical";
 import { evaluateWarnings } from "./warnings";
+import { runAgent } from "./agent";
+import { analysesTable, messagesTable } from "@workspace/db";
 import { logger } from "./logger";
 
 const objectStorage = new ObjectStorageService();
@@ -369,6 +371,39 @@ export async function ingestFile(fileId: string): Promise<void> {
       await evaluateWarnings(file.datasetId, file.userId);
     } catch (err) {
       logger.warn({ err, datasetId: file.datasetId }, "Warnungsauswertung fehlgeschlagen");
+    }
+    // Automatische Erstanalyse nach erfolgreichem Ingest.
+    try {
+      const [analysis] = await db
+        .insert(analysesTable)
+        .values({
+          datasetId: file.datasetId,
+          userId: file.userId,
+          title: "Automatische Erstanalyse",
+          category: "overview",
+          source: "agent",
+        })
+        .returning();
+      const question =
+        "Bitte erstelle eine kurze Erstanalyse der hochgeladenen Betriebsdaten: Welche Kennzahlen sind vorhanden, wie sieht die Datenqualität aus und gibt es erste auffällige Werte?";
+      const result = await runAgent({
+        datasetId: file.datasetId,
+        conversation: [{ role: "user", content: question }],
+      });
+      await db.insert(messagesTable).values({
+        analysisId: analysis.id,
+        role: "user",
+        content: question,
+      });
+      await db.insert(messagesTable).values({
+        analysisId: analysis.id,
+        role: "assistant",
+        content: result.text,
+        charts: result.charts as unknown as Record<string, unknown>[],
+        citations: result.citations as unknown as Record<string, unknown>[],
+      });
+    } catch (err) {
+      logger.warn({ err, datasetId: file.datasetId }, "Automatische Erstanalyse fehlgeschlagen");
     }
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {

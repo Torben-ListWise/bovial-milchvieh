@@ -12,7 +12,6 @@ import {
   reportsTable,
   activityLogTable,
 } from "@workspace/db";
-import { ExportMyDataResponse } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { ObjectStorageService } from "../lib/objectStorage";
 
@@ -21,36 +20,47 @@ const objectStorage = new ObjectStorageService();
 
 router.post("/privacy/export", requireAuth, async (req: Request, res: Response) => {
   const userId = req.userId!;
+
   const datasets = await db
     .select()
     .from(datasetsTable)
     .where(eq(datasetsTable.userId, userId));
-  const analyses = await db
-    .select()
-    .from(analysesTable)
-    .where(eq(analysesTable.userId, userId));
-  const rules = await db
-    .select()
-    .from(rulesTable)
-    .where(eq(rulesTable.userId, userId));
 
-  const analysesWithMessages = [];
-  for (const a of analyses) {
-    const msgs = await db
-      .select()
-      .from(messagesTable)
-      .where(eq(messagesTable.analysisId, a.id));
-    analysesWithMessages.push({ ...a, messages: msgs });
-  }
+  const datasetIds = datasets.map((d) => d.id);
 
-  res.json(
-    ExportMyDataResponse.parse({
-      generatedAt: new Date(),
-      datasets: datasets as unknown as Record<string, unknown>[],
-      analyses: analysesWithMessages as unknown as Record<string, unknown>[],
-      rules: rules as unknown as Record<string, unknown>[],
-    }),
-  );
+  const [analyses, rules, warnings, reports, files] = await Promise.all([
+    db.select().from(analysesTable).where(eq(analysesTable.userId, userId)),
+    db.select().from(rulesTable).where(eq(rulesTable.userId, userId)),
+    db.select().from(warningsTable).where(eq(warningsTable.userId, userId)),
+    db.select().from(reportsTable).where(eq(reportsTable.userId, userId)),
+    datasetIds.length > 0
+      ? db.select().from(sourceFilesTable).where(inArray(sourceFilesTable.datasetId, datasetIds))
+      : Promise.resolve([]),
+  ]);
+
+  const analysisIds = analyses.map((a) => a.id);
+  const messages =
+    analysisIds.length > 0
+      ? await db.select().from(messagesTable).where(inArray(messagesTable.analysisId, analysisIds))
+      : [];
+
+  const analysesWithMessages = analyses.map((a) => ({
+    ...a,
+    messages: messages.filter((m) => m.analysisId === a.id),
+  }));
+
+  // Strip objectPath from file metadata for privacy (no signed URLs in export)
+  const filesMeta = files.map(({ objectPath: _op, ...rest }) => rest);
+
+  res.json({
+    generatedAt: new Date(),
+    datasets,
+    analyses: analysesWithMessages,
+    rules,
+    warnings,
+    reports,
+    files: filesMeta,
+  });
 });
 
 router.delete("/privacy/data", requireAuth, async (req: Request, res: Response) => {

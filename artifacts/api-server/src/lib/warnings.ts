@@ -3,6 +3,7 @@ import {
   db,
   rulesTable,
   warningsTable,
+  masterDataTable,
   type Rule,
 } from "@workspace/db";
 import { computeMetricStats, detectAnomalies, getDatasetSchema } from "./compute";
@@ -27,7 +28,7 @@ function compare(value: number, comparator: string | null, threshold: number): b
   }
 }
 
-// Re-evaluate all rules + anomalies for a dataset and (re)create open warnings.
+// Re-evaluate all rules + anomalies + operator master-data reference ranges for a dataset.
 export async function evaluateWarnings(
   datasetId: string,
   userId: string,
@@ -46,11 +47,6 @@ export async function evaluateWarnings(
   const presentMetrics = new Set(schema.fields.map((f) => f.key));
   if (schema.totalRows === 0) return 0;
 
-  const rules: Rule[] = await db
-    .select()
-    .from(rulesTable)
-    .where(and(eq(rulesTable.userId, userId), eq(rulesTable.enabled, true)));
-
   const newWarnings: {
     datasetId: string;
     userId: string;
@@ -61,6 +57,12 @@ export async function evaluateWarnings(
     severity: string;
     ruleId: string | null;
   }[] = [];
+
+  // 1. Customer-defined rules.
+  const rules: Rule[] = await db
+    .select()
+    .from(rulesTable)
+    .where(and(eq(rulesTable.userId, userId), eq(rulesTable.enabled, true)));
 
   for (const rule of rules) {
     if (!presentMetrics.has(rule.metric)) continue;
@@ -83,7 +85,43 @@ export async function evaluateWarnings(
     }
   }
 
-  // Anomaly-based warnings for key metrics.
+  // 2. Operator master-data reference ranges (category = "reference_range").
+  //    Expected key format: "<metric>_min" or "<metric>_max".
+  const masterRanges = await db
+    .select()
+    .from(masterDataTable)
+    .where(eq(masterDataTable.category, "reference_range"));
+
+  for (const entry of masterRanges) {
+    const isMin = entry.key.endsWith("_min");
+    const isMax = entry.key.endsWith("_max");
+    if (!isMin && !isMax) continue;
+    const metric = isMin ? entry.key.slice(0, -4) : entry.key.slice(0, -4);
+    if (!presentMetrics.has(metric)) continue;
+    const threshold = parseFloat(entry.value);
+    if (isNaN(threshold)) continue;
+    const stats = await computeMetricStats(datasetId, metric);
+    if (!stats) continue;
+    const field = CANONICAL_FIELD_MAP[metric];
+    const unit = entry.unit ?? field?.unit ?? "";
+    const violated = isMin
+      ? stats.mean < threshold
+      : stats.mean > threshold;
+    if (!violated) continue;
+    const direction = isMin ? "unter dem Mindestwert" : "über dem Höchstwert";
+    newWarnings.push({
+      datasetId,
+      userId,
+      title: `Referenzwert überschritten: ${field?.label ?? metric}`,
+      detail: `${field?.label ?? metric}: Ø ${stats.mean}${unit ? " " + unit : ""} liegt ${direction} (${isMin ? "Min" : "Max"}: ${threshold}${unit ? " " + unit : ""}) laut Betriebsstammdaten.`,
+      metric,
+      value: stats.mean,
+      severity: "warning",
+      ruleId: null,
+    });
+  }
+
+  // 3. Statistical anomaly detection for key metrics.
   for (const metric of ["milk_yield_kg", "scc", "fat_pct", "protein_pct"]) {
     if (!presentMetrics.has(metric)) continue;
     const anomaly = await detectAnomalies(datasetId, metric, 2.5);
