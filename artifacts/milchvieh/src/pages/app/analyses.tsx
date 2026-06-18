@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import {
-  useListAnalyses,
   getListAnalysesQueryKey,
   useCreateAnalysis,
   useGetAnalysis,
@@ -26,9 +25,9 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Bot, User, AlertCircle, Send, Plus, PanelLeft,
+  Bot, User, AlertCircle, Send,
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
-  Loader2, ChevronRight, Upload, Menu, X,
+  Loader2, ChevronRight, Upload,
   CheckCircle2, Clock,
 } from "lucide-react";
 
@@ -263,72 +262,6 @@ function AgentProgressPanel({ step }: { step: string }) {
   );
 }
 
-// ── Conversation sidebar inner ───────────────────────────────────────────────
-
-function SidebarContent({
-  datasetId,
-  activeId,
-  onSelect,
-  onNew,
-}: {
-  datasetId: string;
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  onNew: () => void;
-}) {
-  const { data: analyses, isLoading } = useListAnalyses(datasetId, {
-    query: { queryKey: getListAnalysesQueryKey(datasetId) },
-  });
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-border shrink-0">
-        <Button size="sm" className="w-full gap-2 justify-start" onClick={onNew}>
-          <Plus className="w-4 h-4" />
-          Neue Analyse
-        </Button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
-        {isLoading ? (
-          <div className="space-y-2 p-1">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : !analyses || analyses.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6 px-2">
-            Noch keine Analysen
-          </p>
-        ) : (
-          analyses.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => onSelect(a.id)}
-              className={cn(
-                "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors",
-                a.id === activeId
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted text-foreground",
-              )}
-            >
-              <p className="font-medium truncate leading-tight">{a.title}</p>
-              <p
-                className={cn(
-                  "text-xs mt-0.5 truncate",
-                  a.id === activeId
-                    ? "text-primary-foreground/70"
-                    : "text-muted-foreground",
-                )}
-              >
-                {format(new Date(a.createdAt), "dd.MM. HH:mm", { locale: de })}
-              </p>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Starter questions ────────────────────────────────────────────────────────
 
 function StarterQuestions({
@@ -474,12 +407,8 @@ export function AnalysesPage() {
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [mobileTab, setMobileTab] = useState<"chat" | "chart">("chat");
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
-    return sessionStorage.getItem("analysisSidebarOpen") !== "false";
-  });
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -563,22 +492,9 @@ export function AnalysesPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [analysis?.messages?.length, currentStep, systemMessages.length]);
 
-  function toggleSidebar() {
-    setSidebarOpen((prev) => {
-      sessionStorage.setItem("analysisSidebarOpen", String(!prev));
-      return !prev;
-    });
-  }
-
-  function handleSelectAnalysis(id: string) {
-    setActiveAnalysisId(id);
-    setMobileSidebarOpen(false);
-  }
-
   function handleNewAnalysis() {
     setActiveAnalysisId(null);
     setQuestion("");
-    setMobileSidebarOpen(false);
     inputRef.current?.focus();
   }
 
@@ -827,23 +743,6 @@ export function AnalysesPage() {
 
       {/* ── Desktop layout ─────────────────────────────────────────────────── */}
       <div className="hidden md:flex w-full h-full">
-        {/* Sidebar */}
-        <div
-          className={cn(
-            "shrink-0 transition-all duration-200 overflow-hidden border-r border-border bg-secondary/20",
-            sidebarOpen ? "w-[220px]" : "w-0",
-          )}
-        >
-          {sidebarOpen && (
-            <SidebarContent
-              datasetId={datasetId}
-              activeId={activeAnalysisId}
-              onSelect={setActiveAnalysisId}
-              onNew={handleNewAnalysis}
-            />
-          )}
-        </div>
-
         {/* Chat zone */}
         <div className="w-[300px] shrink-0 flex flex-col border-r border-border">
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -867,60 +766,6 @@ export function AnalysesPage() {
 
       {/* ── Mobile layout ──────────────────────────────────────────────────── */}
       <div className="flex md:hidden flex-col w-full h-full">
-        {/* Mobile top bar */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-background">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setMobileSidebarOpen(true)}
-          >
-            <Menu className="w-4 h-4" />
-          </Button>
-          <span className="text-sm font-medium text-foreground truncate flex-1">
-            {activeAnalysisId && analysis ? analysis.title : "Analysen"}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleNewAnalysis}
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {/* Mobile sidebar modal */}
-        {mobileSidebarOpen && (
-          <div className="absolute inset-0 z-40 flex">
-            <div
-              className="absolute inset-0 bg-black/40"
-              onClick={() => setMobileSidebarOpen(false)}
-            />
-            <div className="relative w-72 max-w-[80vw] h-full bg-background shadow-xl flex flex-col">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                <span className="font-semibold text-sm">Gespräche</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setMobileSidebarOpen(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="flex-1 min-h-0">
-                <SidebarContent
-                  datasetId={datasetId}
-                  activeId={activeAnalysisId}
-                  onSelect={handleSelectAnalysis}
-                  onNew={handleNewAnalysis}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Mobile tab content */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {mobileTab === "chat" ? (
