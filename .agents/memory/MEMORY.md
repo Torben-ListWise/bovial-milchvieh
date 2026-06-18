@@ -1,3 +1,5 @@
 - [Milchvieh dataset context](milchvieh-dataset-context.md) — datasetId must be preserved in all customer sidebar nav links (preserveDataset flag)
 - [Milchvieh cron security](milchvieh-cron-security.md) — CRON_SECRET must be non-empty or cron endpoint is disabled; never allow unauthenticated job triggering
-- [Milchvieh analysis source enum](milchvieh-analysis-source.md) — auto-ingestion must use source="auto", not "agent"; normalize unknown values at read time to prevent Zod 500s
+- [Milchvieh analysis source enum](milchvieh-analysis-source.md) — auto-ingestion must use source="auto"; normalize unknown values at read time to prevent Zod 500s
+- [Milchvieh agent grounding](milchvieh-agent-grounding.md) — agent must call a compute tool before emitting text; no-tool responses are replaced with a safe fallback
+- [Milchvieh dataset delete cascade](milchvieh-dataset-delete-cascade.md) — dataset deletion must remove analyses+messages+reports+activity; no FK cascades in schema

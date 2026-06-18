@@ -352,6 +352,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   }
 
   let finalText = "";
+  let toolWasCalled = false;
   const maxTurns = 12;
   for (let turn = 0; turn < maxTurns; turn++) {
     const response = await client.messages.create({
@@ -373,6 +374,16 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const toolUses = response.content.filter(
         (b): b is ToolUseBlock => b.type === "tool_use",
       );
+      // Mark that at least one compute/data tool has been called so the
+      // grounding guarantee is satisfied. (emit_chart and get_schema alone
+      // do not count as a compute evidence tool.)
+      const computeTools = new Set([
+        "get_metric_stats", "get_kpis", "get_timeseries",
+        "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
+      ]);
+      if (toolUses.some((t) => computeTools.has(t.name))) {
+        toolWasCalled = true;
+      }
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const tu of toolUses) {
@@ -393,6 +404,19 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       continue;
     }
     break;
+  }
+
+  // Grounding enforcement: if the model returned text without calling any
+  // compute tool, replace the response with a safe fallback. This prevents
+  // hallucinated numbers from reaching the user.
+  if (!toolWasCalled && finalText) {
+    logger.warn(
+      { datasetId: opts.datasetId },
+      "Agent antwortete ohne Werkzeugaufruf — Antwort wird verworfen (Grounding-Garantie)",
+    );
+    finalText =
+      "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
+      "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
   }
 
   return { text: finalText, charts, citations };

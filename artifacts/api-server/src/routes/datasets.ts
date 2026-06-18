@@ -6,6 +6,10 @@ import {
   sourceFilesTable,
   dataRowsTable,
   warningsTable,
+  analysesTable,
+  messagesTable,
+  reportsTable,
+  activityLogTable,
   type Dataset,
 } from "@workspace/db";
 import {
@@ -128,9 +132,22 @@ router.delete("/datasets/:datasetId", requireAuth, async (req: Request, res: Res
     res.status(404).json({ error: "Datensatz nicht gefunden" });
     return;
   }
+  // Delete child analyses and their messages first (no FK cascade in schema).
+  const linkedAnalyses = await db
+    .select({ id: analysesTable.id })
+    .from(analysesTable)
+    .where(eq(analysesTable.datasetId, datasetId));
+  if (linkedAnalyses.length > 0) {
+    const { inArray } = await import("drizzle-orm");
+    const analysisIds = linkedAnalyses.map((a) => a.id);
+    await db.delete(messagesTable).where(inArray(messagesTable.analysisId, analysisIds));
+  }
+  await db.delete(analysesTable).where(eq(analysesTable.datasetId, datasetId));
+  await db.delete(reportsTable).where(eq(reportsTable.datasetId, datasetId));
   await db.delete(dataRowsTable).where(eq(dataRowsTable.datasetId, datasetId));
   await db.delete(sourceFilesTable).where(eq(sourceFilesTable.datasetId, datasetId));
   await db.delete(warningsTable).where(eq(warningsTable.datasetId, datasetId));
+  await db.delete(activityLogTable).where(eq(activityLogTable.datasetRef, datasetId.slice(0, 8)));
   await db.delete(datasetsTable).where(eq(datasetsTable.id, datasetId));
   res.status(204).end();
 });
