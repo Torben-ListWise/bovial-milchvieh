@@ -845,7 +845,7 @@ export function AnalysesPage() {
         </div>
 
         {/* Chat zone */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+        <div className="w-[300px] shrink-0 flex flex-col border-r border-border">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-background">
             <Button
               variant="ghost"
@@ -870,7 +870,7 @@ export function AnalysesPage() {
         </div>
 
         {/* Chart panel */}
-        <div className="w-[40%] max-w-[520px] shrink-0 flex flex-col bg-background">
+        <div className="flex-1 flex flex-col bg-background min-w-0">
           <div className="px-4 py-2 border-b border-border shrink-0 bg-muted/30">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Grafik
