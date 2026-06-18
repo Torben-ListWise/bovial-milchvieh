@@ -3,11 +3,11 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser, useAuth } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { deDE } from "@clerk/localizations";
 import { useEffect, useRef } from "react";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import { useGetCurrentUser, setAuthTokenGetter } from "@workspace/api-client-react";
 
 import { AppLayout } from "@/components/layout";
 import { DatasetList } from "@/pages/app/datasets";
@@ -241,6 +241,28 @@ function ProtectedApp() {
   );
 }
 
+// Wires Clerk's getToken into the API client so every request carries a Bearer token.
+// Also invalidates all cached queries once the token is ready so they refetch
+// instead of staying stuck in error state from the pre-auth 401 responses.
+function ClerkAuthTokenSetup() {
+  const { getToken, isSignedIn } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setAuthTokenGetter(() => getToken());
+    return () => setAuthTokenGetter(null);
+  }, [getToken]);
+
+  // Once signed in, flush any stale 401-error queries so they refetch with the token.
+  useEffect(() => {
+    if (isSignedIn) {
+      queryClient.invalidateQueries();
+    }
+  }, [isSignedIn, queryClient]);
+
+  return null;
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const queryClient = useQueryClient();
@@ -276,6 +298,7 @@ function ClerkProviderWithRoutes() {
       signUpUrl={`${basePath}/sign-up`}
     >
       <QueryClientProvider client={queryClient}>
+        <ClerkAuthTokenSetup />
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <Switch>
