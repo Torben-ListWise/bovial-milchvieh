@@ -1,0 +1,93 @@
+import type { Request, Response, NextFunction } from "express";
+import { getAuth, clerkClient } from "@clerk/express";
+import { eq } from "drizzle-orm";
+import { db, usersTable, type User } from "@workspace/db";
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      userId?: string;
+      appUser?: User;
+    }
+  }
+}
+
+const OPERATOR_EMAILS = (process.env.OPERATOR_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+async function provisionUser(clerkUserId: string): Promise<User> {
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, clerkUserId));
+  if (existing[0]) return existing[0];
+
+  let email: string | null = null;
+  let name: string | null = null;
+  try {
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    email =
+      clerkUser.primaryEmailAddress?.emailAddress ??
+      clerkUser.emailAddresses[0]?.emailAddress ??
+      null;
+    const fullName = [clerkUser.firstName, clerkUser.lastName]
+      .filter(Boolean)
+      .join(" ");
+    name = fullName || clerkUser.username || null;
+  } catch {
+    // Clerk lookup failed; provision with minimal info.
+  }
+
+  const isOperator =
+    email != null && OPERATOR_EMAILS.includes(email.toLowerCase());
+
+  const [created] = await db
+    .insert(usersTable)
+    .values({
+      id: clerkUserId,
+      email,
+      name,
+      role: isOperator ? "operator" : "customer",
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (created) return created;
+  const again = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, clerkUserId));
+  return again[0];
+}
+
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const auth = getAuth(req);
+  const clerkUserId = auth?.userId;
+  if (!clerkUserId) {
+    res.status(401).json({ error: "Nicht angemeldet" });
+    return;
+  }
+  const user = await provisionUser(clerkUserId);
+  req.userId = user.id;
+  req.appUser = user;
+  next();
+}
+
+export function requireOperator(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (req.appUser?.role !== "operator") {
+    res.status(403).json({ error: "Nur für Betreiber zugänglich" });
+    return;
+  }
+  next();
+}

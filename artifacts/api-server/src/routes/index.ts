@@ -1,8 +1,30 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import storageRouter from "./storage";
+import meRouter from "./me";
+import datasetsRouter from "./datasets";
+import filesRouter from "./files";
+import analysesRouter from "./analyses";
+import rulesRouter from "./rules";
+import warningsRouter from "./warnings";
+import reportsRouter from "./reports";
+import masterdataRouter from "./masterdata";
+import adminRouter from "./admin";
+import privacyRouter from "./privacy";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(storageRouter);
+router.use(meRouter);
+router.use(datasetsRouter);
+router.use(filesRouter);
+router.use(analysesRouter);
+router.use(rulesRouter);
+router.use(warningsRouter);
+router.use(reportsRouter);
+router.use(masterdataRouter);
+router.use(adminRouter);
+router.use(privacyRouter);
 
 export default router;
