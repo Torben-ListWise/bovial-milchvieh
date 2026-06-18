@@ -1,4 +1,20 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+/**
+ * Auto-report scheduler.
+ *
+ * Two execution paths:
+ *   1. In-process setInterval (hourly) — suitable for always-on deployments.
+ *   2. External cron: POST /api/admin/cron/run-reports with the CRON_SECRET
+ *      header, which calls `runScheduledReports()` directly. This allows an
+ *      external scheduler (Render cron, GitHub Actions, etc.) to trigger
+ *      reports without relying on the web process staying alive.
+ *
+ * Weekly reports: generated on Monday at 06:00 server time.
+ * Monthly reports: generated on the 1st of each month at 06:00 server time.
+ * Idempotent: skips if a report for the same period already exists within
+ * the period window (7 days for weekly, 28 days for monthly).
+ */
+
+import { and, eq, gte } from "drizzle-orm";
 import {
   db,
   datasetsTable,
@@ -19,8 +35,7 @@ async function generateAutoReport(
   userId: string,
   period: "weekly" | "monthly",
 ): Promise<void> {
-  const title = `${PERIOD_LABEL[period]}bericht ${new Date().toLocaleDateString("de-DE")}`;
-
+  const windowMs = period === "weekly" ? 6 * 86400_000 : 28 * 86400_000;
   const [existing] = await db
     .select({ id: reportsTable.id })
     .from(reportsTable)
@@ -28,7 +43,7 @@ async function generateAutoReport(
       and(
         eq(reportsTable.datasetId, datasetId),
         eq(reportsTable.period, period),
-        gte(reportsTable.createdAt, new Date(Date.now() - (period === "weekly" ? 6 : 28) * 86400_000)),
+        gte(reportsTable.createdAt, new Date(Date.now() - windowMs)),
       ),
     )
     .limit(1);
@@ -44,7 +59,7 @@ async function generateAutoReport(
       conversation: [
         {
           role: "user",
-          content: `Erstelle eine sachliche Zusammenfassung der wichtigsten Kennzahlen und Auffälligkeiten dieses Milchviehbetriebs für den automatischen ${PERIOD_LABEL[period]}bericht.`,
+          content: `Erstelle eine sachliche Zusammenfassung der wichtigsten Kennzahlen und Auffälligkeiten dieses Milchviehbetriebs für den automatischen ${PERIOD_LABEL[period] ?? ""}bericht.`,
         },
       ],
       systemExtra:
@@ -75,7 +90,7 @@ async function generateAutoReport(
   await db.insert(reportsTable).values({
     datasetId,
     userId,
-    title,
+    title: `${PERIOD_LABEL[period] ?? ""}bericht ${new Date().toLocaleDateString("de-DE")}`,
     period,
     summary,
     sections,
@@ -92,11 +107,15 @@ async function generateAutoReport(
   logger.info({ datasetId, period }, "Automatischer Bericht erstellt");
 }
 
-async function runScheduler(): Promise<void> {
+/**
+ * Core logic: generate weekly/monthly reports for all ready datasets.
+ * Can be called from the in-process scheduler or the external cron endpoint.
+ */
+export async function runScheduledReports(force = false): Promise<void> {
   try {
     const now = new Date();
-    const isWeekly = now.getDay() === 1 && now.getHours() === 6;
-    const isMonthly = now.getDate() === 1 && now.getHours() === 6;
+    const isWeekly = force || (now.getDay() === 1 && now.getHours() === 6);
+    const isMonthly = force || (now.getDate() === 1 && now.getHours() === 6);
 
     if (!isWeekly && !isMonthly) return;
 
@@ -122,11 +141,16 @@ async function runScheduler(): Promise<void> {
   }
 }
 
-const SCHEDULER_INTERVAL_MS = 60 * 60 * 1000;
-
+/**
+ * Start the in-process hourly scheduler.
+ * For always-on deployments; for autoscaled environments prefer the
+ * POST /api/admin/cron/run-reports external cron endpoint instead.
+ */
 export function startScheduler(): void {
   logger.info("Auto-Report-Scheduler gestartet (stündliche Prüfung)");
   setInterval(() => {
-    runScheduler().catch((err) => logger.error({ err }, "Scheduler-Ausnahmefehler"));
-  }, SCHEDULER_INTERVAL_MS);
+    runScheduledReports().catch((err) =>
+      logger.error({ err }, "Scheduler-Ausnahmefehler"),
+    );
+  }, 60 * 60 * 1000);
 }

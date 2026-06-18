@@ -183,6 +183,25 @@ async function extractPptxText(buf: Buffer): Promise<string> {
   }
 }
 
+// Scan up to the first MAX_HEADER_SCAN rows and return the index of the row
+// that has the most canonical-field header matches. Handles exports where
+// the first N rows are metadata / title lines before the actual data header.
+const MAX_HEADER_SCAN = 10;
+function detectHeaderRow(rows2d: string[][]): number {
+  const limit = Math.min(rows2d.length, MAX_HEADER_SCAN);
+  let bestIdx = 0;
+  let bestScore = -1;
+  for (let i = 0; i < limit; i++) {
+    const row = rows2d[i];
+    const score = row.filter((cell) => suggestCanonicalField(cell.trim()) !== null).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
 async function downloadBytes(objectPath: string): Promise<Buffer> {
   const file = await objectStorage.getObjectEntityFile(objectPath);
   const [buf] = await file.download();
@@ -219,8 +238,12 @@ export async function analyzeFile(file: SourceFile): Promise<AnalyzeResult> {
     };
   }
 
-  const headers = rows2d[0].map((h, i) => h.trim() || `Spalte ${i + 1}`);
-  const dataRows = rows2d.slice(1);
+  // Detect header row: scan up to the first 10 rows and pick the one with the
+  // highest number of canonical-field matches. Handles exports where the first
+  // several rows are metadata / title lines.
+  const headerRowIdx = detectHeaderRow(rows2d);
+  const headers = rows2d[headerRowIdx].map((h, i) => h.trim() || `Spalte ${i + 1}`);
+  const dataRows = rows2d.slice(headerRowIdx + 1);
 
   const columns: ColumnInfo[] = headers.map((header, idx) => {
     const samples = dataRows
@@ -273,7 +296,8 @@ export async function materializeRows(
   await db.delete(dataRowsTable).where(eq(dataRowsTable.fileId, file.id));
   if (rows2d.length < 2) return 0;
 
-  const headers = rows2d[0].map((h, i) => h.trim() || `Spalte ${i + 1}`);
+  const headerRowIdx = detectHeaderRow(rows2d);
+  const headers = rows2d[headerRowIdx].map((h, i) => h.trim() || `Spalte ${i + 1}`);
   const headerToCanonical = new Map<number, string>();
   headers.forEach((h, idx) => {
     const canonical = mapping[h];
@@ -290,7 +314,7 @@ export async function materializeRows(
     data: Record<string, number | string>;
   }[] = [];
 
-  for (const row of rows2d.slice(1)) {
+  for (const row of rows2d.slice(headerRowIdx + 1)) {
     const data: Record<string, number | string> = {};
     let recordDate: string | null = null;
     for (const [idx, canonical] of headerToCanonical) {

@@ -1,2 +1,1 @@
-- [lib/db dist rebuild](lib-db-dist-rebuild.md) — always rebuild lib/db dist after schema changes or TS errors reference stale declarations
-- [Milchvieh arch decisions](milchvieh-arch.md) — key design decisions: ACL ownership check, anomaly bounding, LLM grounding, route contracts
+- [Milchvieh project architecture](milchvieh-arch.md) — pnpm monorepo: api-server (Express+Drizzle), milchvieh (React+Vite), Clerk auth, own Anthropic key

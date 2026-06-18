@@ -18,6 +18,10 @@ import { ObjectStorageService } from "../lib/objectStorage";
 const router: IRouter = Router();
 const objectStorage = new ObjectStorageService();
 
+// Cap parsed rows per export to avoid huge responses (DSGVO export is for
+// data portability; users needing full raw data can re-download their files).
+const EXPORT_ROWS_LIMIT = 10_000;
+
 router.post("/privacy/export", requireAuth, async (req: Request, res: Response) => {
   const userId = req.userId!;
 
@@ -49,17 +53,43 @@ router.post("/privacy/export", requireAuth, async (req: Request, res: Response) 
     messages: messages.filter((m) => m.analysisId === a.id),
   }));
 
-  // Strip objectPath from file metadata for privacy (no signed URLs in export)
-  const filesMeta = files.map(({ objectPath: _op, ...rest }) => rest);
+  // Include parsed canonical rows (capped for response size).
+  const dataRows =
+    datasetIds.length > 0
+      ? await db
+          .select()
+          .from(dataRowsTable)
+          .where(inArray(dataRowsTable.datasetId, datasetIds))
+          .limit(EXPORT_ROWS_LIMIT)
+      : [];
+
+  // Generate short-lived download URLs for uploaded file objects.
+  const filesWithDownload = await Promise.all(
+    files.map(async (f) => {
+      const { objectPath: _op, ...meta } = f;
+      let downloadUrl: string | null = null;
+      try {
+        const obj = await objectStorage.getObjectEntityFile(f.objectPath);
+        [downloadUrl] = await obj.getSignedUrl({ action: "read", expires: Date.now() + 3600_000 });
+      } catch {
+        // Object may be missing or storage unavailable.
+      }
+      return { ...meta, downloadUrl };
+    }),
+  );
 
   res.json({
     generatedAt: new Date(),
+    note: dataRows.length === EXPORT_ROWS_LIMIT
+      ? `Parsed rows capped at ${EXPORT_ROWS_LIMIT}. Download your original files for the full dataset.`
+      : undefined,
     datasets,
     analyses: analysesWithMessages,
     rules,
     warnings,
     reports,
-    files: filesMeta,
+    files: filesWithDownload,
+    dataRows,
   });
 });
 

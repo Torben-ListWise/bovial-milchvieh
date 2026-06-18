@@ -14,6 +14,7 @@ import {
   GetAdminActivityResponse,
 } from "@workspace/api-zod";
 import { requireAuth, requireOperator } from "../lib/auth";
+import { runScheduledReports } from "../lib/scheduler";
 
 const router: IRouter = Router();
 
@@ -102,6 +103,25 @@ router.get(
         })),
       ),
     );
+  },
+);
+
+// External cron trigger: POST /api/admin/cron/run-reports
+// Called by external schedulers (e.g. GitHub Actions, Render cron jobs).
+// Protected by CRON_SECRET env var to prevent unauthorized access.
+router.post(
+  "/admin/cron/run-reports",
+  async (req: Request, res: Response) => {
+    const cronSecret = process.env["CRON_SECRET"];
+    if (cronSecret) {
+      const provided = req.headers["x-cron-secret"] ?? req.headers["authorization"]?.replace("Bearer ", "");
+      if (provided !== cronSecret) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+    }
+    runScheduledReports(true).catch(() => undefined);
+    res.json({ ok: true, message: "Berichtsplanung gestartet." });
   },
 );
 

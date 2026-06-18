@@ -1,20 +1,29 @@
 ---
-name: Milchvieh architecture decisions
-description: Key design and security decisions for the Milchvieh Datenanalyse-Assistent dairy app
+name: Milchvieh project architecture
+description: Key architecture decisions and non-obvious constraints for the Milchvieh Datenanalyse-Assistent project
 ---
 
-**ACL ownership hardening:** `trySetObjectEntityAclPolicy` checks existing ACL owner before allowing reassignment — throws `ObjectAclConflictError` (403) if object already owned by a different user. Files route returns 502 (not silent continue) on any other ACL failure.
+## Core constraints
+- LLM only narrates; all numbers computed deterministically in code (compute layer)
+- Send only aggregates/schema to AI, never raw rows
+- Own Anthropic key via ANTHROPIC_API_KEY secret (direct SDK, not Replit AI integration)
+- German UI throughout; German number formats parsed in canonical.ts (parseGermanNumber)
+- analysesTable has NO `status` column — use `source` text field instead
+- messagesTable has NO `source` column
 
-**Why:** Prevents an attacker who knows an object path from reassigning ownership to themselves (broken access control).
+## Header detection
+- detectHeaderRow() in ingest.ts scans first 10 rows, picks row with most canonical-field matches
+- Both analyzeFile() and materializeRows() use this — handles exports with metadata rows before headers
 
-**LLM grounding:** Anthropic agent receives only deterministically-computed aggregates (KPIs, timeseries, anomaly stats) — never raw DB rows. The `detect_anomalies` tool returns bounded outlier lists (max 25 records with animalId/value/date) — this is intentional: farmers need actionable per-animal data, and the key is their own.
+## Scheduler
+- In-process setInterval (hourly) for always-on deployments
+- External cron path: POST /api/admin/cron/run-reports with X-Cron-Secret header (CRON_SECRET env var)
+- runScheduledReports(force=true) shared by both paths
 
-**Route contracts aligned to OpenAPI:**
-- `POST /privacy/export` (not GET)
-- `PATCH /files/:fileId/mapping` (not PUT)  
-- `POST /datasets/:datasetId/analyses` returns `AnalysisDetail` with messages (not bare summary)
-- `POST /analyses/:analysisId/messages` returns 200 (not 201)
+## DSGVO export
+- Includes dataRows (capped at 10k), signed 1-hour download URLs for original files
+- POST /privacy/export (not GET) per route contract
 
-**Operator role:** controlled by `OPERATOR_EMAILS` env var (comma-separated). Operator sees master data + activity log (aggregate metadata) but zero customer raw data.
-
-**Required secrets/env:** `ANTHROPIC_API_KEY` (secret), `OPERATOR_EMAILS` (shared env). Clerk keys are auto-provisioned by Replit.
+## Object storage
+- ACL ownership enforced via ObjectAclConflictError
+- masterDataTable: category='reference_range', key=<metric>_min or <metric>_max
