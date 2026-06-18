@@ -475,7 +475,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const toolUses = response.content.filter(
         (b): b is ToolUseBlock => b.type === "tool_use",
       );
-      if (toolUses.some((t) => groundedTools.has(t.name))) {
+      // For follow-up questions the data is already in the conversation context;
+      // emit_chart alone is valid since numbers were grounded in a prior turn.
+      const isFollowUp = opts.conversation.length > 0;
+      if (toolUses.some((t) => groundedTools.has(t.name) || (isFollowUp && t.name === "emit_chart"))) {
         toolWasCalled = true;
       }
       messages.push({ role: "assistant", content: response.content });

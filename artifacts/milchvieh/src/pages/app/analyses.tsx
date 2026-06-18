@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
+import ReactMarkdown from "react-markdown";
 import { Link } from "wouter";
 import {
   getListAnalysesQueryKey,
@@ -282,43 +283,46 @@ function AgentStepsTimeline({
   );
 }
 
-// ── Streaming text (word-by-word reveal) ──────────────────────────────────────
+// ── Markdown renderer ────────────────────────────────────────────────────────
+
+const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
+  return (
+    <ReactMarkdown
+      className="prose prose-sm max-w-none
+        prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-3 prose-headings:mb-1
+        prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed
+        prose-strong:text-foreground prose-strong:font-semibold
+        prose-li:text-foreground prose-li:my-0.5
+        prose-ul:my-1 prose-ol:my-1
+        prose-ul:pl-4 prose-ol:pl-4
+        [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+    >
+      {text}
+    </ReactMarkdown>
+  );
+});
+
+// ── Streaming text (character-by-character reveal) ────────────────────────────
 
 function StreamingText({ text, animate }: { text: string; animate: boolean }) {
-  const [visibleWords, setVisibleWords] = useState(animate ? 0 : Infinity);
+  const [visibleChars, setVisibleChars] = useState(animate ? 0 : text.length);
 
   useEffect(() => {
     if (!animate) return;
-    const words = text.split(/\s+/).filter(Boolean).length;
     let i = 0;
     const id = setInterval(() => {
-      i += 4;
-      setVisibleWords(i);
-      if (i >= words) clearInterval(id);
-    }, 25);
+      i += 10;
+      setVisibleChars(i);
+      if (i >= text.length) clearInterval(id);
+    }, 16);
     return () => clearInterval(id);
   }, [animate, text]);
 
-  if (!animate || visibleWords === Infinity) {
-    return <span className="whitespace-pre-wrap">{text}</span>;
-  }
+  const displayText = animate && visibleChars < text.length
+    ? text.slice(0, visibleChars)
+    : text;
 
-  const chunks = text.split(/(\s+)/);
-  let wordIdx = 0;
-  return (
-    <span className="whitespace-pre-wrap">
-      {chunks.map((chunk, i) => {
-        const isWord = !/^\s+$/.test(chunk);
-        if (isWord) wordIdx++;
-        const visible = wordIdx <= visibleWords;
-        return (
-          <span key={i} className={visible ? "" : "opacity-0 select-none"}>
-            {chunk}
-          </span>
-        );
-      })}
-    </span>
-  );
+  return <MarkdownContent text={displayText} />;
 }
 
 // ── Follow-up question chips ───────────────────────────────────────────────────
