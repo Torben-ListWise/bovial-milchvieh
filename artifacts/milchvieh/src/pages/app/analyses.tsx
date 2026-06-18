@@ -409,10 +409,19 @@ export function AnalysesPage() {
   const [mobileTab, setMobileTab] = useState<"chat" | "chart">("chat");
   const [isDragOver, setIsDragOver] = useState(false);
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    const saved = sessionStorage.getItem("chatPanelWidth");
+    return saved ? Math.max(200, Math.min(700, parseInt(saved, 10))) : 320;
+  });
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const askIsPendingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartWidthRef = useRef(0);
+  const chatWidthRef = useRef(chatWidth);
+  chatWidthRef.current = chatWidth;
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
@@ -491,6 +500,43 @@ export function AnalysesPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [analysis?.messages?.length, currentStep, systemMessages.length]);
+
+  // ── Panel resize drag handlers ────────────────────────────────────────────
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!dragStartXRef.current && dragStartXRef.current !== 0) return;
+      if (!document.body.classList.contains("resizing-panel")) return;
+      const delta = e.clientX - dragStartXRef.current;
+      const newW = Math.max(200, Math.min(700, dragStartWidthRef.current + delta));
+      setChatWidth(newW);
+      chatWidthRef.current = newW;
+    }
+    function onMouseUp() {
+      if (document.body.classList.contains("resizing-panel")) {
+        document.body.classList.remove("resizing-panel");
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        setIsDraggingPanel(false);
+        sessionStorage.setItem("chatPanelWidth", String(chatWidthRef.current));
+      }
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  function handlePanelDragStart(e: React.MouseEvent) {
+    dragStartXRef.current = e.clientX;
+    dragStartWidthRef.current = chatWidthRef.current;
+    document.body.classList.add("resizing-panel");
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    setIsDraggingPanel(true);
+    e.preventDefault();
+  }
 
   function handleNewAnalysis() {
     setActiveAnalysisId(null);
@@ -742,14 +788,26 @@ export function AnalysesPage() {
       )}
 
       {/* ── Desktop layout ─────────────────────────────────────────────────── */}
-      <div className="hidden md:flex w-full h-full">
+      <div className={cn("hidden md:flex w-full h-full", isDraggingPanel && "select-none")}>
         {/* Chat zone */}
-        <div className="w-[300px] shrink-0 flex flex-col border-r border-border">
+        <div
+          className="shrink-0 flex flex-col border-r border-border"
+          style={{ width: chatWidth }}
+        >
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {renderChatContent()}
           </div>
           {chatInputArea}
         </div>
+
+        {/* Drag handle */}
+        <div
+          className={cn(
+            "w-1 shrink-0 cursor-col-resize hover:bg-primary/40 transition-colors",
+            isDraggingPanel ? "bg-primary/50" : "bg-border"
+          )}
+          onMouseDown={handlePanelDragStart}
+        />
 
         {/* Chart panel */}
         <div className="flex-1 flex flex-col bg-background min-w-0">
