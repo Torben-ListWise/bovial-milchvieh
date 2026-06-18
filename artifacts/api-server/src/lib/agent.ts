@@ -275,12 +275,25 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             (input.limit as number) ?? 10,
           )) ?? { error: "Keine Daten" }
         );
-      case "detect_anomalies":
-        return (
-          (await detectAnomalies(datasetId, metric!, (input.sigma as number) ?? 2)) ?? {
-            error: "Zu wenige Daten",
-          }
-        );
+      case "detect_anomalies": {
+        // Return only aggregated summary — per-animal/date/value rows must
+        // never be sent to the LLM provider (data-residency constraint).
+        const result = await detectAnomalies(datasetId, metric!, (input.sigma as number) ?? 2);
+        if (!result) return { error: "Zu wenige Daten" };
+        return {
+          metric: result.metric,
+          label: result.label,
+          unit: result.unit ?? null,
+          mean: result.mean,
+          std: result.std,
+          lowerBound: result.lowerBound,
+          upperBound: result.upperBound,
+          outlierCount: result.outlierCount,
+          basisRowCount: result.basis.rowCount,
+          // Deliberately omitting result.outliers (per-animal rows) —
+          // data-residency constraint: only aggregates may be sent to AI.
+        };
+      }
       case "get_master_data": {
         const cat = input.category as string | undefined;
         const rows = cat

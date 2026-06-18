@@ -52,8 +52,23 @@ app.use(
   cors({
     credentials: true,
     origin: (origin, callback) => {
-      // Allow server-to-server calls (no Origin header) and listed origins.
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      // No Origin header = server-to-server call; always allow.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      // In production with no allowlist configured, fail closed to prevent
+      // credentialed cross-origin access from arbitrary origins.
+      if (allowedOrigins.length === 0) {
+        if (process.env["NODE_ENV"] !== "production") {
+          // Dev-only: fail open so the local Vite preview works without env setup.
+          callback(null, true);
+        } else {
+          callback(new Error("CORS: no allowed origins configured in production"));
+        }
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
