@@ -227,7 +227,7 @@ function AppPortal() {
         <Route path="/app">
           {effectiveView === 'operator'
             ? <Redirect to="/app/monitoring" />
-            : <Redirect to="/app/datasets" />}
+            : <Redirect to="/app/analyses" />}
         </Route>
       </Switch>
     </AppLayout>
@@ -238,7 +238,7 @@ function HomeRedirect() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/app/datasets" />
+        <Redirect to="/app/analyses" />
       </Show>
       <Show when="signed-out">
         <LandingPage />

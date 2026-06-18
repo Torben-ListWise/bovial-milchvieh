@@ -75,7 +75,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     if (!onSwitchView) return;
     const next = viewMode === 'operator' ? 'customer' : 'operator';
     onSwitchView(next);
-    setLocation(next === 'operator' ? '/app/monitoring' : '/app/datasets');
+    setLocation(next === 'operator' ? '/app/monitoring' : '/app/analyses');
   };
 
   return (
