@@ -35,7 +35,32 @@ app.use(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
+// CORS: allow only the Replit dev domain and any configured ALLOWED_ORIGINS.
+// Never use origin:true (reflects arbitrary origins) with credentials:true.
+const allowedOrigins = (() => {
+  const base = process.env["REPLIT_DEV_DOMAIN"]
+    ? [`https://${process.env["REPLIT_DEV_DOMAIN"]}`]
+    : [];
+  const extra = (process.env["ALLOWED_ORIGINS"] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...base, ...extra];
+})();
+
+app.use(
+  cors({
+    credentials: true,
+    origin: (origin, callback) => {
+      // Allow server-to-server calls (no Origin header) and listed origins.
+      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+    },
+  }),
+);
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 

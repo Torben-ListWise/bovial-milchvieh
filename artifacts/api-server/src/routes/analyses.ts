@@ -26,6 +26,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { runAgent, MissingApiKeyError, type Chart, type Citation } from "../lib/agent";
+import { rulesTable } from "@workspace/db";
 import { categorizeQuestion } from "../lib/categorize";
 
 const router: IRouter = Router();
@@ -109,8 +110,28 @@ export async function processQuestion(
   let citations: Citation[] = [];
   let error: string | null = null;
 
+  // Load customer-defined rules and pass them as structured context so the
+  // agent can reference them in every analysis (e.g. custom thresholds).
+  const customerRules = await db
+    .select()
+    .from(rulesTable)
+    .where(and(eq(rulesTable.userId, analysis.userId!), eq(rulesTable.enabled, true)));
+  const rulesContext =
+    customerRules.length > 0
+      ? `\nKundendefinierte Regeln (verwende diese als Hinweise bei der Analyse):\n${customerRules
+          .map(
+            (r) =>
+              `- ${r.name}: ${r.metric} ${r.comparator} ${r.threshold}${r.unit ? " " + r.unit : ""}${r.description ? " (" + r.description + ")" : ""}`,
+          )
+          .join("\n")}`
+      : "";
+
   try {
-    const result = await runAgent({ datasetId: analysis.datasetId, conversation });
+    const result = await runAgent({
+      datasetId: analysis.datasetId,
+      conversation,
+      systemExtra: rulesContext || undefined,
+    });
     content = result.text || "Es konnte keine Antwort erzeugt werden.";
     charts = result.charts;
     citations = result.citations;

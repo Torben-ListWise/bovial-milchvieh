@@ -1,16 +1,20 @@
 import { useListReports, getListReportsQueryKey, useGenerateReport } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Calendar } from "lucide-react";
+import { FileText, Plus, Calendar, Download } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { useAuth } from "@clerk/react";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
 
 export function ReportsPage() {
   const searchParams = new URLSearchParams(window.location.search);
   const datasetId = searchParams.get("datasetId");
   const queryClient = useQueryClient();
+  const { getToken } = useAuth();
 
   const { data: reports, isLoading } = useListReports(
     datasetId ?? "",
@@ -25,8 +29,31 @@ export function ReportsPage() {
     }
   });
 
+  const handleDownload = async (reportId: string, title: string) => {
+    const token = await getToken();
+    const resp = await fetch(`${API_BASE}/api/reports/${reportId}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/[^a-z0-9äöü_\-]/gi, "_")}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!datasetId) {
-    return <div className="p-8">Bitte wählen Sie einen Betrieb aus der Liste.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center gap-4">
+        <FileText className="w-12 h-12 text-muted-foreground/40" />
+        <p className="text-muted-foreground">
+          Bitte wählen Sie zuerst einen Betrieb aus der{" "}
+          <a href="/app/datasets" className="underline text-primary">Betriebsliste</a>.
+        </p>
+      </div>
+    );
   }
 
   const handleGenerate = () => {
@@ -73,24 +100,45 @@ export function ReportsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {reports.map((report) => (
-            <Card key={report.id} className="hover:border-primary/50 transition-colors cursor-pointer group">
+            <Card key={report.id} className="hover:border-primary/50 transition-colors group">
               <CardHeader>
-                <div className="flex justify-between items-start">
-                  <CardTitle className="group-hover:text-primary transition-colors">{report.title}</CardTitle>
-                  <span className={`text-xs px-2 py-1 rounded-full ${report.status === 'ready' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : report.status === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                <div className="flex justify-between items-start gap-2">
+                  <CardTitle className="group-hover:text-primary transition-colors text-base">
+                    {report.title}
+                  </CardTitle>
+                  <span className={`shrink-0 text-xs px-2 py-1 rounded-full ${
+                    report.status === 'ready'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                      : report.status === 'error'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
                     {report.status === 'ready' ? 'Fertig' : report.status === 'error' ? 'Fehler' : 'Generiert...'}
                   </span>
                 </div>
                 <CardDescription className="flex items-center gap-2 mt-2">
                   <Calendar className="w-4 h-4" />
                   {format(new Date(report.createdAt), "dd. MMMM yyyy", { locale: de })}
-                  <span className="capitalize border-l pl-2 ml-2 border-border">{report.period === 'weekly' ? 'Wöchentlich' : report.period === 'monthly' ? 'Monatlich' : report.period}</span>
+                  <span className="capitalize border-l pl-2 ml-2 border-border">
+                    {report.period === 'weekly' ? 'Wöchentlich' : report.period === 'monthly' ? 'Monatlich' : report.period}
+                  </span>
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground line-clamp-3">
+                <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
                   {report.summary || "Keine Zusammenfassung verfügbar."}
                 </p>
+                {report.status === 'ready' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleDownload(report.id, report.title)}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Herunterladen
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}

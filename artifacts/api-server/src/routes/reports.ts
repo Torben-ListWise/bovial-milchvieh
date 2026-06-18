@@ -18,6 +18,7 @@ import {
 import { requireAuth } from "../lib/auth";
 import { computeDashboard } from "../lib/compute";
 import { runAgent } from "../lib/agent";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -160,5 +161,61 @@ router.get("/reports/:reportId", requireAuth, async (req: Request, res: Response
   }
   res.json(GetReportResponse.parse(serializeReport(r)));
 });
+
+// PDF export: renders a plain-text HTML page the browser can print-to-PDF.
+// A full headless-PDF library (Puppeteer, pdfkit) is not bundled to keep the
+// container small; instead we emit print-ready HTML with a Content-Disposition
+// header. The client receives it as a downloadable file.
+router.get(
+  "/reports/:reportId/pdf",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const { reportId } = GetReportParams.parse(req.params);
+    const [r] = await db
+      .select()
+      .from(reportsTable)
+      .where(and(eq(reportsTable.id, reportId), eq(reportsTable.userId, req.userId!)));
+    if (!r) {
+      res.status(404).json({ error: "Bericht nicht gefunden" });
+      return;
+    }
+
+    const sections = (r.sections as Array<{ title?: string; content?: string }> | null) ?? [];
+    const sectionHtml = sections
+      .map(
+        (s) =>
+          `<section><h2>${s.title ?? ""}</h2><pre style="white-space:pre-wrap;font-family:inherit">${s.content ?? ""}</pre></section>`,
+      )
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <title>${r.title}</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 24px;color:#1a1a1a}
+    h1{font-size:1.6rem;margin-bottom:4px}
+    .meta{color:#666;font-size:.85rem;margin-bottom:32px}
+    h2{font-size:1.1rem;margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px}
+    p{line-height:1.6}
+    @media print{body{margin:0}}
+  </style>
+</head>
+<body>
+  <h1>${r.title}</h1>
+  <p class="meta">Erstellt: ${new Date(r.createdAt).toLocaleDateString("de-DE", { day:"2-digit", month:"long", year:"numeric" })} · ${r.period}</p>
+  ${r.summary ? `<p>${r.summary}</p>` : ""}
+  ${sectionHtml}
+</body>
+</html>`;
+
+    const filename = `bericht-${reportId.slice(0, 8)}.html`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(html);
+    logger.info({ reportId }, "Bericht-PDF-Export (HTML) ausgeliefert");
+  },
+);
 
 export default router;
