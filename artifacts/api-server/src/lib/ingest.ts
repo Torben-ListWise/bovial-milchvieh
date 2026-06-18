@@ -169,19 +169,28 @@ function parseSpreadsheet(buf: Buffer, name: string): string[][] {
   return json.map((r) => r.map((c) => (c == null ? "" : String(c))));
 }
 
-async function extractPdfText(buf: Buffer): Promise<string> {
-  try {
-    // pdf-parse v2: class-based API. PDFParse({ data: Buffer }) auto-converts
-    // the Buffer to Uint8Array internally.
-    const { PDFParse } = await import("pdf-parse");
-    // @ts-expect-error - PDFParse constructor accepts { data: Buffer }
-    const parser = new PDFParse({ data: buf });
-    const result = await parser.getText();
-    return result.text ?? "";
-  } catch (err) {
-    logger.warn({ err }, "PDF-Textextraktion fehlgeschlagen");
-    return "";
+export async function extractPdfText(buf: Buffer): Promise<string> {
+  const { getDocument, GlobalWorkerOptions } = await import(
+    "pdfjs-dist/legacy/build/pdf.mjs"
+  );
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  GlobalWorkerOptions.workerSrc = workerPath;
+
+  const data = new Uint8Array(buf);
+  const loadingTask = getDocument({ data, useSystemFonts: true });
+  const doc = await loadingTask.promise;
+  const parts: string[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: { str: string }) => item.str)
+      .join(" ");
+    parts.push(pageText);
   }
+  return parts.join("\n\n");
 }
 
 async function extractPptxText(buf: Buffer): Promise<string> {

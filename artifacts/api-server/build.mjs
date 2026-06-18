@@ -100,10 +100,8 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
-      // PDF parsing uses pdfjs-dist which needs its worker file at a known
-      // relative path — keep both packages external so Node resolves them
-      // from node_modules at runtime (bundling breaks the worker path).
-      "pdf-parse",
+      // pdfjs-dist must be kept external: the worker file is resolved from
+      // node_modules at runtime and cannot be bundled (it's loaded dynamically).
       "pdfjs-dist",
     ],
     sourcemap: "linked",

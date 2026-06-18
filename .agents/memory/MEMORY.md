@@ -5,3 +5,4 @@
 - [Milchvieh dataset delete cascade](milchvieh-dataset-delete-cascade.md) — dataset deletion must remove analyses+messages+reports+activity; no FK cascades in schema
 - [Milchvieh rules wired into agent](milchvieh-rules-agent.md) — customer rules loaded per-user and passed as systemExtra context on every runAgent call
 - [Milchvieh CORS config](milchvieh-cors.md) — never use origin:true with credentials:true; use REPLIT_DEV_DOMAIN + ALLOWED_ORIGINS allowlist
+- [Milchvieh PDF extraction](milchvieh-pdf-extraction.md) — use pdfjs-dist legacy/build directly; pdf-parse v1 bundles break on Node.js v24
