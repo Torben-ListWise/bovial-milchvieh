@@ -149,10 +149,12 @@ function parseSpreadsheet(buf: Buffer, name: string): string[][] {
 
 async function extractPdfText(buf: Buffer): Promise<string> {
   try {
-    // @ts-expect-error - deep import has no bundled type declarations
-    const mod = await import("pdf-parse/lib/pdf-parse.js");
-    const pdfParse = (mod as { default: (b: Buffer) => Promise<{ text: string }> })
-      .default;
+    // pdf-parse is a CommonJS module; use createRequire to bypass ESM export
+    // restrictions that block the internal subpath import.
+    const { createRequire } = await import("module");
+    const req = createRequire(import.meta.url);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfParse = req("pdf-parse") as (b: Buffer) => Promise<{ text: string }>;
     const result = await pdfParse(buf);
     return result.text ?? "";
   } catch (err) {

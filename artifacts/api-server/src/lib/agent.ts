@@ -387,14 +387,15 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const toolUses = response.content.filter(
         (b): b is ToolUseBlock => b.type === "tool_use",
       );
-      // Mark that at least one compute/data tool has been called so the
-      // grounding guarantee is satisfied. (emit_chart and get_schema alone
-      // do not count as a compute evidence tool.)
-      const computeTools = new Set([
+      // Mark that at least one data/compute tool has been called so the
+      // grounding guarantee is satisfied. get_dataset_schema also counts:
+      // if the schema is empty the agent legitimately reports no data.
+      const groundedTools = new Set([
+        "get_dataset_schema",
         "get_metric_stats", "get_kpis", "get_timeseries",
         "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
       ]);
-      if (toolUses.some((t) => computeTools.has(t.name))) {
+      if (toolUses.some((t) => groundedTools.has(t.name))) {
         toolWasCalled = true;
       }
       messages.push({ role: "assistant", content: response.content });
