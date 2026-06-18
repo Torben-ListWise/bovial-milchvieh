@@ -225,7 +225,16 @@ WENN get_schema 0 FELDER ZEIGT UND dokumentAvailable: true:
 - Beantworte die Frage direkt und vollständig aus dem Dokumentinhalt.
 - Kein get_kpis, get_timeseries oder andere DB-Werkzeuge aufrufen — die Daten liegen als Text vor, nicht als Datenbankzeilen.
 - Zahlen und Werte aus dem PDF-Text dürfen zitiert werden (sie stammen aus dem Dokument, nicht aus der Datenbank).
-- emit_chart ist in diesem Fall nicht verfügbar (keine strukturierten Zeitreihen).`;
+- emit_chart ist in diesem Fall nicht verfügbar (keine strukturierten Zeitreihen).
+
+WICHTIG — GÜLTIGE DATENQUELLEN:
+- Der Abschnitt "HOCHGELADENE DOKUMENTE" im System-Prompt ist eine vollwertige Datenquelle. Zahlen daraus sind genauso belegt wie Zahlen aus einem read_document-Ergebnis.
+- Wenn in einem vorherigen Gesprächsschritt Zahlen aus diesem Abschnitt oder aus read_document zitiert wurden, sind diese Zahlen korrekt belegt. Behaupte NIEMALS im Nachhinein, sie seien erfunden oder unbelegt.
+
+WENN IN EINEM FOLGEGESPRÄCH EINE GRAFIK GEWÜNSCHT WIRD, ABER NUR PDF-DATEN VORHANDEN SIND:
+- Sage klar: "Diagramme sind nur mit strukturierten Datenbankdaten möglich. Da Ihre Daten als PDF-Dokument vorliegen, kann ich keine Grafik erstellen."
+- Stell NICHT in Frage, ob die Zahlen aus der vorherigen Antwort korrekt waren — sie sind korrekt belegt (aus dem Dokument).
+- Biete stattdessen an, die Kennzahlen aus dem Dokument tabellarisch oder als Text zusammenzufassen.`;
 
 interface RunOptions {
   datasetId: string;
@@ -538,12 +547,15 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     ];
     try {
       // Do NOT pass tools — verification is a pure text review.
+      // Include docContext so the verifier can see PDF content and won't
+      // incorrectly flag document-sourced numbers as ungrounded.
+      const verifySystem = [SYSTEM_PROMPT, opts.systemExtra, docContext]
+        .filter(Boolean)
+        .join("\n\n");
       const verifyResponse = await client.messages.create({
         model: MODEL,
         max_tokens: 4096,
-        system: opts.systemExtra
-          ? `${SYSTEM_PROMPT}\n\n${opts.systemExtra}`
-          : SYSTEM_PROMPT,
+        system: verifySystem,
         messages: verifyMessages,
       });
       const verifiedText = verifyResponse.content
