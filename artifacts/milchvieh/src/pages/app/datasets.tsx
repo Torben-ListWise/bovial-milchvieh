@@ -1,13 +1,14 @@
 import { useListDatasets, useCreateDataset } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Home as HomeIcon } from "lucide-react";
+import { Plus, Home as HomeIcon, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export function DatasetList() {
   const { data: datasets, isLoading } = useListDatasets();
   const createDataset = useCreateDataset();
+  const [, setLocation] = useLocation();
 
   if (isLoading) {
     return (
@@ -25,12 +26,20 @@ export function DatasetList() {
   }
 
   const handleCreate = () => {
-    createDataset.mutate({
-      data: {
-        name: `Neuer Betrieb ${datasets?.length ? datasets.length + 1 : 1}`,
-        description: "Automatisch generierter Betrieb"
+    if (createDataset.isPending) return;
+    createDataset.mutate(
+      {
+        data: {
+          name: `Neuer Betrieb ${datasets?.length ? datasets.length + 1 : 1}`,
+          description: ""
+        }
+      },
+      {
+        onSuccess: (newDataset) => {
+          setLocation(`/app/overview?datasetId=${newDataset.id}`);
+        }
       }
-    });
+    );
   };
 
   return (
@@ -40,8 +49,8 @@ export function DatasetList() {
           <h1 className="text-3xl font-bold text-foreground">Ihre Betriebe</h1>
           <p className="text-muted-foreground mt-1">Wählen Sie einen Betrieb aus oder legen Sie einen neuen an.</p>
         </div>
-        <Button onClick={handleCreate} className="gap-2">
-          <Plus className="w-4 h-4" />
+        <Button onClick={handleCreate} disabled={createDataset.isPending} className="gap-2">
+          {createDataset.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Neuer Betrieb
         </Button>
       </div>
@@ -56,7 +65,10 @@ export function DatasetList() {
             <p className="text-muted-foreground mb-6 max-w-md">
               Legen Sie Ihren ersten Betrieb an, um Daten hochzuladen und mit der Analyse zu beginnen.
             </p>
-            <Button onClick={handleCreate}>Ersten Betrieb anlegen</Button>
+            <Button onClick={handleCreate} disabled={createDataset.isPending} className="gap-2">
+              {createDataset.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Ersten Betrieb anlegen
+            </Button>
           </CardContent>
         </Card>
       ) : (
