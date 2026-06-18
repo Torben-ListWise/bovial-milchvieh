@@ -189,21 +189,36 @@ const TOOLS: Tool[] = [
   {
     name: "emit_chart",
     description:
-      "Erstellt ein interaktives Diagramm aus deterministisch berechneten Daten und hängt es an die Antwort an. Die Daten werden serverseitig berechnet.",
+      "Erstellt ein interaktives Diagramm. Bei strukturierten DB-Daten: source='timeseries'|'group'|'ranking' + metric. Bei PDF-Dokumenten: source='document' + data-Array direkt übergeben.",
     input_schema: {
       type: "object",
       properties: {
         title: { type: "string" },
         chartType: { type: "string", enum: ["line", "bar", "area", "pie"] },
-        source: { type: "string", enum: ["timeseries", "group", "ranking"] },
+        source: { type: "string", enum: ["timeseries", "group", "ranking", "document"] },
         metric: { type: "string" },
         interval: { type: "string", enum: ["day", "week", "month"] },
         aggregation: { type: "string", enum: ["avg", "sum", "count"] },
         groupBy: { type: "string" },
         order: { type: "string", enum: ["asc", "desc"] },
         limit: { type: "number" },
+        data: {
+          type: "array",
+          description: "Für source='document': Array von Datenpunkten, z.B. [{name:'Remontierungsrate', wert:28}]",
+          items: { type: "object" },
+        },
+        xKey: { type: "string", description: "Schlüssel für die X-Achse im data-Array, z.B. 'name'" },
+        series: {
+          type: "array",
+          description: "Datenreihen, z.B. [{key:'wert', label:'%'}]",
+          items: {
+            type: "object",
+            properties: { key: { type: "string" }, label: { type: "string" } },
+          },
+        },
+        unit: { type: "string" },
       },
-      required: ["title", "chartType", "source", "metric"],
+      required: ["title", "chartType", "source"],
     },
   },
 ];
@@ -215,7 +230,7 @@ STRIKTE REGELN:
 - Wenn du eine Zahl nennst, muss sie aus einem Werkzeug oder einem Dokumenttext stammen.
 - Beginne immer mit get_schema, um zu wissen, welche Felder verfügbar sind.
 - Wenn ein Wert nicht berechnet werden kann oder Daten fehlen, sage das ehrlich.
-- Nutze emit_chart, um zentrale Aussagen mit einem passenden Diagramm zu untermauern (meist 1–3 Diagramme) — aber nur wenn strukturierte Daten (get_schema > 0 Felder) vorhanden sind.
+- Nutze emit_chart, um zentrale Aussagen mit einem passenden Diagramm zu untermauern (meist 1–3 Diagramme). Bei strukturierten DB-Daten: source='timeseries'|'group'|'ranking'. Bei PDF-Dokumenten: source='document' mit manuell konstruiertem data-Array.
 - Vergleiche Werte bei Bedarf mit den geprüften Stammdaten (get_master_data), falls vorhanden.
 - Fasse am Ende die wichtigsten Erkenntnisse verständlich zusammen. Nenne konkrete Zahlen mit Einheiten.
 - Sei präzise und vermeide Spekulation. Lieber weniger, aber belastbare Aussagen.
@@ -225,7 +240,7 @@ WENN get_schema 0 FELDER ZEIGT UND dokumentAvailable: true:
 - Beantworte die Frage direkt und vollständig aus dem Dokumentinhalt.
 - Kein get_kpis, get_timeseries oder andere DB-Werkzeuge aufrufen — die Daten liegen als Text vor, nicht als Datenbankzeilen.
 - Zahlen und Werte aus dem PDF-Text dürfen zitiert werden (sie stammen aus dem Dokument, nicht aus der Datenbank).
-- emit_chart DARF verwendet werden: Lies die relevanten Kennzahlen aus dem Dokumenttext und baue das data-Array manuell. Beispiel für einen Vergleich mehrerer Werte: emit_chart({ type: "bar", title: "Kennzahlen Übersicht", data: [{ name: "Remontierungsrate", wert: 28 }, { name: "Abgangsrate", wert: 14 }], xKey: "name", series: [{ key: "wert", label: "%" }] }). Verwende type:"bar" für Vergleiche, type:"pie" für Anteile, type:"line" nur wenn Zeitreihenpunkte im Dokument stehen.
+- emit_chart DARF und SOLL verwendet werden: Lies die relevanten Kennzahlen aus dem Dokumenttext, baue das data-Array manuell und übergib es mit source='document'. Beispiel: emit_chart({ title: "Kennzahlen Übersicht", chartType: "bar", source: "document", data: [{ name: "Remontierungsrate", wert: 28 }, { name: "Abgangsrate", wert: 14 }], xKey: "name", series: [{ key: "wert", label: "%" }] }). Verwende chartType:"bar" für Vergleiche, chartType:"pie" für Anteile, chartType:"line" nur wenn Zeitreihenpunkte im Dokument stehen.
 - Erstelle nur Grafiken, wenn mindestens 2 Datenpunkte im Dokumenttext vorhanden sind.
 
 WICHTIG — GÜLTIGE DATENQUELLEN:
@@ -425,6 +440,29 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           });
           return { ok: true, points: r.entries.length, basis: basisText(r.basis) };
         }
+        // source === "document": agent passes pre-built data from PDF text
+        if (source === "document") {
+          const rawData = input.data as Record<string, unknown>[] | undefined;
+          if (!rawData || rawData.length < 2) {
+            return { error: "Zu wenige Datenpunkte für ein Diagramm (mind. 2 benötigt)" };
+          }
+          const xKey = (input.xKey as string) ?? "name";
+          const seriesInput = (input.series as { key: string; label: string }[] | undefined) ?? [];
+          if (seriesInput.length === 0) {
+            return { error: "Keine series-Definition angegeben" };
+          }
+          charts.push({
+            id: `chart_${Math.random().toString(36).slice(2, 10)}`,
+            type: chartType,
+            title,
+            xKey,
+            series: seriesInput,
+            data: rawData,
+            unit: (input.unit as string) ?? null,
+            basis: "Dokument",
+          });
+          return { ok: true, points: rawData.length, basis: "Dokument" };
+        }
         return { error: "Unbekannte Diagrammquelle" };
       }
       default:
@@ -540,11 +578,11 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       {
         role: "user" as const,
         content:
-          "Überprüfungsschritt: Kontrolliere deine Antwort. Stimmen alle genannten " +
-          "Zahlen exakt mit den oben stehenden Tool-Ergebnissen überein? " +
-          "Falls ja, gib die Antwort unverändert zurück. " +
-          "Falls nein, korrigiere ausschließlich die fehlerhaften Stellen und " +
-          "gib die vollständige korrigierte Antwort zurück.",
+          "Überprüfungsschritt: Stimmen alle genannten Zahlen exakt mit den " +
+          "Tool-Ergebnissen oder dem Dokumenttext überein? " +
+          "Antworte NUR mit der fertigen Antwort — kein Kommentar zur Überprüfung, " +
+          "keine Erklärung des Prozesses, kein 'Problem:' oder 'Korrigierte Antwort:'. " +
+          "Gib ausschließlich den Text zurück, den der Landwirt lesen soll.",
       },
     ];
     try {
