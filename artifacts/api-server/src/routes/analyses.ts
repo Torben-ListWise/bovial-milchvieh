@@ -133,7 +133,7 @@ export async function processQuestion(
   let charts: Chart[] = [];
   let citations: Citation[] = [];
   let error: string | null = null;
-  let followUpQuestions: string[] = [];
+  let agentResultText: string | undefined;
 
   // Load customer-defined rules and pass them as structured context so the
   // agent can reference them in every analysis (e.g. custom thresholds).
@@ -180,11 +180,8 @@ export async function processQuestion(
     content = result.text || "Es konnte keine Antwort erzeugt werden.";
     charts = result.charts;
     citations = result.citations;
+    agentResultText = result.text;
 
-    // Generate follow-up suggestions in parallel with storing the result
-    if (result.text) {
-      followUpQuestions = await generateFollowUps(question, result.text);
-    }
   } catch (err) {
     if (err instanceof MissingApiKeyError) {
       content = err.message;
@@ -202,6 +199,8 @@ export async function processQuestion(
       .catch(() => {});
   }
 
+  // Save the message immediately so the frontend can show it without waiting
+  // for follow-up question generation (which runs as a background update).
   const [assistant] = await db
     .insert(messagesTable)
     .values({
@@ -211,9 +210,23 @@ export async function processQuestion(
       charts,
       citations,
       error,
-      followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : null,
+      followUpQuestions: null,
     } as any)
     .returning();
+
+  // Generate follow-up questions in the background and patch the message
+  if (agentResultText) {
+    generateFollowUps(question, agentResultText)
+      .then((qs) => {
+        if (qs.length > 0) {
+          db.update(messagesTable)
+            .set({ followUpQuestions: qs } as any)
+            .where(eq(messagesTable.id, assistant.id))
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
 
   const category = analysis.category ?? categorizeQuestion(question);
   await db

@@ -29,10 +29,18 @@ import {
   Bot, User, AlertCircle, Send,
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
   Loader2, ChevronRight, Upload,
-  CheckCircle2, Clock, Check,
+  CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type FileItem = {
+  id: string;
+  name: string;
+  status: string;
+  kind?: string | null;
+  createdAt: Date;
+};
 
 type SystemMsgStatus = "uploading" | "processing" | "ready" | "error" | "timeout";
 
@@ -98,6 +106,57 @@ function normalizeStep(step: string): { emoji: string; label: string } {
   if (step.startsWith("Lade"))            return { emoji: "📚", label: "Lade Stammdaten" };
   if (step.startsWith("Überprüfe"))       return { emoji: "🔍", label: "Überprüfe Ergebnisse" };
   return { emoji: "⚙️", label: step };
+}
+
+// ── Historical file pills ────────────────────────────────────────────────────
+
+function fileKindIcon(kind?: string | null) {
+  if (kind === "pdf") return <FileText className="w-3.5 h-3.5 shrink-0" />;
+  if (kind === "csv" || kind === "excel" || kind === "herd_export")
+    return <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />;
+  return <Sheet className="w-3.5 h-3.5 shrink-0" />;
+}
+
+function HistoricalFiles({ files }: { files: FileItem[] }) {
+  if (files.length === 0) return null;
+  return (
+    <div className="px-4 pt-3 pb-1">
+      <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
+        Hochgeladene Daten
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {files.map((f) => (
+          <div
+            key={f.id}
+            className={cn(
+              "flex items-center gap-2 text-xs rounded-lg px-3 py-2 border",
+              f.status === "ready"
+                ? "bg-green-50/60 border-green-200/70 text-green-800"
+                : f.status === "error"
+                ? "bg-red-50/60 border-red-200/70 text-red-700"
+                : "bg-muted/60 border-border text-muted-foreground",
+            )}
+          >
+            {fileKindIcon(f.kind)}
+            <span className="flex-1 truncate font-medium">{f.name}</span>
+            {f.status === "ready" && (
+              <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+            )}
+            {f.status === "error" && (
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+            )}
+            {(f.status === "uploaded" || f.status === "parsing" || f.status === "mapping") && (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+            )}
+            <span className="text-[10px] text-muted-foreground/70 shrink-0">
+              {format(new Date(f.createdAt), "dd.MM.", { locale: de })}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 border-t border-border/60" />
+    </div>
+  );
 }
 
 // ── File poller ──────────────────────────────────────────────────────────────
@@ -501,6 +560,7 @@ export function AnalysesPage() {
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const askIsPendingRef = useRef(false);
   const pendingQuestionRef = useRef("");
@@ -596,9 +656,12 @@ export function AnalysesPage() {
     return new Date(msg.createdAt).getTime() > mountedAtRef.current;
   }
 
+  // Auto-scroll to bottom only while agent is working (not on initial load)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [analysis?.messages?.length, currentStep, systemMessages.length]);
+    if (isAgentWorking) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [analysis?.messages?.length, currentStep, systemMessages.length, isAgentWorking]);
 
   // ── Panel resize drag handlers ────────────────────────────────────────────
   useEffect(() => {
@@ -648,6 +711,12 @@ export function AnalysesPage() {
     if (!text) return;
 
     pendingQuestionRef.current = text;
+
+    // Scroll to top so the new question appears at the top and
+    // the answer fills down into the visible area
+    requestAnimationFrame(() => {
+      if (chatScrollRef.current) chatScrollRef.current.scrollTop = 0;
+    });
 
     if (!activeAnalysisId) {
       createAnalysis.mutate({
@@ -743,14 +812,24 @@ export function AnalysesPage() {
 
   // ── Chat zone renderer ─────────────────────────────────────────────────────
 
+  const historicalFiles = (files ?? []) as FileItem[];
+
   function renderChatContent() {
     if (!activeAnalysisId && !createAnalysis.isPending && systemMessages.length === 0) {
-      return <StarterQuestions hasFiles={hasFiles} onAsk={handleStarterQuestion} />;
+      return (
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0">
+            <HistoricalFiles files={historicalFiles} />
+            <StarterQuestions hasFiles={hasFiles} onAsk={handleStarterQuestion} />
+          </div>
+        </div>
+      );
     }
 
     if (createAnalysis.isPending && !activeAnalysisId) {
       return (
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
+        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
+          <HistoricalFiles files={historicalFiles} />
           {systemMessages.map((m) => (
             <SystemMessageBubble key={m.id} msg={m} />
           ))}
@@ -775,56 +854,59 @@ export function AnalysesPage() {
     );
 
     return (
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
-        {systemMessages.map((m) => (
-          <SystemMessageBubble key={m.id} msg={m} />
-        ))}
-
-        {!analysis && activeAnalysisId ? (
-          <div className="flex items-center justify-center h-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
-        ) : (
-          <>
-          {/* Show pending question bubble while background agent hasn't written messages yet */}
-          {msgs.length === 0 && isAgentWorking && pendingQuestionRef.current && (
-            <div className="flex gap-3 justify-end">
-              <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
-                {pendingQuestionRef.current}
-              </div>
-              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
-                <User className="w-3.5 h-3.5 text-primary-foreground" />
-              </div>
-            </div>
-          )}
-          {msgs.map((msg, idx) => (
-            <div key={msg.id}>
-              <MessageBubble msg={msg} isNew={isNewMessage(msg)} />
-              {/* Follow-up chips after last assistant message, only when idle */}
-              {msg.role === "assistant" &&
-                idx === lastAssistantIdx &&
-                !isAgentWorking &&
-                (msg.followUpQuestions?.length ?? 0) > 0 && (
-                  <div className="mt-3">
-                    <FollowUpChips
-                      questions={msg.followUpQuestions!}
-                      onAsk={(q) => handleSubmit(q)}
-                    />
-                  </div>
-                )}
-            </div>
+      <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
+        <HistoricalFiles files={historicalFiles} />
+        <div className="space-y-5">
+          {systemMessages.map((m) => (
+            <SystemMessageBubble key={m.id} msg={m} />
           ))}
-          </>
-        )}
 
-        {isAgentWorking && (
-          <AgentStepsTimeline
-            completedSteps={completedSteps}
-            currentStep={currentStep}
-          />
-        )}
+          {!analysis && activeAnalysisId ? (
+            <div className="flex items-center justify-center h-16">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+            {/* Show pending question bubble while background agent hasn't written messages yet */}
+            {msgs.length === 0 && isAgentWorking && pendingQuestionRef.current && (
+              <div className="flex gap-3 justify-end">
+                <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
+                  {pendingQuestionRef.current}
+                </div>
+                <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
+                  <User className="w-3.5 h-3.5 text-primary-foreground" />
+                </div>
+              </div>
+            )}
+            {msgs.map((msg, idx) => (
+              <div key={msg.id}>
+                <MessageBubble msg={msg} isNew={isNewMessage(msg)} />
+                {/* Follow-up chips after last assistant message, only when idle */}
+                {msg.role === "assistant" &&
+                  idx === lastAssistantIdx &&
+                  !isAgentWorking &&
+                  (msg.followUpQuestions?.length ?? 0) > 0 && (
+                    <div className="mt-3">
+                      <FollowUpChips
+                        questions={msg.followUpQuestions!}
+                        onAsk={(q) => handleSubmit(q)}
+                      />
+                    </div>
+                  )}
+              </div>
+            ))}
+            </>
+          )}
 
-        <div ref={bottomRef} />
+          {isAgentWorking && (
+            <AgentStepsTimeline
+              completedSteps={completedSteps}
+              currentStep={currentStep}
+            />
+          )}
+
+          <div ref={bottomRef} />
+        </div>
       </div>
     );
   }
