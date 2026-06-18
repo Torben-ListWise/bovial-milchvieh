@@ -383,12 +383,14 @@ export const GetAnalysisResponse = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "source": zod.union([zod.literal('user'),zod.literal('auto'),zod.literal('report'),zod.literal(null)]).nullish(),
   "agentProgress": zod.string().nullish(),
+  "agentSteps": zod.array(zod.string()).optional(),
   "createdAt": zod.coerce.date(),
   "messages": zod.array(zod.object({
   "id": zod.string(),
   "analysisId": zod.string(),
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().nullish(),
+  "followUpQuestions": zod.array(zod.string()).optional(),
   "charts": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),

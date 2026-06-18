@@ -28,7 +28,7 @@ import {
   Bot, User, AlertCircle, Send,
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
   Loader2, ChevronRight, Upload,
-  CheckCircle2, Clock,
+  CheckCircle2, Clock, Check,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ function SystemMessageBubble({ msg }: { msg: SystemMsg }) {
 
 // ── Message bubble ───────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: AnalysisMessage }) {
+function MessageBubble({ msg, isNew }: { msg: AnalysisMessage; isNew: boolean }) {
   const isAssistant = msg.role === "assistant";
   return (
     <div className={cn("flex gap-3", isAssistant ? "justify-start" : "justify-end")}>
@@ -211,6 +211,8 @@ function MessageBubble({ msg }: { msg: AnalysisMessage }) {
             <span className="flex items-center gap-2 text-destructive">
               <AlertCircle className="w-4 h-4" /> {msg.error}
             </span>
+          ) : isAssistant ? (
+            <StreamingText text={msg.content ?? ""} animate={isNew} />
           ) : (
             <span className="whitespace-pre-wrap">{msg.content ?? ""}</span>
           )}
@@ -240,24 +242,105 @@ function MessageBubble({ msg }: { msg: AnalysisMessage }) {
   );
 }
 
-// ── Agent progress panel ─────────────────────────────────────────────────────
+// ── Live agent steps timeline ─────────────────────────────────────────────────
 
-function AgentProgressPanel({ step }: { step: string }) {
-  const { emoji, label } = normalizeStep(step);
+function AgentStepsTimeline({
+  completedSteps,
+  currentStep,
+}: {
+  completedSteps: string[];
+  currentStep: string | null;
+}) {
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
         <Bot className="w-3.5 h-3.5 text-primary" />
       </div>
-      <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-2 min-w-[200px]">
-        <div className="flex items-center gap-2 text-sm text-foreground">
-          <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
-          <span>{emoji} {label}…</span>
-        </div>
-        <div className="h-1 bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-primary/40 rounded-full animate-pulse w-3/4" />
-        </div>
+      <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-1.5 min-w-[220px]">
+        {completedSteps.map((step, i) => {
+          const { emoji, label } = normalizeStep(step);
+          return (
+            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground/70">
+              <Check className="w-3 h-3 text-green-500 shrink-0" />
+              <span>{emoji} {label}</span>
+            </div>
+          );
+        })}
+        {currentStep ? (
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+            <span>{normalizeStep(currentStep).emoji} {normalizeStep(currentStep).label}…</span>
+          </div>
+        ) : completedSteps.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+            <span>Verbinde mit Agent…</span>
+          </div>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+// ── Streaming text (word-by-word reveal) ──────────────────────────────────────
+
+function StreamingText({ text, animate }: { text: string; animate: boolean }) {
+  const [visibleWords, setVisibleWords] = useState(animate ? 0 : Infinity);
+
+  useEffect(() => {
+    if (!animate) return;
+    const words = text.split(/\s+/).filter(Boolean).length;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 4;
+      setVisibleWords(i);
+      if (i >= words) clearInterval(id);
+    }, 25);
+    return () => clearInterval(id);
+  }, [animate, text]);
+
+  if (!animate || visibleWords === Infinity) {
+    return <span className="whitespace-pre-wrap">{text}</span>;
+  }
+
+  const chunks = text.split(/(\s+)/);
+  let wordIdx = 0;
+  return (
+    <span className="whitespace-pre-wrap">
+      {chunks.map((chunk, i) => {
+        const isWord = !/^\s+$/.test(chunk);
+        if (isWord) wordIdx++;
+        const visible = wordIdx <= visibleWords;
+        return (
+          <span key={i} className={visible ? "" : "opacity-0 select-none"}>
+            {chunk}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+// ── Follow-up question chips ───────────────────────────────────────────────────
+
+function FollowUpChips({
+  questions,
+  onAsk,
+}: {
+  questions: string[];
+  onAsk: (q: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-1">
+      {questions.map((q, i) => (
+        <button
+          key={i}
+          onClick={() => onAsk(q)}
+          className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left"
+        >
+          {q}
+        </button>
+      ))}
     </div>
   );
 }
@@ -422,6 +505,8 @@ export function AnalysesPage() {
   const dragStartWidthRef = useRef(0);
   const chatWidthRef = useRef(chatWidth);
   chatWidthRef.current = chatWidth;
+  // Track component mount time so we can detect "new" messages for animation
+  const mountedAtRef = useRef(Date.now());
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
@@ -496,6 +581,12 @@ export function AnalysesPage() {
     (ask.isPending && !!activeAnalysisId) || analysis?.agentProgress != null;
 
   const currentStep = analysis?.agentProgress ?? null;
+  const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
+
+  // Helper: is this message new (created after this component mounted)?
+  function isNewMessage(msg: AnalysisMessage): boolean {
+    return new Date(msg.createdAt).getTime() > mountedAtRef.current;
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -649,31 +740,29 @@ export function AnalysesPage() {
 
     if (createAnalysis.isPending && !activeAnalysisId) {
       return (
-        <div className="flex-1 flex flex-col items-start gap-4 p-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
           {systemMessages.map((m) => (
             <SystemMessageBubble key={m.id} msg={m} />
           ))}
-          <div className="flex gap-3 w-full max-w-lg">
-            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
-              <User className="w-3.5 h-3.5 text-primary-foreground" />
-            </div>
+          <div className="flex gap-3 justify-end">
             <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
               {question}
             </div>
-          </div>
-          <div className="flex gap-3 w-full max-w-lg">
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-              <Bot className="w-3.5 h-3.5 text-primary" />
-            </div>
-            <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              Agent analysiert Ihre Daten…
+            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
+              <User className="w-3.5 h-3.5 text-primary-foreground" />
             </div>
           </div>
+          <AgentStepsTimeline completedSteps={[]} currentStep={null} />
           <div ref={bottomRef} />
         </div>
       );
     }
+
+    const msgs = analysis?.messages ?? [];
+    const lastAssistantIdx = msgs.reduce(
+      (acc, m, i) => (m.role === "assistant" ? i : acc),
+      -1,
+    );
 
     return (
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
@@ -686,22 +775,32 @@ export function AnalysesPage() {
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : (
-          analysis?.messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
+          msgs.map((msg, idx) => (
+            <div key={msg.id}>
+              <MessageBubble msg={msg} isNew={isNewMessage(msg)} />
+              {/* Follow-up chips after last assistant message, only when idle */}
+              {msg.role === "assistant" &&
+                idx === lastAssistantIdx &&
+                !isAgentWorking &&
+                (msg.followUpQuestions?.length ?? 0) > 0 && (
+                  <div className="mt-3">
+                    <FollowUpChips
+                      questions={msg.followUpQuestions!}
+                      onAsk={(q) => handleSubmit(q)}
+                    />
+                  </div>
+                )}
+            </div>
+          ))
         )}
 
-        {currentStep && <AgentProgressPanel step={currentStep} />}
-
-        {ask.isPending && !currentStep && (
-          <div className="flex gap-3 justify-start">
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <Bot className="w-3.5 h-3.5 text-primary" />
-            </div>
-            <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              Verbinde mit Agent…
-            </div>
-          </div>
+        {isAgentWorking && (
+          <AgentStepsTimeline
+            completedSteps={completedSteps}
+            currentStep={currentStep}
+          />
         )}
+
         <div ref={bottomRef} />
       </div>
     );

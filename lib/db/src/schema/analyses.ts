@@ -20,6 +20,7 @@ export const analysesTable = pgTable(
     tags: jsonb("tags").notNull().default([]),
     source: text("source").default("user"),
     agentProgress: text("agent_progress"),
+    agentSteps: jsonb("agent_steps").default([]),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -40,6 +41,7 @@ export const messagesTable = pgTable(
     charts: jsonb("charts"),
     citations: jsonb("citations"),
     error: text("error"),
+    followUpQuestions: jsonb("follow_up_questions"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

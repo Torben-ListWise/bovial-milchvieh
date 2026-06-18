@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
@@ -50,6 +51,26 @@ async function ownAnalysis(
   return a ?? null;
 }
 
+const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+async function generateFollowUps(question: string, answer: string): Promise<string[]> {
+  try {
+    const resp = await anthropicClient.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 200,
+      messages: [{
+        role: "user",
+        content: `Frage: "${question.slice(0, 200)}"\nAntwort: "${answer.slice(0, 600)}"\n\nGeneriere genau 3 kurze Folgefragen auf Deutsch (max. 7 Wörter je Frage) als JSON-Array von Strings. Antworte NUR mit dem JSON-Array.`,
+      }],
+    });
+    const text = resp.content.find(b => b.type === "text")?.text?.trim() ?? "[]";
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.slice(0, 3).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function serializeAnalysis(a: Analysis, messageCount?: number) {
   return {
     id: a.id,
@@ -62,6 +83,7 @@ function serializeAnalysis(a: Analysis, messageCount?: number) {
       ? (a.source as "user" | "auto" | "report")
       : null),
     agentProgress: (a as any).agentProgress ?? null,
+    agentSteps: ((a as any).agentSteps as string[] | null) ?? [],
     messageCount: messageCount ?? 0,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt ?? null,
@@ -74,6 +96,7 @@ function serializeMessage(m: Message) {
     analysisId: m.analysisId,
     role: m.role as "user" | "assistant",
     content: m.content ?? null,
+    followUpQuestions: ((m as any).followUpQuestions as string[] | null) ?? [],
     charts: (m.charts as Chart[] | null) ?? [],
     citations: (m.citations as Citation[] | null) ?? [],
     error: m.error ?? null,
@@ -110,6 +133,7 @@ export async function processQuestion(
   let charts: Chart[] = [];
   let citations: Citation[] = [];
   let error: string | null = null;
+  let followUpQuestions: string[] = [];
 
   // Load customer-defined rules and pass them as structured context so the
   // agent can reference them in every analysis (e.g. custom thresholds).
@@ -127,21 +151,40 @@ export async function processQuestion(
           .join("\n")}`
       : "";
 
+  // Reset step tracking for this run
+  const completedSteps: string[] = [];
+  let lastProgressStep: string | null = null;
+
+  // Reset agentSteps for this new run
+  await db
+    .update(analysesTable)
+    .set({ agentSteps: [] } as any)
+    .where(eq(analysesTable.id, analysis.id))
+    .catch(() => {});
+
   try {
     const result = await runAgent({
       datasetId: analysis.datasetId,
       conversation,
       systemExtra: rulesContext || undefined,
       onProgress: async (step: string | null) => {
+        // The previous step is now complete — move it to completedSteps
+        if (lastProgressStep) completedSteps.push(lastProgressStep);
+        lastProgressStep = step;
         await db
           .update(analysesTable)
-          .set({ agentProgress: step } as any)
+          .set({ agentProgress: step, agentSteps: [...completedSteps] } as any)
           .where(eq(analysesTable.id, analysis.id));
       },
     });
     content = result.text || "Es konnte keine Antwort erzeugt werden.";
     charts = result.charts;
     citations = result.citations;
+
+    // Generate follow-up suggestions in parallel with storing the result
+    if (result.text) {
+      followUpQuestions = await generateFollowUps(question, result.text);
+    }
   } catch (err) {
     if (err instanceof MissingApiKeyError) {
       content = err.message;
@@ -151,10 +194,10 @@ export async function processQuestion(
     }
     error = err instanceof Error ? err.message : "Unbekannter Fehler";
   } finally {
-    // Always clear progress indicator, even on error
+    // Always clear progress indicators, even on error
     await db
       .update(analysesTable)
-      .set({ agentProgress: null } as any)
+      .set({ agentProgress: null, agentSteps: [] } as any)
       .where(eq(analysesTable.id, analysis.id))
       .catch(() => {});
   }
@@ -168,7 +211,8 @@ export async function processQuestion(
       charts,
       citations,
       error,
-    })
+      followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : null,
+    } as any)
     .returning();
 
   const category = analysis.category ?? categorizeQuestion(question);
