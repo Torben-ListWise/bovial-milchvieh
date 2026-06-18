@@ -11,11 +11,11 @@ import {
   getListFilesQueryKey,
   useRequestUploadUrl,
   useRegisterFile,
+  useGetFile,
   type AnalysisDetail,
 } from "@workspace/api-client-react";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { type AnalysisMessage } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,8 +28,20 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Bot, User, AlertCircle, Send, Plus, PanelLeft,
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
-  Loader2, ChevronRight, Upload, X, Milk,
+  Loader2, ChevronRight, Upload, Menu, X,
+  CheckCircle2, Clock,
 } from "lucide-react";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type SystemMsgStatus = "uploading" | "processing" | "ready" | "error" | "timeout";
+
+interface SystemMsg {
+  id: string;
+  fileName: string;
+  fileId?: string;
+  status: SystemMsgStatus;
+}
 
 // ── Starter questions ────────────────────────────────────────────────────────
 
@@ -72,17 +84,108 @@ const STARTER_QUESTIONS = [
   },
 ];
 
-// ── Progress label helper ────────────────────────────────────────────────────
+// ── Progress label normalization ─────────────────────────────────────────────
 
-function stepEmoji(step: string): string {
-  if (step.startsWith("Lese")) return "📖";
-  if (step.startsWith("Berechne")) return "📊";
-  if (step.startsWith("Erstelle")) return "📈";
-  if (step.startsWith("Erkenne")) return "⚠️";
-  if (step.startsWith("Aggregiere")) return "🔢";
-  if (step.startsWith("Lade")) return "📚";
-  if (step.startsWith("Überprüfe")) return "🔍";
-  return "⚙️";
+function normalizeStep(step: string): { emoji: string; label: string } {
+  if (step.startsWith("Lese"))             return { emoji: "📖", label: "Lese Datenschema" };
+  if (step.startsWith("Berechne alle"))    return { emoji: "📊", label: "Berechne alle Kennzahlen" };
+  if (step.startsWith("Berechne Statistik")) return { emoji: "📊", label: "Berechne Statistiken" };
+  if (step.startsWith("Berechne Zeitreihe")) return { emoji: "📈", label: "Berechne Zeitreihe" };
+  if (step.startsWith("Erstelle Diagramm")) return { emoji: "📊", label: "Erstelle Diagramm" };
+  if (step.startsWith("Erstelle Rangliste")) return { emoji: "🏆", label: "Erstelle Rangliste" };
+  if (step.startsWith("Erkenne Ausreißer")) return { emoji: "⚠️", label: "Erkenne Ausreißer" };
+  if (step.startsWith("Aggregiere"))      return { emoji: "🔢", label: "Aggregiere Daten nach Gruppe" };
+  if (step.startsWith("Lade"))            return { emoji: "📚", label: "Lade Stammdaten" };
+  if (step.startsWith("Überprüfe"))       return { emoji: "🔍", label: "Überprüfe Ergebnisse" };
+  return { emoji: "⚙️", label: step };
+}
+
+// ── File poller ──────────────────────────────────────────────────────────────
+// Renders nothing — polls a single file until ready/error/timeout (2 min)
+
+const POLL_TIMEOUT_MS = 120_000;
+
+function FilePoller({
+  fileId,
+  onDone,
+}: {
+  fileId: string;
+  onDone: (result: "ready" | "error" | "timeout") => void;
+}) {
+  const startRef = useRef(Date.now());
+  const calledRef = useRef(false);
+
+  const { data } = useGetFile(fileId, {
+    query: {
+      queryKey: [`/api/files/${fileId}`],
+      refetchInterval: (query) => {
+        if (calledRef.current) return false;
+        const d = query.state.data;
+        if (!d) return 3000;
+        if (d.status === "ready" || d.status === "error") return false;
+        if (Date.now() - startRef.current > POLL_TIMEOUT_MS) return false;
+        return 3000;
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (!data || calledRef.current) return;
+    if (data.status === "ready" || data.status === "error") {
+      calledRef.current = true;
+      onDone(data.status === "ready" ? "ready" : "error");
+    }
+  }, [data?.status]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!calledRef.current) {
+        calledRef.current = true;
+        onDone("timeout");
+      }
+    }, POLL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return null;
+}
+
+// ── System message bubble ────────────────────────────────────────────────────
+
+function SystemMessageBubble({ msg }: { msg: SystemMsg }) {
+  const icons: Record<SystemMsgStatus, React.ReactNode> = {
+    uploading:   <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />,
+    processing:  <Clock className="w-4 h-4 text-primary animate-pulse shrink-0" />,
+    ready:       <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />,
+    error:       <AlertCircle className="w-4 h-4 text-destructive shrink-0" />,
+    timeout:     <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />,
+  };
+
+  const labels: Record<SystemMsgStatus, string> = {
+    uploading:  `📎 ${msg.fileName} — wird hochgeladen…`,
+    processing: `📎 ${msg.fileName} — wird verarbeitet…`,
+    ready:      `✅ ${msg.fileName} — bereit zum Analysieren`,
+    error:      `❌ ${msg.fileName} — Verarbeitungsfehler`,
+    timeout:    `⏱ ${msg.fileName} — Zeitüberschreitung bei der Verarbeitung`,
+  };
+
+  return (
+    <div className="flex gap-3 justify-center">
+      <div
+        className={cn(
+          "flex items-center gap-2 px-4 py-2 rounded-full text-sm border",
+          msg.status === "ready"
+            ? "bg-green-50 border-green-200 text-green-700"
+            : msg.status === "error" || msg.status === "timeout"
+            ? "bg-destructive/5 border-destructive/20 text-destructive"
+            : "bg-muted border-border text-muted-foreground",
+        )}
+      >
+        {icons[msg.status]}
+        <span>{labels[msg.status]}</span>
+      </div>
+    </div>
+  );
 }
 
 // ── Message bubble ───────────────────────────────────────────────────────────
@@ -141,6 +244,7 @@ function MessageBubble({ msg }: { msg: AnalysisMessage }) {
 // ── Agent progress panel ─────────────────────────────────────────────────────
 
 function AgentProgressPanel({ step }: { step: string }) {
+  const { emoji, label } = normalizeStep(step);
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
@@ -149,9 +253,7 @@ function AgentProgressPanel({ step }: { step: string }) {
       <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-2 min-w-[200px]">
         <div className="flex items-center gap-2 text-sm text-foreground">
           <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
-          <span>
-            {stepEmoji(step)} {step}…
-          </span>
+          <span>{emoji} {label}…</span>
         </div>
         <div className="h-1 bg-muted rounded-full overflow-hidden">
           <div className="h-full bg-primary/40 rounded-full animate-pulse w-3/4" />
@@ -161,9 +263,9 @@ function AgentProgressPanel({ step }: { step: string }) {
   );
 }
 
-// ── Conversation sidebar ─────────────────────────────────────────────────────
+// ── Conversation sidebar inner ───────────────────────────────────────────────
 
-function ConversationSidebar({
+function SidebarContent({
   datasetId,
   activeId,
   onSelect,
@@ -179,13 +281,9 @@ function ConversationSidebar({
   });
 
   return (
-    <div className="flex flex-col h-full bg-secondary/20 border-r border-border">
+    <div className="flex flex-col h-full">
       <div className="p-3 border-b border-border shrink-0">
-        <Button
-          size="sm"
-          className="w-full gap-2 justify-start"
-          onClick={onNew}
-        >
+        <Button size="sm" className="w-full gap-2 justify-start" onClick={onNew}>
           <Plus className="w-4 h-4" />
           Neue Analyse
         </Button>
@@ -216,7 +314,9 @@ function ConversationSidebar({
               <p
                 className={cn(
                   "text-xs mt-0.5 truncate",
-                  a.id === activeId ? "text-primary-foreground/70" : "text-muted-foreground",
+                  a.id === activeId
+                    ? "text-primary-foreground/70"
+                    : "text-muted-foreground",
                 )}
               >
                 {format(new Date(a.createdAt), "dd.MM. HH:mm", { locale: de })}
@@ -262,7 +362,7 @@ function StarterQuestions({
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
       <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
         <Bot className="w-6 h-6 text-primary" />
       </div>
@@ -304,7 +404,9 @@ function ChartPanel({
   isWorking: boolean;
 }) {
   const latestChart = analysis?.messages
-    ? [...analysis.messages].reverse().find((m) => m.charts && m.charts.length > 0)?.charts?.[0]
+    ? [...analysis.messages]
+        .reverse()
+        .find((m) => m.charts && m.charts.length > 0)?.charts?.[0]
     : undefined;
 
   if (!analysis) {
@@ -372,7 +474,9 @@ export function AnalysesPage() {
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [mobileTab, setMobileTab] = useState<"chat" | "chart">("chat");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     return sessionStorage.getItem("analysisSidebarOpen") !== "false";
   });
@@ -385,20 +489,29 @@ export function AnalysesPage() {
   const registerFile = useRegisterFile();
 
   const { data: files } = useListFiles(datasetId ?? "", {
-    query: { enabled: !!datasetId, queryKey: getListFilesQueryKey(datasetId ?? "") },
+    query: {
+      enabled: !!datasetId,
+      queryKey: getListFilesQueryKey(datasetId ?? ""),
+    },
   });
 
   const createAnalysis = useCreateAnalysis({
     mutation: {
       onSuccess: (data) => {
         setActiveAnalysisId(data.id);
-        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
+        queryClient.invalidateQueries({
+          queryKey: getListAnalysesQueryKey(datasetId ?? ""),
+        });
         queryClient.setQueryData(getGetAnalysisQueryKey(data.id), data);
         setQuestion("");
         inputRef.current?.focus();
       },
       onError: () => {
-        toast({ variant: "destructive", title: "Fehler", description: "Analyse konnte nicht gestartet werden." });
+        toast({
+          variant: "destructive",
+          title: "Fehler",
+          description: "Analyse konnte nicht gestartet werden.",
+        });
       },
     },
   });
@@ -406,13 +519,21 @@ export function AnalysesPage() {
   const ask = useAskQuestion({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(activeAnalysisId ?? "") });
-        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
+        queryClient.invalidateQueries({
+          queryKey: getGetAnalysisQueryKey(activeAnalysisId ?? ""),
+        });
+        queryClient.invalidateQueries({
+          queryKey: getListAnalysesQueryKey(datasetId ?? ""),
+        });
         setQuestion("");
         inputRef.current?.focus();
       },
       onError: () => {
-        toast({ variant: "destructive", title: "Fehler", description: "Frage konnte nicht gesendet werden." });
+        toast({
+          variant: "destructive",
+          title: "Fehler",
+          description: "Frage konnte nicht gesendet werden.",
+        });
       },
     },
   });
@@ -427,21 +548,20 @@ export function AnalysesPage() {
       refetchInterval: (query) => {
         if (askIsPendingRef.current) return 2000;
         const data = query.state.data as AnalysisDetail | undefined;
-        if ((data as any)?.agentProgress != null) return 2000;
+        if (data?.agentProgress != null) return 2000;
         return false;
       },
     },
   });
 
   const isAgentWorking =
-    (ask.isPending && !!activeAnalysisId) ||
-    (analysis?.agentProgress != null);
+    (ask.isPending && !!activeAnalysisId) || analysis?.agentProgress != null;
 
   const currentStep = analysis?.agentProgress ?? null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [analysis?.messages?.length, currentStep]);
+  }, [analysis?.messages?.length, currentStep, systemMessages.length]);
 
   function toggleSidebar() {
     setSidebarOpen((prev) => {
@@ -450,12 +570,27 @@ export function AnalysesPage() {
     });
   }
 
+  function handleSelectAnalysis(id: string) {
+    setActiveAnalysisId(id);
+    setMobileSidebarOpen(false);
+  }
+
+  function handleNewAnalysis() {
+    setActiveAnalysisId(null);
+    setQuestion("");
+    setMobileSidebarOpen(false);
+    inputRef.current?.focus();
+  }
+
   async function handleSubmit(q?: string) {
     const text = (q ?? question).trim();
     if (!text) return;
 
     if (!activeAnalysisId) {
-      createAnalysis.mutate({ datasetId: datasetId!, data: { title: text, question: text } });
+      createAnalysis.mutate({
+        datasetId: datasetId!,
+        data: { title: text, question: text },
+      });
     } else {
       ask.mutate({ analysisId: activeAnalysisId, data: { question: text } });
     }
@@ -466,13 +601,13 @@ export function AnalysesPage() {
     handleSubmit(q);
   }
 
-  function handleNewAnalysis() {
-    setActiveAnalysisId(null);
-    setQuestion("");
-    inputRef.current?.focus();
-  }
+  // ── Drag-and-drop upload ────────────────────────────────────────────────────
 
-  // ── Drag-and-drop upload ──────────────────────────────────────────────────
+  function updateSystemMsg(id: string, patch: Partial<SystemMsg>) {
+    setSystemMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    );
+  }
 
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -480,25 +615,44 @@ export function AnalysesPage() {
     const file = e.dataTransfer.files[0];
     if (!file || !datasetId) return;
 
-    toast({ title: `📎 ${file.name}`, description: "Wird hochgeladen…" });
+    const msgId = crypto.randomUUID();
+    setSystemMessages((prev) => [
+      ...prev,
+      { id: msgId, fileName: file.name, status: "uploading" },
+    ]);
 
     try {
       const { uploadURL, objectPath } = await requestUrl.mutateAsync({
-        data: { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
+        data: {
+          name: file.name,
+          size: file.size,
+          contentType: file.type || "application/octet-stream",
+        },
       });
+
       await fetch(uploadURL, {
         method: "PUT",
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
       });
-      await registerFile.mutateAsync({
+
+      const registered = await registerFile.mutateAsync({
         datasetId,
-        data: { objectPath, name: file.name, contentType: file.type || "application/octet-stream", size: file.size },
+        data: {
+          objectPath,
+          name: file.name,
+          contentType: file.type || "application/octet-stream",
+          size: file.size,
+        },
       });
+
       queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(datasetId) });
-      toast({ title: `✅ ${file.name}`, description: "Hochgeladen — wird verarbeitet. Sie können in Kürze Fragen dazu stellen." });
+      updateSystemMsg(msgId, {
+        status: "processing",
+        fileId: (registered as any).id ?? undefined,
+      });
     } catch {
-      toast({ variant: "destructive", title: "Upload fehlgeschlagen", description: file.name });
+      updateSystemMsg(msgId, { status: "error" });
     }
   }
 
@@ -514,36 +668,38 @@ export function AnalysesPage() {
   }
 
   if (datasetLoading || !datasetId) {
-    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
+    return (
+      <div className="h-32 flex items-center justify-center text-muted-foreground">
+        Laden…
+      </div>
+    );
   }
 
   const hasFiles = !!(files && files.length > 0);
   const isPending = createAnalysis.isPending || ask.isPending;
 
-  // ── Chat zone content ──────────────────────────────────────────────────────
+  // ── Chat zone renderer ─────────────────────────────────────────────────────
 
   function renderChatContent() {
-    if (!activeAnalysisId && !createAnalysis.isPending) {
-      return (
-        <StarterQuestions
-          hasFiles={hasFiles}
-          onAsk={handleStarterQuestion}
-        />
-      );
+    if (!activeAnalysisId && !createAnalysis.isPending && systemMessages.length === 0) {
+      return <StarterQuestions hasFiles={hasFiles} onAsk={handleStarterQuestion} />;
     }
 
     if (createAnalysis.isPending && !activeAnalysisId) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
-          <div className="flex gap-3 items-start w-full max-w-lg">
+        <div className="flex-1 flex flex-col items-start gap-4 p-4">
+          {systemMessages.map((m) => (
+            <SystemMessageBubble key={m.id} msg={m} />
+          ))}
+          <div className="flex gap-3 w-full max-w-lg">
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
               <User className="w-3.5 h-3.5 text-primary-foreground" />
             </div>
-            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-md">
+            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
               {question}
             </div>
           </div>
-          <div className="flex gap-3 items-start w-full max-w-lg">
+          <div className="flex gap-3 w-full max-w-lg">
             <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
               <Bot className="w-3.5 h-3.5 text-primary" />
             </div>
@@ -552,27 +708,26 @@ export function AnalysesPage() {
               Agent analysiert Ihre Daten…
             </div>
           </div>
+          <div ref={bottomRef} />
         </div>
       );
     }
 
     return (
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
-        {!analysis ? (
-          <div className="flex items-center justify-center h-full">
+        {systemMessages.map((m) => (
+          <SystemMessageBubble key={m.id} msg={m} />
+        ))}
+
+        {!analysis && activeAnalysisId ? (
+          <div className="flex items-center justify-center h-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
-        ) : analysis.messages.length === 0 && !isAgentWorking ? (
-          <div className="text-center text-muted-foreground py-12 text-sm">
-            Die Analyse wird verarbeitet…
-          </div>
         ) : (
-          analysis.messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
+          analysis?.messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
         )}
 
-        {currentStep && (
-          <AgentProgressPanel step={currentStep} />
-        )}
+        {currentStep && <AgentProgressPanel step={currentStep} />}
 
         {ask.isPending && !currentStep && (
           <div className="flex gap-3 justify-start">
@@ -590,11 +745,12 @@ export function AnalysesPage() {
     );
   }
 
-  // ── Layout ─────────────────────────────────────────────────────────────────
-
   const chatInputArea = (
     <form
-      onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
       className="p-3 border-t border-border bg-background shrink-0"
     >
       <div className="flex gap-2 items-center">
@@ -602,12 +758,24 @@ export function AnalysesPage() {
           ref={inputRef}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder={activeAnalysisId ? "Folgefrage stellen…" : "Stellen Sie eine Frage zu Ihren Daten…"}
+          placeholder={
+            activeAnalysisId
+              ? "Folgefrage stellen…"
+              : "Stellen Sie eine Frage zu Ihren Daten…"
+          }
           className="flex-1"
           disabled={isPending}
         />
-        <Button type="submit" size="icon" disabled={isPending || !question.trim()}>
-          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        <Button
+          type="submit"
+          size="icon"
+          disabled={isPending || !question.trim()}
+        >
+          {isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
         </Button>
       </div>
       {!activeAnalysisId && (
@@ -618,6 +786,24 @@ export function AnalysesPage() {
     </form>
   );
 
+  // ── File pollers (rendered for each processing file) ──────────────────────
+  const filePollers = systemMessages
+    .filter((m) => m.status === "processing" && m.fileId)
+    .map((m) => (
+      <FilePoller
+        key={m.fileId}
+        fileId={m.fileId!}
+        onDone={(result) => {
+          updateSystemMsg(m.id, { status: result });
+          if (result === "ready") {
+            queryClient.invalidateQueries({
+              queryKey: getListFilesQueryKey(datasetId),
+            });
+          }
+        }}
+      />
+    ));
+
   return (
     <div
       className="flex h-full relative overflow-hidden"
@@ -625,6 +811,9 @@ export function AnalysesPage() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Hidden file pollers */}
+      {filePollers}
+
       {/* Drag-and-drop overlay */}
       {isDragOver && (
         <div className="absolute inset-0 z-50 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
@@ -636,17 +825,17 @@ export function AnalysesPage() {
         </div>
       )}
 
-      {/* ── Desktop layout ── */}
+      {/* ── Desktop layout ─────────────────────────────────────────────────── */}
       <div className="hidden md:flex w-full h-full">
         {/* Sidebar */}
         <div
           className={cn(
-            "shrink-0 transition-all duration-200 overflow-hidden",
+            "shrink-0 transition-all duration-200 overflow-hidden border-r border-border bg-secondary/20",
             sidebarOpen ? "w-[220px]" : "w-0",
           )}
         >
           {sidebarOpen && (
-            <ConversationSidebar
+            <SidebarContent
               datasetId={datasetId}
               activeId={activeAnalysisId}
               onSelect={setActiveAnalysisId}
@@ -657,23 +846,26 @@ export function AnalysesPage() {
 
         {/* Chat zone */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
-          {/* Chat header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-background">
-            <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="h-8 w-8"
+            >
               <PanelLeft className="w-4 h-4" />
             </Button>
             {activeAnalysisId && analysis ? (
-              <span className="text-sm font-medium text-foreground truncate">{analysis.title}</span>
+              <span className="text-sm font-medium text-foreground truncate">
+                {analysis.title}
+              </span>
             ) : (
               <span className="text-sm font-medium text-foreground">Analysen</span>
             )}
           </div>
-
-          {/* Messages */}
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {renderChatContent()}
           </div>
-
           {chatInputArea}
         </div>
 
@@ -690,8 +882,62 @@ export function AnalysesPage() {
         </div>
       </div>
 
-      {/* ── Mobile layout ── */}
+      {/* ── Mobile layout ──────────────────────────────────────────────────── */}
       <div className="flex md:hidden flex-col w-full h-full">
+        {/* Mobile top bar */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-background">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setMobileSidebarOpen(true)}
+          >
+            <Menu className="w-4 h-4" />
+          </Button>
+          <span className="text-sm font-medium text-foreground truncate flex-1">
+            {activeAnalysisId && analysis ? analysis.title : "Analysen"}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleNewAnalysis}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Mobile sidebar modal */}
+        {mobileSidebarOpen && (
+          <div className="absolute inset-0 z-40 flex">
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            <div className="relative w-72 max-w-[80vw] h-full bg-background shadow-xl flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+                <span className="font-semibold text-sm">Gespräche</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setMobileSidebarOpen(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <SidebarContent
+                  datasetId={datasetId}
+                  activeId={activeAnalysisId}
+                  onSelect={handleSelectAnalysis}
+                  onNew={handleNewAnalysis}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mobile tab content */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {mobileTab === "chat" ? (
