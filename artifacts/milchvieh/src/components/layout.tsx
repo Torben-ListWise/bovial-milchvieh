@@ -21,25 +21,30 @@ export function AppLayout({ children, role, basePath }: { children: React.ReactN
   const { user } = useUser();
   const { signOut } = useClerk();
 
+  // Extract datasetId from current URL so sidebar links preserve it
+  const searchParams = new URLSearchParams(window.location.search);
+  const datasetId = searchParams.get("datasetId");
+  const datasetQuery = datasetId ? `?datasetId=${datasetId}` : "";
+
   // Strip base for matching
   const currentPath = location.startsWith(basePath) 
     ? location.slice(basePath.length) || "/" 
     : location;
 
   const customerNav = [
-    { name: "Betriebe", href: "/app/datasets", icon: Home },
-    { name: "Übersicht", href: "/app/overview", icon: BarChart2 },
-    { name: "Dateien & Upload", href: "/app/upload", icon: Upload },
-    { name: "Analysen", href: "/app/analyses", icon: MessageSquare },
-    { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle },
-    { name: "Berichte", href: "/app/reports", icon: FileText },
-    { name: "Regeln", href: "/app/rules", icon: Sliders },
-    { name: "Einstellungen", href: "/app/settings", icon: Settings },
+    { name: "Betriebe", href: "/app/datasets", icon: Home, preserveDataset: false },
+    { name: "Übersicht", href: "/app/overview", icon: BarChart2, preserveDataset: true },
+    { name: "Dateien & Upload", href: "/app/upload", icon: Upload, preserveDataset: true },
+    { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true },
+    { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle, preserveDataset: true },
+    { name: "Berichte", href: "/app/reports", icon: FileText, preserveDataset: true },
+    { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true },
+    { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false },
   ];
 
   const operatorNav = [
-    { name: "Monitoring", href: "/app/monitoring", icon: Activity },
-    { name: "Stammdaten", href: "/app/master-data", icon: Database },
+    { name: "Monitoring", href: "/app/monitoring", icon: Activity, preserveDataset: false },
+    { name: "Stammdaten", href: "/app/master-data", icon: Database, preserveDataset: false },
   ];
 
   const navItems = role === 'operator' ? operatorNav : customerNav;
@@ -58,9 +63,10 @@ export function AppLayout({ children, role, basePath }: { children: React.ReactN
             {navItems.map((item) => {
               const isActive = currentPath.startsWith(item.href);
               const Icon = item.icon;
+              const href = item.preserveDataset ? `${item.href}${datasetQuery}` : item.href;
               return (
                 <li key={item.name}>
-                  <Link href={item.href}>
+                  <Link href={href}>
                     <div className={cn(
                       "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer",
                       isActive 

@@ -1,1 +1,2 @@
-- [Milchvieh project architecture](milchvieh-arch.md) — pnpm monorepo: api-server (Express+Drizzle), milchvieh (React+Vite), Clerk auth, own Anthropic key
+- [Milchvieh dataset context](milchvieh-dataset-context.md) — datasetId must be preserved across all customer sidebar nav links
+- [Milchvieh cron security](milchvieh-cron-security.md) — CRON_SECRET must be non-empty or cron endpoint is disabled entirely; never allow unauthenticated job triggering
