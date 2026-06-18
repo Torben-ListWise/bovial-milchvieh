@@ -57,7 +57,9 @@ function serializeAnalysis(a: Analysis, messageCount?: number) {
     category: a.category ?? null,
     pinned: a.pinned,
     tags: (a.tags as string[]) ?? [],
-    source: (a.source as "user" | "auto" | "report" | null) ?? "user",
+    source: (["user", "auto", "report"].includes(a.source ?? "")
+      ? (a.source as "user" | "auto" | "report")
+      : null),
     messageCount: messageCount ?? 0,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt ?? null,

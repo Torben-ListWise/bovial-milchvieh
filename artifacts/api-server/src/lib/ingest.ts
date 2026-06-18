@@ -405,7 +405,7 @@ export async function ingestFile(fileId: string): Promise<void> {
           userId: file.userId,
           title: "Automatische Erstanalyse",
           category: "overview",
-          source: "agent",
+          source: "auto",
         })
         .returning();
       const question =
