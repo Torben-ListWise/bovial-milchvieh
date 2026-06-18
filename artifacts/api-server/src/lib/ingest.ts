@@ -1,3 +1,25 @@
+// Polyfills required by pdf-parse (uses browser canvas APIs internally)
+if (typeof (globalThis as any).DOMMatrix === "undefined") {
+  (globalThis as any).DOMMatrix = class DOMMatrix {
+    a=1;b=0;c=0;d=1;e=0;f=0;
+    m11=1;m12=0;m13=0;m14=0;m21=0;m22=1;m23=0;m24=0;
+    m31=0;m32=0;m33=1;m34=0;m41=0;m42=0;m43=0;m44=1;
+    is2D=true;isIdentity=true;
+    constructor(_init?: string | number[]) {}
+    transformPoint(p?: {x?:number;y?:number}) { return p ?? {x:0,y:0}; }
+  };
+}
+if (typeof (globalThis as any).ImageData === "undefined") {
+  (globalThis as any).ImageData = class ImageData {
+    constructor(public data: Uint8ClampedArray | number, public width: number, public height?: number) {}
+  };
+}
+if (typeof (globalThis as any).Path2D === "undefined") {
+  (globalThis as any).Path2D = class Path2D {
+    addPath() {} moveTo() {} lineTo() {} arc() {} closePath() {}
+  };
+}
+
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { eq } from "drizzle-orm";

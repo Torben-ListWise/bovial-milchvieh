@@ -400,6 +400,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         ? `${SYSTEM_PROMPT}\n\n${opts.systemExtra}`
         : SYSTEM_PROMPT,
       tools: TOOLS,
+      // Force at least one tool call on the first turn so the agent always
+      // grounds its response in actual data (prevents hallucination on turn 0).
+      tool_choice: turn === 0 ? { type: "any" } : { type: "auto" },
       messages,
     });
 
