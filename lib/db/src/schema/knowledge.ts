@@ -46,7 +46,7 @@ export const knowledgeChunksTable = pgTable(
     docId: uuid("doc_id").notNull(),
     chunkIndex: integer("chunk_index").notNull(),
     chunkText: text("chunk_text").notNull(),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    embedding: vector("embedding", { dimensions: 768 }),
   },
   (table) => [
     index("knowledge_chunks_doc_idx").on(table.docId, table.chunkIndex),

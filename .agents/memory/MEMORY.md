@@ -6,4 +6,4 @@
 - [Milchvieh rules wired into agent](milchvieh-rules-agent.md) — customer rules loaded per-user and passed as systemExtra context on every runAgent call
 - [Milchvieh CORS config](milchvieh-cors.md) — never use origin:true with credentials:true; use REPLIT_DEV_DOMAIN + ALLOWED_ORIGINS allowlist
 - [Milchvieh PDF extraction](milchvieh-pdf-extraction.md) — use pdfjs-dist legacy/build directly; pdf-parse v1 bundles break on Node.js v24
-- [Milchvieh knowledge embeddings](milchvieh-knowledge-embeddings.md) — OpenAI text-embedding-3-small (1536 dims), NOT Gemini; ensureExtensions() at startup ensures pgvector
+- [Milchvieh embeddings](milchvieh-embeddings.md) — use gemini-embedding-001 via v1beta REST (not text-embedding-004, not SDK); CONCURRENCY=1; sequential startup ingest
