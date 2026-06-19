@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useAuth } from "@clerk/react";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 export function ReportsPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
