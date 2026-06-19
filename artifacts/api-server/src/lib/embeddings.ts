@@ -3,7 +3,8 @@ import { logger } from "./logger";
 const EMBEDDING_MODEL = "gemini-embedding-001";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const EMBEDDING_DIMENSIONS = 768;
-const CONCURRENCY = 1;
+const MAX_RETRIES = 8;
+const INTER_CHUNK_DELAY_MS = 400;
 const MAX_CHUNKS = 500;
 const CHUNK_SIZE = 600;
 const CHUNK_OVERLAP = 100;
@@ -55,10 +56,7 @@ async function embedSingle(text: string, apiKey: string): Promise<number[]> {
     outputDimensionality: EMBEDDING_DIMENSIONS,
   };
 
-  let attempt = 0;
-  const maxRetries = 3;
-
-  while (attempt < maxRetries) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -66,9 +64,8 @@ async function embedSingle(text: string, apiKey: string): Promise<number[]> {
     });
 
     if (res.status === 429) {
-      attempt++;
-      const delay = Math.pow(2, attempt) * 1000;
-      logger.warn({ attempt, delay }, "Rate-Limit beim Embedding — Retry nach Backoff");
+      const delay = Math.min(Math.pow(2, attempt + 1) * 1000, 60000);
+      logger.warn({ attempt: attempt + 1, delayMs: delay }, "Rate-Limit — Retry nach Backoff");
       await new Promise((r) => setTimeout(r, delay));
       continue;
     }
@@ -89,15 +86,13 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
 
   const apiKey = getApiKey();
-  const results: number[][] = new Array(texts.length);
+  const results: number[][] = [];
 
-  for (let i = 0; i < texts.length; i += CONCURRENCY) {
-    const batch = texts.slice(i, i + CONCURRENCY);
-    const embeddings = await Promise.all(
-      batch.map((text) => embedSingle(text, apiKey)),
-    );
-    for (let j = 0; j < embeddings.length; j++) {
-      results[i + j] = embeddings[j];
+  for (let i = 0; i < texts.length; i++) {
+    const embedding = await embedSingle(texts[i], apiKey);
+    results.push(embedding);
+    if (i < texts.length - 1) {
+      await new Promise((r) => setTimeout(r, INTER_CHUNK_DELAY_MS));
     }
   }
 
