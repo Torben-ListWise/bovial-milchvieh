@@ -28,8 +28,11 @@ import {
   sourceFilesTable,
   dataRowsTable,
   datasetsTable,
+  knowledgeDocumentsTable,
+  knowledgeChunksTable,
   type SourceFile,
 } from "@workspace/db";
+import { chunkText, embedTexts } from "./embeddings";
 import {
   ObjectStorageService,
   ObjectNotFoundError,
@@ -500,6 +503,72 @@ export async function remapFile(
     .where(eq(sourceFilesTable.id, fileId));
   await refreshDatasetStatus(file.datasetId);
   return rowCount;
+}
+
+export async function ingestKnowledgeDoc(docId: string): Promise<void> {
+  const [doc] = await db
+    .select()
+    .from(knowledgeDocumentsTable)
+    .where(eq(knowledgeDocumentsTable.id, docId));
+  if (!doc) return;
+
+  try {
+    await db
+      .update(knowledgeDocumentsTable)
+      .set({ status: "processing" })
+      .where(eq(knowledgeDocumentsTable.id, docId));
+
+    const buf = await downloadBytes(doc.objectPath);
+    let text = "";
+    if (doc.fileType === "pptx") {
+      text = await extractPptxText(buf);
+    } else {
+      text = await extractPdfText(buf);
+    }
+
+    const chunks = chunkText(text);
+    if (chunks.length === 0) {
+      await db
+        .update(knowledgeDocumentsTable)
+        .set({ status: "error", errorMessage: "Kein Text extrahierbar" })
+        .where(eq(knowledgeDocumentsTable.id, docId));
+      return;
+    }
+
+    const embeddings = await embedTexts(chunks);
+
+    await db
+      .delete(knowledgeChunksTable)
+      .where(eq(knowledgeChunksTable.docId, docId));
+
+    const BATCH = 100;
+    for (let i = 0; i < chunks.length; i += BATCH) {
+      const sliceChunks = chunks.slice(i, i + BATCH);
+      const sliceEmbeds = embeddings.slice(i, i + BATCH);
+      await db.insert(knowledgeChunksTable).values(
+        sliceChunks.map((chunkText, j) => ({
+          docId,
+          chunkIndex: i + j,
+          chunkText,
+          embedding: sliceEmbeds[j],
+        })),
+      );
+    }
+
+    await db
+      .update(knowledgeDocumentsTable)
+      .set({ status: "ready", chunkCount: chunks.length })
+      .where(eq(knowledgeDocumentsTable.id, docId));
+  } catch (err) {
+    logger.error({ err, docId }, "Knowledge-Ingestion fehlgeschlagen");
+    await db
+      .update(knowledgeDocumentsTable)
+      .set({
+        status: "error",
+        errorMessage: err instanceof Error ? err.message : "Unbekannter Fehler",
+      })
+      .where(eq(knowledgeDocumentsTable.id, docId));
+  }
 }
 
 async function refreshDatasetStatus(datasetId: string): Promise<void> {

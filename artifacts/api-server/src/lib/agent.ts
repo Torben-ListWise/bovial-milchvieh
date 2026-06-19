@@ -4,8 +4,15 @@ import type {
   BetaTool,
   BetaToolUseBlock,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { and, eq } from "drizzle-orm";
-import { db, masterDataTable, sourceFilesTable } from "@workspace/db";
+import { and, eq, sql } from "drizzle-orm";
+import {
+  db,
+  masterDataTable,
+  sourceFilesTable,
+  knowledgeDocumentsTable,
+  knowledgeChunksTable,
+} from "@workspace/db";
+import { embedTexts } from "./embeddings";
 import {
   getDatasetSchema,
   computeMetricStats,
@@ -187,6 +194,25 @@ const TOOLS: BetaTool[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "search_knowledge",
+    description:
+      "Durchsucht die verifizierte Wissensbibliothek semantisch. Aufrufen für allgemeine Fachfragen (Normen, Richtlinien, Beratungsberichte) die nicht aus den Betriebsdaten beantwortet werden können.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Suchanfrage, z.B. 'Zellzahl Grenzwerte' oder 'Eutergesundheit Behandlung'",
+        },
+        topK: {
+          type: "number",
+          description: "Anzahl der zurückgegebenen Textstellen (Standard: 5)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "emit_chart",
     description:
       "Erstellt ein interaktives Diagramm. Bei strukturierten DB-Daten: source='timeseries'|'group'|'ranking' + metric. Bei PDF-Dokumenten: source='document' + data-Array direkt übergeben.",
@@ -308,6 +334,30 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
   const docContext = await fetchDocumentContext(datasetId);
 
+  // Check if any ready knowledge docs exist
+  const [knowledgeCount] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(knowledgeDocumentsTable)
+    .where(sql`status = 'ready'`);
+  const knowledgeDocsExist = (knowledgeCount?.c ?? 0) > 0;
+
+  // Build knowledge doc title list for systemExtra
+  let knowledgeTitles = "";
+  if (knowledgeDocsExist) {
+    const knowledgeDocs = await db
+      .select({
+        title: knowledgeDocumentsTable.title,
+        chunkCount: knowledgeDocumentsTable.chunkCount,
+      })
+      .from(knowledgeDocumentsTable)
+      .where(sql`${knowledgeDocumentsTable.status} = 'ready'`);
+    const titleList = knowledgeDocs
+      .map((d) => `- "${d.title}" (${d.chunkCount ?? "?"} Chunks)`)
+      .join("\n");
+    knowledgeTitles =
+      `\n\nWISSENSBIBLIOTHEK (verified): Nutze search_knowledge(query) für Fachinformationen. Verfügbare Dokumente:\n${titleList}`;
+  }
+
   function buildSystemBlocks(docCtx: string, extra?: string) {
     return [
       { type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } },
@@ -322,8 +372,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     switch (block.name) {
       case "get_schema": {
         const schema = await getDatasetSchema(datasetId);
-        // Hint at documents so the agent knows to call read_document
-        return docContext
+        const dokumentAvailable = docContext.length > 0 || knowledgeDocsExist;
+        return dokumentAvailable
           ? { ...schema, dokumentAvailable: true }
           : schema;
       }
@@ -403,6 +453,31 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           .replace(/^\n\nHOCHGELADENE DOKUMENTE.*?:\n/s, "")
           .trim();
         return { text: rawText };
+      }
+      case "search_knowledge": {
+        const query = input.query as string;
+        const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
+        try {
+          const [queryVec] = await embedTexts([query]);
+          const vecStr = `[${queryVec.join(",")}]`;
+          const rows = await db.execute(
+            sql`
+              SELECT kc.chunk_text, kd.title
+              FROM knowledge_chunks kc
+              JOIN knowledge_documents kd ON kd.id = kc.doc_id
+              WHERE kd.status = 'ready'
+              ORDER BY kc.embedding <=> ${vecStr}::vector
+              LIMIT ${topK}
+            `,
+          );
+          const results = (rows.rows as { chunk_text: string; title: string }[]).map(
+            (r) => ({ title: r.title, text: r.chunk_text }),
+          );
+          return { results };
+        } catch (err) {
+          logger.error({ err }, "search_knowledge fehlgeschlagen");
+          return { error: "Suche fehlgeschlagen" };
+        }
       }
       case "emit_chart": {
         const title = (input.title as string) ?? "Diagramm";
@@ -499,6 +574,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "detect_anomalies": return `Erkenne Ausreißer${metric ? ` bei ${metric}` : ""}`;
       case "get_master_data": return "Lade Stammdaten";
       case "read_document": return "Lese Dokumententext";
+      case "search_knowledge": return "Durchsuche Wissensdatenbank";
       case "emit_chart": return `Erstelle Diagramm`;
       default: return "Verarbeite Daten";
     }
@@ -514,13 +590,17 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "get_metric_stats", "get_kpis", "get_timeseries",
     "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
     "read_document",
+    "search_knowledge",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
     const response = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 8192,
-      system: buildSystemBlocks(docContext, opts.systemExtra),
+      system: buildSystemBlocks(
+        docContext,
+        ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
+      ),
       tools: TOOLS,
       // Force at least one tool call on the first turn so the agent always
       // grounds its response in actual data (prevents hallucination on turn 0).
@@ -546,7 +626,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       // - follow-up turn (numbers already grounded in prior turn), OR
       // - document context is available (agent reads PDF numbers and builds chart manually)
       const isFollowUp = opts.conversation.length > 0;
-      const hasDocContext = docContext.length > 0;
+      const hasDocContext = docContext.length > 0 || knowledgeDocsExist;
       if (toolUses.some((t) => groundedTools.has(t.name) || ((isFollowUp || hasDocContext) && t.name === "emit_chart"))) {
         toolWasCalled = true;
       }
@@ -612,7 +692,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const verifyResponse = await client.beta.messages.create({
         model: MODEL,
         max_tokens: 4096,
-        system: buildSystemBlocks(docContext, opts.systemExtra),
+        system: buildSystemBlocks(docContext, ((opts.systemExtra ?? "") + knowledgeTitles) || undefined),
         messages: verifyMessages,
       });
       logger.debug({

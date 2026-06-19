@@ -11,6 +11,7 @@ import reportsRouter from "./reports";
 import masterdataRouter from "./masterdata";
 import adminRouter from "./admin";
 import privacyRouter from "./privacy";
+import { knowledgeRouter } from "./knowledge";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(reportsRouter);
 router.use(masterdataRouter);
 router.use(adminRouter);
 router.use(privacyRouter);
+router.use(knowledgeRouter);
 
 export default router;

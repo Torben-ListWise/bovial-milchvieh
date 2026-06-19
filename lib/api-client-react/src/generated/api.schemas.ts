@@ -683,6 +683,47 @@ export interface DataExport {
   rules?: DataExportRulesItem[];
 }
 
+export type KnowledgeDocumentStatus = typeof KnowledgeDocumentStatus[keyof typeof KnowledgeDocumentStatus];
+
+export const KnowledgeDocumentStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  ready: 'ready',
+  error: 'error',
+} as const;
+
+export interface KnowledgeDocument {
+  id: string;
+  title: string;
+  filename: string;
+  fileType: string;
+  status: KnowledgeDocumentStatus;
+  /** @nullable */
+  chunkCount?: number | null;
+  /** @nullable */
+  size?: number | null;
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt: string;
+}
+
+export interface KnowledgeUploadUrlRequest {
+  /** @minLength 1 */
+  filename: string;
+  /** @minLength 1 */
+  contentType: string;
+  /** @minimum 1 */
+  size: number;
+  title?: string;
+}
+
+export interface KnowledgeUploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  docId: string;
+  title: string;
+}
+
 /**
  * Invalid request.
  */

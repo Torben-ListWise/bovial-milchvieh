@@ -795,6 +795,45 @@ export const GetAdminActivityResponse = zod.array(GetAdminActivityResponseItem)
 
 
 /**
+ * @summary List all knowledge documents (operator only)
+ */
+export const ListKnowledgeDocumentsResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "filename": zod.string(),
+  "fileType": zod.string(),
+  "status": zod.enum(['pending', 'processing', 'ready', 'error']),
+  "chunkCount": zod.number().nullish(),
+  "size": zod.number().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListKnowledgeDocumentsResponse = zod.array(ListKnowledgeDocumentsResponseItem)
+
+export const KnowledgeUploadUrlBody = zod.object({
+  "filename": zod.string().min(1),
+  "contentType": zod.string().min(1),
+  "size": zod.number().min(1),
+  "title": zod.string().optional()
+})
+
+export const KnowledgeUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string(),
+  "docId": zod.string(),
+  "title": zod.string()
+})
+
+export const KnowledgeIngestParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const KnowledgeDeleteParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
  * @summary Export all of the current user's data (DSGVO)
  */
 export const ExportMyDataResponse = zod.object({

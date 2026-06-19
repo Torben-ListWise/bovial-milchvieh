@@ -16,7 +16,8 @@ import {
   LogOut,
   ChevronRight,
   ChevronLeft,
-  ArrowLeftRight
+  ArrowLeftRight,
+  BookOpen,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -67,6 +68,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
   const operatorNav = [
     { name: "Monitoring", href: "/app/monitoring", icon: Activity, preserveDataset: false },
     { name: "Stammdaten", href: "/app/master-data", icon: Database, preserveDataset: false },
+    { name: "Wissensbibliothek", href: "/app/knowledge", icon: BookOpen, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;

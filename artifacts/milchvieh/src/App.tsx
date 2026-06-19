@@ -20,6 +20,7 @@ import { RulesPage } from "@/pages/app/rules";
 import { SettingsPage } from "@/pages/app/settings";
 import { OperatorDashboard } from "@/pages/operator/monitoring";
 import { MasterDataPage } from "@/pages/operator/master-data";
+import { KnowledgePage } from "@/pages/operator/knowledge";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -216,6 +217,7 @@ function AppPortal() {
       <Switch>
         <Route path="/app/monitoring" component={OperatorDashboard} />
         <Route path="/app/master-data" component={MasterDataPage} />
+        <Route path="/app/knowledge" component={KnowledgePage} />
         <Route path="/app/datasets" component={DatasetList} />
         <Route path="/app/overview" component={DatasetOverview} />
         <Route path="/app/upload" component={UploadPage} />
