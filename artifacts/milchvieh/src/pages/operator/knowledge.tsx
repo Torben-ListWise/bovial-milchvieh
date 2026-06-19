@@ -81,7 +81,8 @@ export function KnowledgePage() {
     queryFn: async () => {
       const token = await getToken();
       const res = await fetch(`${API_BASE}/api/knowledge`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Fehler beim Laden");
       return res.json();
@@ -100,7 +101,8 @@ export function KnowledgePage() {
       const token = await getToken();
       const res = await fetch(`${API_BASE}/api/knowledge/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Löschen fehlgeschlagen");
     },
@@ -122,12 +124,14 @@ export function KnowledgePage() {
     try {
       updateItem({ status: "uploading" });
       const token = await getToken();
+      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
       const urlRes = await fetch(`${API_BASE}/api/knowledge/upload-url`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...authHeader,
         },
         body: JSON.stringify({
           filename: item.file.name,
@@ -137,7 +141,10 @@ export function KnowledgePage() {
         }),
       });
 
-      if (!urlRes.ok) throw new Error("Upload-URL konnte nicht erstellt werden");
+      if (!urlRes.ok) {
+        const errBody = await urlRes.json().catch(() => ({}));
+        throw new Error((errBody as { error?: string }).error ?? "Upload-URL konnte nicht erstellt werden");
+      }
       const { uploadURL, docId } = await urlRes.json();
 
       const putRes = await fetch(uploadURL, {
@@ -150,7 +157,8 @@ export function KnowledgePage() {
       updateItem({ status: "ingesting" });
       await fetch(`${API_BASE}/api/knowledge/${docId}/ingest`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+        headers: { ...authHeader },
       });
 
       updateItem({ status: "done" });
