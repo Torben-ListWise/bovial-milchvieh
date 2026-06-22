@@ -30,6 +30,8 @@ tags:
     description: Scheduled and on-demand reports.
   - name: Admin
     description: Operator monitoring (metadata only, no customer data).
+  - name: Templates
+    description: DB-driven one-click analysis templates.
   - name: Privacy
     description: DSGVO data export and deletion.
 paths:
@@ -451,11 +453,11 @@ paths:
               $ref: "#/components/schemas/QuestionInput"
       responses:
         "200":
-          description: Assistant answer with narrative and charts.
+          description: Accepted; agent runs in background. Poll the analysis for new messages.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AnalysisMessage"
+                $ref: "#/components/schemas/AskQuestionResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -732,6 +734,156 @@ paths:
                   $ref: "#/components/schemas/ActivityEntry"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /datasets/{datasetId}/templates:
+    get:
+      tags: [Templates]
+      operationId: listTemplates
+      summary: List active analysis templates for a dataset (with last-run context)
+      parameters:
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Templates with optional last-run metadata.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalysisTemplate"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /datasets/{datasetId}/templates/{templateId}/run:
+    post:
+      tags: [Templates]
+      operationId: runTemplate
+      summary: Run a template — creates a new analysis and starts the agent in the background
+      parameters:
+        - $ref: "#/components/parameters/DatasetId"
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Analysis created and agent started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunTemplateResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /admin/templates:
+    get:
+      tags: [Admin]
+      operationId: listAdminTemplates
+      summary: List all templates (incl. inactive) for operator management
+      responses:
+        "200":
+          description: All templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminTemplate"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Admin]
+      operationId: createAdminTemplate
+      summary: Create a new analysis template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/templates/reorder:
+    patch:
+      tags: [Admin]
+      operationId: reorderAdminTemplates
+      summary: Bulk-update sort order of templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateReorderBody"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/templates/{templateId}:
+    patch:
+      tags: [Admin]
+      operationId: updateAdminTemplate
+      summary: Update a template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdate"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTemplate"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Admin]
+      operationId: deleteAdminTemplate
+      summary: Delete a template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted.
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /privacy/export:
     post:
@@ -1104,6 +1256,10 @@ components:
           type: string
         label:
           type: string
+        yAxisId:
+          type: ["string", "null"]
+        unit:
+          type: ["string", "null"]
     Chart:
       type: object
       required: [id, type, title, data]
@@ -1153,7 +1309,15 @@ components:
             type: string
         source:
           type: ["string", "null"]
-          enum: [user, auto, report, null]
+          enum: [user, auto, report, template, null]
+        templateRef:
+          type: ["string", "null"]
+        agentProgress:
+          type: ["string", "null"]
+        agentSteps:
+          type: array
+          items:
+            type: string
         messageCount:
           type: integer
         createdAt:
@@ -1192,6 +1356,13 @@ components:
           type: string
         basis:
           type: ["string", "null"]
+    AskQuestionResponse:
+      type: object
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+
     AnalysisMessage:
       type: object
       required: [id, analysisId, role, createdAt]
@@ -1213,6 +1384,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Citation"
+        followUpQuestions:
+          type: array
+          items:
+            type: string
         error:
           type: ["string", "null"]
         createdAt:
@@ -1238,7 +1413,15 @@ components:
             type: string
         source:
           type: ["string", "null"]
-          enum: [user, auto, report, null]
+          enum: [user, auto, report, template, null]
+        templateRef:
+          type: ["string", "null"]
+        agentProgress:
+          type: ["string", "null"]
+        agentSteps:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
           format: date-time
@@ -1503,6 +1686,159 @@ components:
         category:
           type: ["string", "null"]
         datasetRef:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    AnalysisTemplate:
+      type: object
+      required: [id, title, emoji, shortDescription, promptText, sortOrder, active, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        emoji:
+          type: string
+        shortDescription:
+          type: string
+        promptText:
+          type: string
+        categoryTag:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastRunAt:
+          type: ["string", "null"]
+          format: date-time
+        lastResultSnippet:
+          type: ["string", "null"]
+
+    AdminTemplate:
+      type: object
+      required: [id, title, emoji, shortDescription, promptText, sortOrder, active, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        emoji:
+          type: string
+        shortDescription:
+          type: string
+        promptText:
+          type: string
+        categoryTag:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TemplateInput:
+      type: object
+      required: [title, emoji, shortDescription, promptText]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        emoji:
+          type: string
+          minLength: 1
+        shortDescription:
+          type: string
+        promptText:
+          type: string
+          minLength: 1
+        categoryTag:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        active:
+          type: boolean
+
+    TemplateUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        emoji:
+          type: string
+          minLength: 1
+        shortDescription:
+          type: string
+        promptText:
+          type: string
+          minLength: 1
+        categoryTag:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        active:
+          type: boolean
+
+    TemplateReorderItem:
+      type: object
+      required: [id, sortOrder]
+      properties:
+        id:
+          type: string
+        sortOrder:
+          type: integer
+
+    TemplateReorderBody:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateReorderItem"
+
+    RunTemplateResponse:
+      type: object
+      required: [analysisId]
+      properties:
+        analysisId:
+          type: string
+
+    KnowledgeDocument:
+      type: object
+      required: [id, title, filename, fileType, status, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        filename:
+          type: string
+        fileType:
+          type: string
+          enum: [pdf, pptx]
+        status:
+          type: string
+          enum: [pending, processing, ready, error]
+        chunkCount:
+          type: ["integer", "null"]
+        size:
+          type: ["integer", "null"]
+        errorMessage:
           type: ["string", "null"]
         createdAt:
           type: string

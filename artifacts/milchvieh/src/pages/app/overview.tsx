@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useGetDatasetOverview,
   getGetDatasetOverviewQueryKey,
   useListAnalyses,
   getListAnalysesQueryKey,
+  useListTemplates,
+  getListTemplatesQueryKey,
+  useRunTemplate,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, Bot, X, ArrowRight } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Bot, X, ArrowRight, ChevronRight, Loader2 } from "lucide-react";
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 
@@ -45,6 +50,80 @@ function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; dat
       >
         <X className="w-4 h-4" />
       </button>
+    </div>
+  );
+}
+
+function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: templates, isLoading } = useListTemplates(datasetId, {
+    query: {
+      queryKey: getListTemplatesQueryKey(datasetId),
+      staleTime: 60_000,
+    },
+  });
+
+  const runTemplate = useRunTemplate({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
+        queryClient.invalidateQueries({ queryKey: getListTemplatesQueryKey(datasetId) });
+        navigate(`/app/analyses?datasetId=${datasetId}&analysisId=${data.analysisId}`);
+      },
+      onError: () => {
+        toast({
+          variant: "destructive",
+          title: "Fehler",
+          description: "Vorlage konnte nicht gestartet werden.",
+        });
+      },
+    },
+  });
+
+  const top4 = (templates ?? []).slice(0, 4);
+
+  if (isLoading || top4.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground">Schnellauswertungen</h2>
+        <Link href={`/app/analyses?datasetId=${datasetId}`}>
+          <span className="text-sm text-primary hover:underline flex items-center gap-1">
+            Alle ansehen <ChevronRight className="w-3.5 h-3.5" />
+          </span>
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {top4.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => runTemplate.mutate({ datasetId, templateId: t.id })}
+            disabled={runTemplate.isPending}
+            className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-60"
+          >
+            <div className="flex items-start gap-2.5">
+              <span className="text-xl leading-none mt-0.5 shrink-0">{t.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors truncate">
+                  {t.title}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                  {t.shortDescription}
+                </p>
+              </div>
+              {runTemplate.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0 mt-0.5" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5 transition-colors" />
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -126,6 +205,8 @@ export function DatasetOverview() {
           </Card>
         ))}
       </div>
+
+      <SchnellauswertungenSection datasetId={datasetId} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {overview.charts.map((chart) => (

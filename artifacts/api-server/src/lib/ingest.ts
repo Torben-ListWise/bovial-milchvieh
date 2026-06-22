@@ -189,7 +189,8 @@ export async function extractPdfText(buf: Buffer): Promise<string> {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
     const pageText = content.items
-      .map((item: { str: string }) => item.str)
+      .filter((item) => "str" in item)
+      .map((item) => (item as unknown as { str: string }).str)
       .join(" ");
     parts.push(pageText);
   }

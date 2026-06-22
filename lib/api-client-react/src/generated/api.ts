@@ -22,11 +22,13 @@ import type {
 import type {
   ActivityEntry,
   AdminStats,
+  AdminTemplate,
   Analysis,
   AnalysisDetail,
   AnalysisInput,
-  AnalysisMessage,
+  AnalysisTemplate,
   AnalysisUpdate,
+  AskQuestionResponse,
   BadRequestResponse,
   ColumnMappingUpdate,
   CurrentUser,
@@ -43,15 +45,20 @@ import type {
   NotFoundResponse,
   QuestionInput,
   QuestionSuggestion,
+  ReorderAdminTemplates200,
   Report,
   ReportInput,
   Rule,
   RuleInput,
   RuleUpdate,
+  RunTemplateResponse,
   ServerErrorResponse,
   SourceFile,
   SourceFileDetail,
   SourceFileInput,
+  TemplateInput,
+  TemplateReorderBody,
+  TemplateUpdate,
   UnauthorizedResponse,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -1723,9 +1730,9 @@ export const getAskQuestionUrl = (analysisId: string,) => {
  * @summary Ask a question; runs the AI agent and returns the answer
  */
 export const askQuestion = async (analysisId: string,
-    questionInput: QuestionInput, options?: RequestInit): Promise<AnalysisMessage> => {
+    questionInput: QuestionInput, options?: RequestInit): Promise<AskQuestionResponse> => {
 
-  return customFetch<AnalysisMessage>(getAskQuestionUrl(analysisId),
+  return customFetch<AskQuestionResponse>(getAskQuestionUrl(analysisId),
   {
     ...options,
     method: 'POST',
@@ -2891,6 +2898,516 @@ export function useGetAdminActivity<TData = Awaited<ReturnType<typeof getAdminAc
 
 
 
+
+export const getListTemplatesUrl = (datasetId: string,) => {
+
+
+
+
+  return `/api/datasets/${datasetId}/templates`
+}
+
+/**
+ * @summary List active analysis templates for a dataset (with last-run context)
+ */
+export const listTemplates = async (datasetId: string, options?: RequestInit): Promise<AnalysisTemplate[]> => {
+
+  return customFetch<AnalysisTemplate[]>(getListTemplatesUrl(datasetId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTemplatesQueryKey = (datasetId: string,) => {
+    return [
+    `/api/datasets/${datasetId}/templates`
+    ] as const;
+    }
+
+
+export const getListTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listTemplates>>, TError = ErrorType<NotFoundResponse>>(datasetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTemplatesQueryKey(datasetId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTemplates>>> = ({ signal }) => listTemplates(datasetId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(datasetId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listTemplates>>>
+export type ListTemplatesQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary List active analysis templates for a dataset (with last-run context)
+ */
+
+export function useListTemplates<TData = Awaited<ReturnType<typeof listTemplates>>, TError = ErrorType<NotFoundResponse>>(
+ datasetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTemplatesQueryOptions(datasetId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRunTemplateUrl = (datasetId: string,
+    templateId: string,) => {
+
+
+
+
+  return `/api/datasets/${datasetId}/templates/${templateId}/run`
+}
+
+/**
+ * @summary Run a template — creates a new analysis and starts the agent in the background
+ */
+export const runTemplate = async (datasetId: string,
+    templateId: string, options?: RequestInit): Promise<RunTemplateResponse> => {
+
+  return customFetch<RunTemplateResponse>(getRunTemplateUrl(datasetId,templateId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRunTemplateMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runTemplate>>, TError,{datasetId: string;templateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runTemplate>>, TError,{datasetId: string;templateId: string}, TContext> => {
+
+const mutationKey = ['runTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runTemplate>>, {datasetId: string;templateId: string}> = (props) => {
+          const {datasetId,templateId} = props ?? {};
+
+          return  runTemplate(datasetId,templateId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof runTemplate>>>
+
+    export type RunTemplateMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Run a template — creates a new analysis and starts the agent in the background
+ */
+export const useRunTemplate = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runTemplate>>, TError,{datasetId: string;templateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof runTemplate>>,
+        TError,
+        {datasetId: string;templateId: string},
+        TContext
+      > => {
+      return useMutation(getRunTemplateMutationOptions(options));
+    }
+
+export const getListAdminTemplatesUrl = () => {
+
+
+
+
+  return `/api/admin/templates`
+}
+
+/**
+ * @summary List all templates (incl. inactive) for operator management
+ */
+export const listAdminTemplates = async ( options?: RequestInit): Promise<AdminTemplate[]> => {
+
+  return customFetch<AdminTemplate[]>(getListAdminTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminTemplatesQueryKey = () => {
+    return [
+    `/api/admin/templates`
+    ] as const;
+    }
+
+
+export const getListAdminTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminTemplates>>, TError = ErrorType<ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminTemplates>>> = ({ signal }) => listAdminTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminTemplates>>>
+export type ListAdminTemplatesQueryError = ErrorType<ForbiddenResponse>
+
+
+/**
+ * @summary List all templates (incl. inactive) for operator management
+ */
+
+export function useListAdminTemplates<TData = Awaited<ReturnType<typeof listAdminTemplates>>, TError = ErrorType<ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateAdminTemplateUrl = () => {
+
+
+
+
+  return `/api/admin/templates`
+}
+
+/**
+ * @summary Create a new analysis template
+ */
+export const createAdminTemplate = async (templateInput: TemplateInput, options?: RequestInit): Promise<AdminTemplate> => {
+
+  return customFetch<AdminTemplate>(getCreateAdminTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      templateInput,)
+  }
+);}
+
+
+
+
+export const getCreateAdminTemplateMutationOptions = <TError = ErrorType<BadRequestResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminTemplate>>, TError,{data: BodyType<TemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminTemplate>>, TError,{data: BodyType<TemplateInput>}, TContext> => {
+
+const mutationKey = ['createAdminTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminTemplate>>, {data: BodyType<TemplateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminTemplate>>>
+    export type CreateAdminTemplateMutationBody = BodyType<TemplateInput>
+    export type CreateAdminTemplateMutationError = ErrorType<BadRequestResponse | ForbiddenResponse>
+
+    /**
+ * @summary Create a new analysis template
+ */
+export const useCreateAdminTemplate = <TError = ErrorType<BadRequestResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminTemplate>>, TError,{data: BodyType<TemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminTemplate>>,
+        TError,
+        {data: BodyType<TemplateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminTemplateMutationOptions(options));
+    }
+
+export const getReorderAdminTemplatesUrl = () => {
+
+
+
+
+  return `/api/admin/templates/reorder`
+}
+
+/**
+ * @summary Bulk-update sort order of templates
+ */
+export const reorderAdminTemplates = async (templateReorderBody: TemplateReorderBody, options?: RequestInit): Promise<ReorderAdminTemplates200> => {
+
+  return customFetch<ReorderAdminTemplates200>(getReorderAdminTemplatesUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      templateReorderBody,)
+  }
+);}
+
+
+
+
+export const getReorderAdminTemplatesMutationOptions = <TError = ErrorType<ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderAdminTemplates>>, TError,{data: BodyType<TemplateReorderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderAdminTemplates>>, TError,{data: BodyType<TemplateReorderBody>}, TContext> => {
+
+const mutationKey = ['reorderAdminTemplates'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderAdminTemplates>>, {data: BodyType<TemplateReorderBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderAdminTemplates(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderAdminTemplatesMutationResult = NonNullable<Awaited<ReturnType<typeof reorderAdminTemplates>>>
+    export type ReorderAdminTemplatesMutationBody = BodyType<TemplateReorderBody>
+    export type ReorderAdminTemplatesMutationError = ErrorType<ForbiddenResponse>
+
+    /**
+ * @summary Bulk-update sort order of templates
+ */
+export const useReorderAdminTemplates = <TError = ErrorType<ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderAdminTemplates>>, TError,{data: BodyType<TemplateReorderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderAdminTemplates>>,
+        TError,
+        {data: BodyType<TemplateReorderBody>},
+        TContext
+      > => {
+      return useMutation(getReorderAdminTemplatesMutationOptions(options));
+    }
+
+export const getUpdateAdminTemplateUrl = (templateId: string,) => {
+
+
+
+
+  return `/api/admin/templates/${templateId}`
+}
+
+/**
+ * @summary Update a template
+ */
+export const updateAdminTemplate = async (templateId: string,
+    templateUpdate: TemplateUpdate, options?: RequestInit): Promise<AdminTemplate> => {
+
+  return customFetch<AdminTemplate>(getUpdateAdminTemplateUrl(templateId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      templateUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateAdminTemplateMutationOptions = <TError = ErrorType<ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminTemplate>>, TError,{templateId: string;data: BodyType<TemplateUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminTemplate>>, TError,{templateId: string;data: BodyType<TemplateUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminTemplate>>, {templateId: string;data: BodyType<TemplateUpdate>}> = (props) => {
+          const {templateId,data} = props ?? {};
+
+          return  updateAdminTemplate(templateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminTemplate>>>
+    export type UpdateAdminTemplateMutationBody = BodyType<TemplateUpdate>
+    export type UpdateAdminTemplateMutationError = ErrorType<ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Update a template
+ */
+export const useUpdateAdminTemplate = <TError = ErrorType<ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminTemplate>>, TError,{templateId: string;data: BodyType<TemplateUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminTemplate>>,
+        TError,
+        {templateId: string;data: BodyType<TemplateUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminTemplateMutationOptions(options));
+    }
+
+export const getDeleteAdminTemplateUrl = (templateId: string,) => {
+
+
+
+
+  return `/api/admin/templates/${templateId}`
+}
+
+/**
+ * @summary Delete a template
+ */
+export const deleteAdminTemplate = async (templateId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteAdminTemplateUrl(templateId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAdminTemplateMutationOptions = <TError = ErrorType<ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTemplate>>, TError,{templateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTemplate>>, TError,{templateId: string}, TContext> => {
+
+const mutationKey = ['deleteAdminTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminTemplate>>, {templateId: string}> = (props) => {
+          const {templateId} = props ?? {};
+
+          return  deleteAdminTemplate(templateId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAdminTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminTemplate>>>
+
+    export type DeleteAdminTemplateMutationError = ErrorType<ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Delete a template
+ */
+export const useDeleteAdminTemplate = <TError = ErrorType<ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTemplate>>, TError,{templateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAdminTemplate>>,
+        TError,
+        {templateId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteAdminTemplateMutationOptions(options));
+    }
 
 export const getExportMyDataUrl = () => {
 

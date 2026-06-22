@@ -10,11 +10,15 @@ import {
   useAskQuestion,
   useListFiles,
   getListFilesQueryKey,
+  useListTemplates,
+  getListTemplatesQueryKey,
+  useRunTemplate,
   useRequestUploadUrl,
   useRegisterFile,
   useGetFile,
   type AnalysisDetail,
   type Analysis,
+  type AnalysisTemplate,
 } from "@workspace/api-client-react";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { type AnalysisMessage } from "@workspace/api-client-react";
@@ -54,47 +58,6 @@ interface SystemMsg {
   status: SystemMsgStatus;
 }
 
-// ── Starter questions ────────────────────────────────────────────────────────
-
-const STARTER_QUESTIONS = [
-  {
-    emoji: "🥛",
-    title: "Milchleistungs-Trend",
-    description: "12-Monats-Verlauf und Spitzentiere",
-    question: "Wie hat sich meine Milchleistung in den letzten 12 Monaten entwickelt?",
-  },
-  {
-    emoji: "🔬",
-    title: "Zellzahl-Analyse",
-    description: "Trend und auffällige Tiere",
-    question: "Zeig mir den Zellzahl-Trend und identifiziere auffällige Tiere.",
-  },
-  {
-    emoji: "🌾",
-    title: "Fütterungseffizienz",
-    description: "Verbrauch und Optimierungspotenzial",
-    question: "Wie effizient ist meine Fütterung? Gibt es Verbesserungspotenzial?",
-  },
-  {
-    emoji: "📋",
-    title: "Fruchtbarkeit",
-    description: "Kennzahlen vs. Normwerte",
-    question: "Wie sind meine Fruchtbarkeitskennzahlen im Vergleich zu Normwerten?",
-  },
-  {
-    emoji: "⚠️",
-    title: "Ausreißer & Warnungen",
-    description: "Auffälligkeiten in den Daten",
-    question: "Gibt es Ausreißer oder kritische Auffälligkeiten in meinen Daten?",
-  },
-  {
-    emoji: "💡",
-    title: "Handlungsempfehlungen",
-    description: "Top-3 Maßnahmen basierend auf Ihren Daten",
-    question: "Was sind meine Top-3 Handlungsempfehlungen basierend auf den aktuellen Daten?",
-  },
-];
-
 // ── Progress label normalization ─────────────────────────────────────────────
 
 function normalizeStep(step: string): { emoji: string; label: string } {
@@ -123,8 +86,15 @@ function AnalysisSourceBadge({ source }: { source?: string | null }) {
   }
   if (source === "template") {
     return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 shrink-0">
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 shrink-0">
         Vorlage
+      </span>
+    );
+  }
+  if (source === "report") {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground shrink-0">
+        Bericht
       </span>
     );
   }
@@ -491,15 +461,56 @@ function FollowUpChips({
   );
 }
 
-// ── Starter questions ────────────────────────────────────────────────────────
+// ── Starter questions (DB-driven templates) ──────────────────────────────────
+
+function relativeDay(date: Date | string | null | undefined): string | null {
+  if (!date) return null;
+  const d = typeof date === "string" ? new Date(date) : date;
+  const diffDays = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "heute";
+  if (diffDays === 1) return "gestern";
+  return `vor ${diffDays} Tagen`;
+}
 
 function StarterQuestions({
   hasFiles,
+  datasetId,
+  onTemplateRun,
   onAsk,
 }: {
   hasFiles: boolean;
+  datasetId: string;
+  onTemplateRun: (analysisId: string) => void;
   onAsk: (question: string) => void;
 }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: templates, isLoading: templatesLoading } = useListTemplates(datasetId, {
+    query: {
+      enabled: hasFiles,
+      queryKey: getListTemplatesQueryKey(datasetId),
+      staleTime: 60_000,
+    },
+  });
+
+  const runTemplate = useRunTemplate({
+    mutation: {
+      onSuccess: (data, vars) => {
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
+        queryClient.invalidateQueries({ queryKey: getListTemplatesQueryKey(datasetId) });
+        onTemplateRun(data.analysisId);
+      },
+      onError: () => {
+        toast({
+          variant: "destructive",
+          title: "Fehler",
+          description: "Vorlage konnte nicht gestartet werden.",
+        });
+      },
+    },
+  });
+
   if (!hasFiles) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
@@ -533,24 +544,53 @@ function StarterQuestions({
         Stellen Sie eine Frage oder wählen Sie eine Vorlage:
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
-        {STARTER_QUESTIONS.map((q) => (
-          <button
-            key={q.title}
-            onClick={() => onAsk(q.question)}
-            className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all"
-          >
-            <div className="flex items-start gap-3">
-              <span className="text-2xl leading-none mt-0.5">{q.emoji}</span>
-              <div className="min-w-0">
-                <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">
-                  {q.title}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{q.description}</p>
+        {templatesLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="p-4 rounded-xl border border-border bg-card animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded bg-muted shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 bg-muted rounded w-3/4" />
+                    <div className="h-2 bg-muted rounded w-1/2" />
+                  </div>
+                </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-0.5 ml-auto" />
-            </div>
-          </button>
-        ))}
+            ))
+          : (templates ?? []).map((t) => {
+              const lastDay = relativeDay(t.lastRunAt);
+              const snippet = t.lastResultSnippet
+                ? t.lastResultSnippet.slice(0, 80)
+                : null;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() =>
+                    runTemplate.mutate({ datasetId, templateId: t.id })
+                  }
+                  disabled={runTemplate.isPending}
+                  className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-60"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl leading-none mt-0.5">{t.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">
+                        {t.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {t.shortDescription}
+                      </p>
+                      {lastDay && (
+                        <p className="text-[10px] text-muted-foreground/70 mt-1 truncate">
+                          Zuletzt: {lastDay}
+                          {snippet ? ` · ${snippet}` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-0.5" />
+                  </div>
+                </button>
+              );
+            })}
       </div>
     </div>
   );
@@ -980,7 +1020,15 @@ export function AnalysesPage() {
           )}
           <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0">
             <HistoricalFiles files={historicalFiles} />
-            <StarterQuestions hasFiles={hasFiles} onAsk={handleStarterQuestion} />
+            <StarterQuestions
+                hasFiles={hasFiles}
+                datasetId={datasetId}
+                onTemplateRun={(id) => {
+                  setActiveAnalysisId(id);
+                  queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
+                }}
+                onAsk={handleStarterQuestion}
+              />
           </div>
         </div>
       );

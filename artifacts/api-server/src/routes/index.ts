@@ -12,6 +12,7 @@ import masterdataRouter from "./masterdata";
 import adminRouter from "./admin";
 import privacyRouter from "./privacy";
 import { knowledgeRouter } from "./knowledge";
+import templatesRouter from "./templates";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(masterdataRouter);
 router.use(adminRouter);
 router.use(privacyRouter);
 router.use(knowledgeRouter);
+router.use(templatesRouter);
 
 export default router;

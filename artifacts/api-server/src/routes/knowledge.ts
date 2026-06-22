@@ -9,7 +9,35 @@ import { requireAuth, requireOperator } from "../lib/auth";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { ingestKnowledgeDoc } from "../lib/ingest";
 import { logger } from "../lib/logger";
-import { KnowledgeUploadUrlBody } from "@workspace/api-zod";
+
+interface KnowledgeUploadUrlBodyType {
+  filename: string;
+  contentType: string;
+  size: number;
+  title?: string;
+}
+
+const KnowledgeUploadUrlBody = {
+  safeParse(body: unknown): { success: true; data: KnowledgeUploadUrlBodyType } | { success: false } {
+    if (
+      typeof body !== "object" || body === null ||
+      typeof (body as any).filename !== "string" || !(body as any).filename ||
+      typeof (body as any).contentType !== "string" || !(body as any).contentType ||
+      typeof (body as any).size !== "number" || (body as any).size < 1
+    ) {
+      return { success: false };
+    }
+    return {
+      success: true,
+      data: {
+        filename: (body as any).filename,
+        contentType: (body as any).contentType,
+        size: (body as any).size,
+        title: typeof (body as any).title === "string" ? (body as any).title : undefined,
+      },
+    };
+  },
+};
 
 const router: IRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -97,7 +125,7 @@ router.post(
   requireAuth,
   requireOperator,
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [doc] = await db
       .select({ id: knowledgeDocumentsTable.id })
       .from(knowledgeDocumentsTable)
@@ -116,7 +144,7 @@ router.delete(
   requireAuth,
   requireOperator,
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [doc] = await db
       .select()
       .from(knowledgeDocumentsTable)

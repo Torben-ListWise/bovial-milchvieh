@@ -350,6 +350,8 @@ export const ListAnalysesResponseItem = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "source": zod.union([zod.literal('user'),zod.literal('auto'),zod.literal('report'),zod.literal('template'),zod.literal(null)]).nullish(),
   "templateRef": zod.string().nullish(),
+  "agentProgress": zod.string().nullish(),
+  "agentSteps": zod.array(zod.string()).optional(),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()
@@ -394,7 +396,6 @@ export const GetAnalysisResponse = zod.object({
   "analysisId": zod.string(),
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().nullish(),
-  "followUpQuestions": zod.array(zod.string()).optional(),
   "charts": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),
@@ -416,6 +417,7 @@ export const GetAnalysisResponse = zod.object({
   "value": zod.string(),
   "basis": zod.string().nullish()
 })).optional(),
+  "followUpQuestions": zod.array(zod.string()).optional(),
   "error": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }))
@@ -445,6 +447,8 @@ export const UpdateAnalysisResponse = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "source": zod.union([zod.literal('user'),zod.literal('auto'),zod.literal('report'),zod.literal('template'),zod.literal(null)]).nullish(),
   "templateRef": zod.string().nullish(),
+  "agentProgress": zod.string().nullish(),
+  "agentSteps": zod.array(zod.string()).optional(),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()
@@ -798,41 +802,131 @@ export const GetAdminActivityResponse = zod.array(GetAdminActivityResponseItem)
 
 
 /**
- * @summary List all knowledge documents (operator only)
+ * @summary List active analysis templates for a dataset (with last-run context)
  */
-export const ListKnowledgeDocumentsResponseItem = zod.object({
+export const ListTemplatesParams = zod.object({
+  "datasetId": zod.coerce.string()
+})
+
+export const ListTemplatesResponseItem = zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "filename": zod.string(),
-  "fileType": zod.string(),
-  "status": zod.enum(['pending', 'processing', 'ready', 'error']),
-  "chunkCount": zod.number().nullish(),
-  "size": zod.number().nullish(),
-  "errorMessage": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "emoji": zod.string(),
+  "shortDescription": zod.string(),
+  "promptText": zod.string(),
+  "categoryTag": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "lastRunAt": zod.coerce.date().nullish(),
+  "lastResultSnippet": zod.string().nullish()
 })
-export const ListKnowledgeDocumentsResponse = zod.array(ListKnowledgeDocumentsResponseItem)
+export const ListTemplatesResponse = zod.array(ListTemplatesResponseItem)
 
-export const KnowledgeUploadUrlBody = zod.object({
-  "filename": zod.string().min(1),
-  "contentType": zod.string().min(1),
-  "size": zod.number().min(1),
-  "title": zod.string().optional()
-})
 
-export const KnowledgeUploadUrlResponse = zod.object({
-  "uploadURL": zod.string(),
-  "objectPath": zod.string(),
-  "docId": zod.string(),
-  "title": zod.string()
+/**
+ * @summary Run a template — creates a new analysis and starts the agent in the background
+ */
+export const RunTemplateParams = zod.object({
+  "datasetId": zod.coerce.string(),
+  "templateId": zod.coerce.string()
 })
 
-export const KnowledgeIngestParams = zod.object({
-  "id": zod.coerce.string()
+
+/**
+ * @summary List all templates (incl. inactive) for operator management
+ */
+export const ListAdminTemplatesResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "emoji": zod.string(),
+  "shortDescription": zod.string(),
+  "promptText": zod.string(),
+  "categoryTag": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListAdminTemplatesResponse = zod.array(ListAdminTemplatesResponseItem)
+
+
+/**
+ * @summary Create a new analysis template
+ */
+
+
+
+
+
+export const CreateAdminTemplateBody = zod.object({
+  "title": zod.string().min(1),
+  "emoji": zod.string().min(1),
+  "shortDescription": zod.string(),
+  "promptText": zod.string().min(1),
+  "categoryTag": zod.string().nullish(),
+  "sortOrder": zod.number().optional(),
+  "active": zod.boolean().optional()
 })
 
-export const KnowledgeDeleteParams = zod.object({
-  "id": zod.coerce.string()
+
+/**
+ * @summary Bulk-update sort order of templates
+ */
+export const ReorderAdminTemplatesBody = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderAdminTemplatesResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Update a template
+ */
+export const UpdateAdminTemplateParams = zod.object({
+  "templateId": zod.coerce.string()
+})
+
+
+
+
+
+
+export const UpdateAdminTemplateBody = zod.object({
+  "title": zod.string().min(1).optional(),
+  "emoji": zod.string().min(1).optional(),
+  "shortDescription": zod.string().optional(),
+  "promptText": zod.string().min(1).optional(),
+  "categoryTag": zod.string().nullish(),
+  "sortOrder": zod.number().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateAdminTemplateResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "emoji": zod.string(),
+  "shortDescription": zod.string(),
+  "promptText": zod.string(),
+  "categoryTag": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a template
+ */
+export const DeleteAdminTemplateParams = zod.object({
+  "templateId": zod.coerce.string()
 })
 
 

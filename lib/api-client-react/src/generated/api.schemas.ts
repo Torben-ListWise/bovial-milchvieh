@@ -321,6 +321,9 @@ export interface Analysis {
   source?: AnalysisSource;
   /** @nullable */
   templateRef?: string | null;
+  /** @nullable */
+  agentProgress?: string | null;
+  agentSteps?: string[];
   messageCount?: number;
   createdAt: string;
   /** @nullable */
@@ -346,6 +349,10 @@ export interface Citation {
   basis?: string | null;
 }
 
+export interface AskQuestionResponse {
+  accepted: boolean;
+}
+
 export type AnalysisMessageRole = typeof AnalysisMessageRole[keyof typeof AnalysisMessageRole];
 
 
@@ -362,6 +369,7 @@ export interface AnalysisMessage {
   content?: string | null;
   charts?: Chart[];
   citations?: Citation[];
+  followUpQuestions?: string[];
   /** @nullable */
   error?: string | null;
   createdAt: string;
@@ -394,6 +402,7 @@ export interface AnalysisDetail {
   templateRef?: string | null;
   /** @nullable */
   agentProgress?: string | null;
+  agentSteps?: string[];
   createdAt: string;
   messages: AnalysisMessage[];
 }
@@ -676,20 +685,89 @@ export interface ActivityEntry {
   createdAt: string;
 }
 
-export type DataExportDatasetsItem = { [key: string]: unknown };
-
-export type DataExportAnalysesItem = { [key: string]: unknown };
-
-export type DataExportRulesItem = { [key: string]: unknown };
-
-export interface DataExport {
-  generatedAt: string;
-  datasets?: DataExportDatasetsItem[];
-  analyses?: DataExportAnalysesItem[];
-  rules?: DataExportRulesItem[];
+export interface AnalysisTemplate {
+  id: string;
+  title: string;
+  emoji: string;
+  shortDescription: string;
+  promptText: string;
+  /** @nullable */
+  categoryTag?: string | null;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  lastRunAt?: string | null;
+  /** @nullable */
+  lastResultSnippet?: string | null;
 }
 
+export interface AdminTemplate {
+  id: string;
+  title: string;
+  emoji: string;
+  shortDescription: string;
+  promptText: string;
+  /** @nullable */
+  categoryTag?: string | null;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TemplateInput {
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  emoji: string;
+  shortDescription: string;
+  /** @minLength 1 */
+  promptText: string;
+  /** @nullable */
+  categoryTag?: string | null;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export interface TemplateUpdate {
+  /** @minLength 1 */
+  title?: string;
+  /** @minLength 1 */
+  emoji?: string;
+  shortDescription?: string;
+  /** @minLength 1 */
+  promptText?: string;
+  /** @nullable */
+  categoryTag?: string | null;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export interface TemplateReorderItem {
+  id: string;
+  sortOrder: number;
+}
+
+export interface TemplateReorderBody {
+  items: TemplateReorderItem[];
+}
+
+export interface RunTemplateResponse {
+  analysisId: string;
+}
+
+export type KnowledgeDocumentFileType = typeof KnowledgeDocumentFileType[keyof typeof KnowledgeDocumentFileType];
+
+
+export const KnowledgeDocumentFileType = {
+  pdf: 'pdf',
+  pptx: 'pptx',
+} as const;
+
 export type KnowledgeDocumentStatus = typeof KnowledgeDocumentStatus[keyof typeof KnowledgeDocumentStatus];
+
 
 export const KnowledgeDocumentStatus = {
   pending: 'pending',
@@ -702,7 +780,7 @@ export interface KnowledgeDocument {
   id: string;
   title: string;
   filename: string;
-  fileType: string;
+  fileType: KnowledgeDocumentFileType;
   status: KnowledgeDocumentStatus;
   /** @nullable */
   chunkCount?: number | null;
@@ -713,21 +791,17 @@ export interface KnowledgeDocument {
   createdAt: string;
 }
 
-export interface KnowledgeUploadUrlRequest {
-  /** @minLength 1 */
-  filename: string;
-  /** @minLength 1 */
-  contentType: string;
-  /** @minimum 1 */
-  size: number;
-  title?: string;
-}
+export type DataExportDatasetsItem = { [key: string]: unknown };
 
-export interface KnowledgeUploadUrlResponse {
-  uploadURL: string;
-  objectPath: string;
-  docId: string;
-  title: string;
+export type DataExportAnalysesItem = { [key: string]: unknown };
+
+export type DataExportRulesItem = { [key: string]: unknown };
+
+export interface DataExport {
+  generatedAt: string;
+  datasets?: DataExportDatasetsItem[];
+  analyses?: DataExportAnalysesItem[];
+  rules?: DataExportRulesItem[];
 }
 
 /**
@@ -754,4 +828,8 @@ export type NotFoundResponse = ErrorEnvelope;
  * Server error.
  */
 export type ServerErrorResponse = ErrorEnvelope;
+
+export type ReorderAdminTemplates200 = {
+  ok: boolean;
+};
 

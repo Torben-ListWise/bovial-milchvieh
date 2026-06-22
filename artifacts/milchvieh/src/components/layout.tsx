@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ArrowLeftRight,
   BookOpen,
+  LayoutList,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -69,6 +70,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Monitoring", href: "/app/monitoring", icon: Activity, preserveDataset: false },
     { name: "Stammdaten", href: "/app/master-data", icon: Database, preserveDataset: false },
     { name: "Wissensbibliothek", href: "/app/knowledge", icon: BookOpen, preserveDataset: false },
+    { name: "Auswertungsvorlagen", href: "/app/templates", icon: LayoutList, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;

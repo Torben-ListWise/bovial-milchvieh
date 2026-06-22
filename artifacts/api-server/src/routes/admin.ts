@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq, gte, sql } from "drizzle-orm";
+import { asc, desc, eq, gte, sql } from "drizzle-orm";
 import {
   db,
   usersTable,
@@ -8,6 +8,8 @@ import {
   sourceFilesTable,
   warningsTable,
   activityLogTable,
+  analysisTemplatesTable,
+  messagesTable,
 } from "@workspace/db";
 import {
   GetAdminStatsResponse,
@@ -103,6 +105,152 @@ router.get(
         })),
       ),
     );
+  },
+);
+
+function serializeTemplate(t: typeof analysisTemplatesTable.$inferSelect) {
+  return {
+    id: t.id,
+    title: t.title,
+    emoji: t.emoji,
+    shortDescription: t.shortDescription,
+    promptText: t.promptText,
+    categoryTag: t.categoryTag ?? null,
+    sortOrder: t.sortOrder,
+    active: t.active,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  };
+}
+
+router.get(
+  "/admin/templates",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    const rows = await db
+      .select()
+      .from(analysisTemplatesTable)
+      .orderBy(asc(analysisTemplatesTable.sortOrder));
+    res.json(rows.map(serializeTemplate));
+  },
+);
+
+router.post(
+  "/admin/templates",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { title, emoji, shortDescription, promptText, categoryTag, sortOrder, active } = req.body;
+    if (!title || !emoji || !promptText) {
+      res.status(400).json({ error: "Pflichtfelder: title, emoji, promptText" });
+      return;
+    }
+    const [row] = await db
+      .insert(analysisTemplatesTable)
+      .values({
+        title,
+        emoji,
+        shortDescription: shortDescription ?? "",
+        promptText,
+        categoryTag: categoryTag ?? null,
+        sortOrder: sortOrder ?? 0,
+        active: active !== false,
+      })
+      .returning();
+    res.status(201).json(serializeTemplate(row));
+  },
+);
+
+router.patch(
+  "/admin/templates/reorder",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { items } = req.body as { items: { id: string; sortOrder: number }[] };
+    if (!Array.isArray(items)) {
+      res.status(400).json({ error: "items muss ein Array sein" });
+      return;
+    }
+    await Promise.all(
+      items.map(({ id, sortOrder }) =>
+        db
+          .update(analysisTemplatesTable)
+          .set({ sortOrder, updatedAt: new Date() })
+          .where(eq(analysisTemplatesTable.id, id)),
+      ),
+    );
+    res.json({ ok: true });
+  },
+);
+
+router.patch(
+  "/admin/templates/:id",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { id } = req.params as { id: string };
+    const { title, emoji, shortDescription, promptText, categoryTag, sortOrder, active } = req.body;
+    const [row] = await db
+      .select()
+      .from(analysisTemplatesTable)
+      .where(eq(analysisTemplatesTable.id, id))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Vorlage nicht gefunden" });
+      return;
+    }
+    const [updated] = await db
+      .update(analysisTemplatesTable)
+      .set({
+        ...(title !== undefined ? { title } : {}),
+        ...(emoji !== undefined ? { emoji } : {}),
+        ...(shortDescription !== undefined ? { shortDescription } : {}),
+        ...(promptText !== undefined ? { promptText } : {}),
+        ...(categoryTag !== undefined ? { categoryTag: categoryTag ?? null } : {}),
+        ...(sortOrder !== undefined ? { sortOrder } : {}),
+        ...(active !== undefined ? { active } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(analysisTemplatesTable.id, id))
+      .returning();
+    res.json(serializeTemplate(updated));
+  },
+);
+
+router.delete(
+  "/admin/templates/:id",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { id } = req.params as { id: string };
+    const [row] = await db
+      .select({ id: analysisTemplatesTable.id })
+      .from(analysisTemplatesTable)
+      .where(eq(analysisTemplatesTable.id, id))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Vorlage nicht gefunden" });
+      return;
+    }
+    const [hasAnalyses] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(analysesTable)
+      .where(eq(analysesTable.templateRef as any, id));
+    if ((hasAnalyses?.c ?? 0) > 0) {
+      await db
+        .delete(messagesTable)
+        .where(
+          sql`${messagesTable.analysisId} IN (SELECT id FROM analyses WHERE template_ref = ${id})`,
+        );
+      await db
+        .delete(analysesTable)
+        .where(eq(analysesTable.templateRef as any, id));
+    }
+    await db
+      .delete(analysisTemplatesTable)
+      .where(eq(analysisTemplatesTable.id, id));
+    res.status(204).end();
   },
 );
 

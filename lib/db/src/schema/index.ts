@@ -8,3 +8,4 @@ export * from "./reports";
 export * from "./masterData";
 export * from "./activity";
 export * from "./knowledge";
+export * from "./templates";
