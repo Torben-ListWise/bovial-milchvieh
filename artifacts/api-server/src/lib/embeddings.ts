@@ -61,6 +61,7 @@ async function embedSingle(text: string, apiKey: string): Promise<number[]> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (res.status === 429) {

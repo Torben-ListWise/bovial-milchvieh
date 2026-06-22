@@ -109,22 +109,33 @@ export async function processQuestion(
       .where(eq(analysesTable.id, analysis.id))
       .catch(() => {});
 
+    const AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 Minuten Hard-Limit
+    const agentTimeout = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Zeitüberschreitung: Der Assistent hat zu lange gebraucht. Bitte nochmals versuchen.")),
+        AGENT_TIMEOUT_MS,
+      ),
+    );
+
     try {
-      const result = await runAgent({
-        datasetId: analysis.datasetId,
-        conversation,
-        sector,
-        systemExtra: rulesContext || undefined,
-        onProgress: async (step: string | null) => {
-          // The previous step is now complete — move it to completedSteps
-          if (lastProgressStep) completedSteps.push(lastProgressStep);
-          lastProgressStep = step;
-          await db
-            .update(analysesTable)
-            .set({ agentProgress: step, agentSteps: [...completedSteps] } as any)
-            .where(eq(analysesTable.id, analysis.id));
-        },
-      });
+      const result = await Promise.race([
+        runAgent({
+          datasetId: analysis.datasetId,
+          conversation,
+          sector,
+          systemExtra: rulesContext || undefined,
+          onProgress: async (step: string | null) => {
+            // The previous step is now complete — move it to completedSteps
+            if (lastProgressStep) completedSteps.push(lastProgressStep);
+            lastProgressStep = step;
+            await db
+              .update(analysesTable)
+              .set({ agentProgress: step, agentSteps: [...completedSteps] } as any)
+              .where(eq(analysesTable.id, analysis.id));
+          },
+        }),
+        agentTimeout,
+      ]);
       content = result.text || "Es konnte keine Antwort erzeugt werden.";
       charts = result.charts;
       citations = result.citations;
