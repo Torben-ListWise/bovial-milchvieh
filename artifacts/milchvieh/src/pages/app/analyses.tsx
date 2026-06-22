@@ -873,10 +873,13 @@ export function AnalysesPage() {
   }
 
   // Auto-scroll to bottom when new messages or system messages arrive.
-  // Deliberately NOT triggered by isAgentWorking or currentStep — otherwise
-  // the scroll-to-top fired in handleSubmit would immediately be overridden
-  // by the agent starting up (isAgentWorking flipping to true).
+  // Skip when the newest message is a user message — handleSubmit already
+  // scrolled to top so the new question is visible; we only want to scroll
+  // down when the assistant answer actually arrives.
   useEffect(() => {
+    const msgs = analysis?.messages ?? [];
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg?.role === "user") return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [analysis?.messages?.length, systemMessages.length]);
 
