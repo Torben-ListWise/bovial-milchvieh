@@ -872,12 +872,13 @@ export function AnalysesPage() {
     return new Date(msg.createdAt).getTime() > mountedAtRef.current;
   }
 
-  // Auto-scroll to bottom only while agent is working (not on initial load)
+  // Auto-scroll to bottom when new messages or system messages arrive.
+  // Deliberately NOT triggered by isAgentWorking or currentStep — otherwise
+  // the scroll-to-top fired in handleSubmit would immediately be overridden
+  // by the agent starting up (isAgentWorking flipping to true).
   useEffect(() => {
-    if (isAgentWorking) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [analysis?.messages?.length, currentStep, systemMessages.length, isAgentWorking]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [analysis?.messages?.length, systemMessages.length]);
 
   // Auto-focus input when agent finishes with a back-question or an error
   useEffect(() => {
