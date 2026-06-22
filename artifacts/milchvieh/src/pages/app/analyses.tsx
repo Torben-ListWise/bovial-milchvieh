@@ -439,6 +439,31 @@ function AgentStepsTimeline({
   );
 }
 
+// ── Agent Working Banner ──────────────────────────────────────────────────────
+
+function AgentWorkingBanner({ currentStep }: { currentStep: string | null }) {
+  const stepLabel = currentStep ? normalizeStep(currentStep).label : null;
+  const displayText = stepLabel ? `${stepLabel}…` : "Assistent arbeitet…";
+
+  return (
+    <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+        <Bot className="w-3.5 h-3.5 text-primary" />
+      </div>
+      <div className="flex-1 rounded-2xl rounded-tl-sm border-l-4 border-primary bg-primary/5 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="flex gap-1 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
+            <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
+            <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
+          </span>
+          <span className="text-sm font-medium text-foreground">{displayText}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Markdown renderer ────────────────────────────────────────────────────────
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
@@ -1142,7 +1167,7 @@ export function AnalysesPage() {
                 <User className="w-3.5 h-3.5 text-primary-foreground" />
               </div>
             </div>
-            <AgentStepsTimeline completedSteps={[]} currentStep={null} />
+            <AgentWorkingBanner currentStep={null} />
             <div ref={bottomRef} />
           </div>
           {scrollToBottomButton}
@@ -1216,10 +1241,7 @@ export function AnalysesPage() {
           )}
 
           {isAgentWorking && (
-            <AgentStepsTimeline
-              completedSteps={completedSteps}
-              currentStep={currentStep}
-            />
+            <AgentWorkingBanner currentStep={currentStep} />
           )}
 
           <div ref={bottomRef} />
