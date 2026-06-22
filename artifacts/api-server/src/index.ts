@@ -1,10 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
-import { ensureExtensions, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
+import { ensureExtensions, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
-import { warmupEmbeddingModel, LOCAL_MODEL_NAME } from "./lib/embeddings";
+import { warmupEmbeddingModel, embeddingModelReady, LOCAL_MODEL_NAME } from "./lib/embeddings";
 
 const rawPort = process.env["PORT"];
 
@@ -21,14 +21,17 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 /**
- * Mark all 'ready' documents that were embedded with the old Gemini model
- * (embeddingModel IS NULL) as 'pending' so they get re-embedded with the
- * local model on the next resumePendingIngestions() call.
+ * Re-embed all documents whose embedding_model differs from the current local
+ * model (NULL = old Gemini, or a different version). Atomic per document:
+ *   1. Drop HNSW index (prevents index corruption mid-migration)
+ *   2. For each legacy doc: ingestKnowledgeDoc() handles delete→embed→insert→set_model
+ *   3. Recreate HNSW index once at the end
+ * A server restart mid-migration is safe — docs with the wrong/missing
+ * embedding_model will simply be re-processed on the next startup.
  */
-async function markLegacyDocsForReembedding(): Promise<void> {
+async function reembedLegacyDocs(): Promise<void> {
   try {
-    // Find 'ready' docs where embeddingModel IS NULL (old Gemini API) or differs from local model
-    const toMigrate = await db
+    const legacy = await db
       .select({
         id: knowledgeDocumentsTable.id,
         title: knowledgeDocumentsTable.title,
@@ -44,29 +47,41 @@ async function markLegacyDocsForReembedding(): Promise<void> {
         ),
       );
 
-    if (toMigrate.length === 0) {
-      logger.info("Alle Dokumente sind bereits mit dem lokalen Modell eingebettet");
+    if (legacy.length === 0) {
+      logger.info("Re-Embedding: alle Dokumente sind bereits mit dem lokalen Modell eingebettet");
       return;
     }
 
     logger.info(
-      { count: toMigrate.length, model: LOCAL_MODEL_NAME },
-      "Re-Embedding: Setze veraltete Dokumente auf 'pending'",
+      { count: legacy.length, model: LOCAL_MODEL_NAME },
+      "Re-Embedding: starte Migration alter Dokumente",
     );
 
-    for (const doc of toMigrate) {
-      await db
-        .update(knowledgeDocumentsTable)
-        .set({ status: "pending" })
-        .where(eq(knowledgeDocumentsTable.id, doc.id));
+    // 1. Drop HNSW index so inserts are fast and index stays consistent
+    await pool.query("DROP INDEX IF EXISTS knowledge_chunks_embedding_hnsw_idx");
+    logger.info("Re-Embedding: HNSW-Index entfernt");
+
+    // 2. Re-embed each doc atomically (delete old chunks → embed → insert → set embeddingModel)
+    for (const doc of legacy) {
+      logger.info({ id: doc.id, title: doc.title }, "Re-Embedding: Dokument startet");
+      try {
+        await ingestKnowledgeDoc(doc.id);
+        logger.info({ id: doc.id, title: doc.title }, "Re-Embedding: Dokument abgeschlossen");
+      } catch (err) {
+        logger.warn({ id: doc.id, err }, "Re-Embedding: Dokument fehlgeschlagen — weiter mit nächstem");
+      }
     }
 
-    logger.info(
-      { count: toMigrate.length },
-      "Re-Embedding: Dokumente bereit für Neu-Einbettung",
-    );
+    // 3. Recreate HNSW index
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
+      ON knowledge_chunks
+      USING hnsw (embedding vector_cosine_ops)
+      WITH (m = 16, ef_construction = 64)
+    `);
+    logger.info("Re-Embedding: HNSW-Index neu erstellt — Migration abgeschlossen");
   } catch (err) {
-    logger.warn({ err }, "markLegacyDocsForReembedding fehlgeschlagen");
+    logger.warn({ err }, "reembedLegacyDocs fehlgeschlagen");
   }
 }
 
@@ -112,7 +127,6 @@ async function clearOrphanedAnalyses() {
 
     for (const { id } of orphans) {
       try {
-        // Get the last message for this analysis
         const [lastMsg] = await db
           .select({ role: messagesTable.role })
           .from(messagesTable)
@@ -120,17 +134,14 @@ async function clearOrphanedAnalyses() {
           .orderBy(desc(messagesTable.createdAt))
           .limit(1);
 
-        // Clear agentProgress in all cases
         await db
           .update(analysesTable)
           .set({ agentProgress: null, agentSteps: [] } as any)
           .where(eq(analysesTable.id, id));
 
         if (lastMsg?.role === "assistant") {
-          // Agent completed but the finally-block DB-clear never ran — no error needed
           logger.info({ id }, "Verwaiste Analyse: agentProgress geleert (Antwort bereits vorhanden)");
         } else {
-          // Agent was interrupted mid-run — insert a visible error message
           await db.insert(messagesTable).values({
             analysisId: id,
             role: "assistant",
@@ -157,13 +168,18 @@ ensureExtensions()
       }
 
       logger.info({ port }, "Server listening");
+
+      if (process.env.GOOGLE_API_KEY) {
+        logger.info("GOOGLE_API_KEY ist gesetzt, wird nicht mehr für Embeddings verwendet (lokales Modell aktiv)");
+      }
+
       startScheduler();
       void clearOrphanedAnalyses();
 
       // Load local embedding model in background, then migrate legacy docs and
       // run any pending ingestions. Server is already accepting requests.
       void warmupEmbeddingModel()
-        .then(() => markLegacyDocsForReembedding())
+        .then(() => reembedLegacyDocs())
         .then(() => resumePendingIngestions())
         .catch((err) => logger.error({ err }, "Embedding-Startup fehlgeschlagen"));
     });
