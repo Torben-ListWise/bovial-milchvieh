@@ -4,7 +4,7 @@ import type {
   BetaTool,
   BetaToolUseBlock,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   masterDataTable,
@@ -271,7 +271,16 @@ const TOOLS: BetaTool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `Du bist ein vertrauenswürdiger Datenanalyse-Assistent für Milchviehbetriebe. Du antwortest ausschließlich auf Deutsch in klarer, fachlich korrekter Sprache für Landwirtinnen und Landwirte.
+const SECTOR_CONTEXT: Record<string, string> = {
+  dairy: `BETRIEBSTYP: Milchviehbetrieb
+Du analysierst Daten eines Milchviehbetriebs. Relevante Kennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Fruchtbarkeit (ZKZ, Erstbesamungserfolg), Remontierung, Laktationsnummer, Abgänge.`,
+  biogas: `BETRIEBSTYP: Biogasanlage
+Du analysierst Daten einer Biogasanlage. Relevante Kennzahlen: Gasproduktion (m³/h), Methangehalt (%), Substrat-Input (t/d, FM), organische Trockensubstanz (oTS, %), spezifische Gasausbeute (m³/t oTS), elektrische Leistung (kWel), Betriebsstunden, Wirkungsgrad. Typische Zielwerte: Methangehalt >52%, spezifische Gasausbeute >300 m³/t oTS.`,
+  arable: `BETRIEBSTYP: Ackerbaubetrieb
+Du analysierst Daten eines Ackerbaubetriebs. Relevante Kennzahlen: Erträge (dt/ha), Fläche (ha), Kulturarten und Fruchtfolge, Bonituren, Niederschlag und Bewässerung, Düngebedarf (kg N/ha), Pflanzenschutzmittelaufwand, Deckungsbeiträge (€/ha). Vergleiche Erträge mit regionalen Durchschnittswerten falls in den Stammdaten vorhanden.`,
+};
+
+const SYSTEM_PROMPT_BASE = `Du bist ein vertrauenswürdiger Datenanalyse-Assistent. Du antwortest ausschließlich auf Deutsch in klarer, fachlich korrekter Sprache für Landwirtinnen und Landwirte.
 
 STRIKTE REGELN:
 - Alle Zahlen stammen AUSSCHLIESSLICH aus den Werkzeug-Ergebnissen oder dem extrahierten Dokumenttext. Erfinde NIEMALS Zahlen, Mittelwerte oder Trends.
@@ -315,6 +324,7 @@ RÜCKFRAGEN-VERHALTEN:
 interface RunOptions {
   datasetId: string;
   conversation: { role: "user" | "assistant"; content: string }[];
+  sector?: string;
   systemExtra?: string;
   onProgress?: (step: string | null) => Promise<void>;
 }
@@ -383,6 +393,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     knowledgeTitles =
       `\n\nWISSENSBIBLIOTHEK (verified): Nutze search_knowledge(query) für Fachinformationen. Verfügbare Dokumente:\n${titleList}`;
   }
+
+  const sectorCtx = SECTOR_CONTEXT[opts.sector ?? "dairy"] ?? SECTOR_CONTEXT.dairy;
+  const SYSTEM_PROMPT = `${sectorCtx}\n\n${SYSTEM_PROMPT_BASE}`;
 
   function buildSystemBlocks(docCtx: string, extra?: string) {
     return [
@@ -464,12 +477,18 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       }
       case "get_master_data": {
         const cat = input.category as string | undefined;
+        const sector = opts.sector ?? "dairy";
+        // Filter master data to rows matching this dataset's sector or universal rows (sector IS NULL)
+        const sectorFilter = or(
+          isNull(masterDataTable.sector),
+          eq(masterDataTable.sector, sector),
+        );
         const rows = cat
           ? await db
               .select()
               .from(masterDataTable)
-              .where(eq(masterDataTable.category, cat))
-          : await db.select().from(masterDataTable);
+              .where(and(eq(masterDataTable.category, cat), sectorFilter))
+          : await db.select().from(masterDataTable).where(sectorFilter);
         return rows;
       }
       case "read_document": {

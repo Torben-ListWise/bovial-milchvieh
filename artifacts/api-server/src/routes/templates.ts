@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   datasetsTable,
@@ -10,15 +10,17 @@ import {
 import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { processQuestion } from "../lib/analysisService";
+import { normalizeSector } from "../lib/serializers";
 
 const router: IRouter = Router();
 
-async function ownDatasetId(datasetId: string, userId: string): Promise<boolean> {
+async function getDatasetSector(datasetId: string, userId: string): Promise<string | null> {
   const [d] = await db
-    .select({ id: datasetsTable.id })
+    .select({ id: datasetsTable.id, sector: datasetsTable.sector })
     .from(datasetsTable)
     .where(and(eq(datasetsTable.id, datasetId), eq(datasetsTable.userId, userId)));
-  return !!d;
+  if (!d) return null;
+  return normalizeSector((d as any).sector);
 }
 
 router.get(
@@ -26,15 +28,28 @@ router.get(
   requireAuth,
   async (req: Request, res: Response) => {
     const { datasetId } = req.params as { datasetId: string };
-    if (!(await ownDatasetId(datasetId, req.userId!))) {
+    const sector = await getDatasetSector(datasetId, req.userId!);
+    if (sector === null) {
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }
 
+    // Filter templates: show templates that match the dataset sector OR have no categoryTag (universal)
+    // Map sector to categoryTag values used in templates
+    const sectorTag = sector === "dairy" ? "milchvieh" : sector === "biogas" ? "biogas" : "ackerbau";
+
     const templates = await db
       .select()
       .from(analysisTemplatesTable)
-      .where(eq(analysisTemplatesTable.active, true))
+      .where(
+        and(
+          eq(analysisTemplatesTable.active, true),
+          or(
+            isNull(analysisTemplatesTable.categoryTag),
+            eq(analysisTemplatesTable.categoryTag, sectorTag),
+          ),
+        ),
+      )
       .orderBy(analysisTemplatesTable.sortOrder);
 
     const result = await Promise.all(
@@ -99,7 +114,8 @@ router.post(
       templateId: string;
     };
 
-    if (!(await ownDatasetId(datasetId, req.userId!))) {
+    const sector = await getDatasetSector(datasetId, req.userId!);
+    if (sector === null) {
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }
@@ -117,6 +133,13 @@ router.post(
 
     if (!template) {
       res.status(404).json({ error: "Vorlage nicht gefunden" });
+      return;
+    }
+
+    // Validate sector compatibility: template categoryTag must match dataset sector (or be null/universal)
+    const sectorTag = sector === "dairy" ? "milchvieh" : sector === "biogas" ? "biogas" : "ackerbau";
+    if (template.categoryTag && template.categoryTag !== sectorTag) {
+      res.status(400).json({ error: "Vorlage ist nicht für diesen Betriebstyp geeignet" });
       return;
     }
 

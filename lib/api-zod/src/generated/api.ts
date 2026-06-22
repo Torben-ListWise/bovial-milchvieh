@@ -89,6 +89,7 @@ export const ListDatasetsResponseItem = zod.object({
   "fileCount": zod.number(),
   "rowCount": zod.number().optional(),
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
   "periodEnd": zod.coerce.date().nullish()
 })
@@ -103,7 +104,8 @@ export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem)
 
 export const CreateDatasetBody = zod.object({
   "name": zod.string().min(1),
-  "description": zod.string().optional()
+  "description": zod.string().optional(),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy')
 })
 
 
@@ -123,6 +125,7 @@ export const GetDatasetResponse = zod.object({
   "fileCount": zod.number(),
   "rowCount": zod.number().optional(),
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
   "periodEnd": zod.coerce.date().nullish()
 })
@@ -140,7 +143,8 @@ export const UpdateDatasetParams = zod.object({
 
 export const UpdateDatasetBody = zod.object({
   "name": zod.string().min(1).optional(),
-  "description": zod.string().optional()
+  "description": zod.string().optional(),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional()
 })
 
 export const UpdateDatasetResponse = zod.object({
@@ -152,6 +156,7 @@ export const UpdateDatasetResponse = zod.object({
   "fileCount": zod.number(),
   "rowCount": zod.number().optional(),
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
   "periodEnd": zod.coerce.date().nullish()
 })
@@ -710,6 +715,7 @@ export const ListMasterDataResponseItem = zod.object({
   "value": zod.string(),
   "unit": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional(),
   "createdAt": zod.coerce.date()
 })
 export const ListMasterDataResponse = zod.array(ListMasterDataResponseItem)
@@ -728,7 +734,8 @@ export const CreateMasterDataBody = zod.object({
   "key": zod.string().min(1),
   "value": zod.string().min(1),
   "unit": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional()
 })
 
 
@@ -749,7 +756,8 @@ export const UpdateMasterDataBody = zod.object({
   "key": zod.string().min(1).optional(),
   "value": zod.string().min(1).optional(),
   "unit": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional()
 })
 
 export const UpdateMasterDataResponse = zod.object({
@@ -759,6 +767,7 @@ export const UpdateMasterDataResponse = zod.object({
   "value": zod.string(),
   "unit": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional(),
   "createdAt": zod.coerce.date()
 })
 

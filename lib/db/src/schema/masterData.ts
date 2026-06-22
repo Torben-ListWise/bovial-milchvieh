@@ -7,6 +7,7 @@ export const masterDataTable = pgTable("master_data", {
   value: text("value").notNull(),
   unit: text("unit"),
   notes: text("notes"),
+  sector: text("sector"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -27,7 +27,7 @@ import {
   GetQuestionSuggestionsResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
-import { serializeDataset, mapDatasetStatus } from "../lib/serializers";
+import { serializeDataset, mapDatasetStatus, normalizeSector } from "../lib/serializers";
 import { computeDashboard, getDatasetSchema } from "../lib/compute";
 
 const router: IRouter = Router();
@@ -75,6 +75,7 @@ router.post("/datasets", requireAuth, async (req: Request, res: Response) => {
     res.status(400).json({ error: "Ungültige Eingabe" });
     return;
   }
+  const sector = normalizeSector(parsed.data.sector ?? "dairy");
   const [created] = await db
     .insert(datasetsTable)
     .values({
@@ -82,7 +83,8 @@ router.post("/datasets", requireAuth, async (req: Request, res: Response) => {
       name: parsed.data.name,
       description: parsed.data.description,
       status: "empty",
-    })
+      sector,
+    } as any)
     .returning();
   res.status(201).json(serializeDataset(created, 0, 0));
 });
@@ -117,8 +119,11 @@ router.patch("/datasets/:datasetId", requireAuth, async (req: Request, res: Resp
       ...(parsed.data.description !== undefined
         ? { description: parsed.data.description }
         : {}),
+      ...(parsed.data.sector !== undefined
+        ? { sector: normalizeSector(parsed.data.sector) }
+        : {}),
       updatedAt: new Date(),
-    })
+    } as any)
     .where(eq(datasetsTable.id, datasetId))
     .returning();
   const c = await counts(datasetId);

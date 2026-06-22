@@ -12,6 +12,7 @@ export const datasetsTable = pgTable("datasets", {
   name: text("name").notNull(),
   description: text("description"),
   status: text("status").notNull().default("empty"),
+  sector: text("sector").notNull().default("dairy"),
   periodStart: date("period_start"),
   periodEnd: date("period_end"),
   createdAt: timestamp("created_at", { withTimezone: true })

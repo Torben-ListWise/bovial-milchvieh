@@ -32,6 +32,43 @@ import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
+type Sector = "dairy" | "biogas" | "arable";
+
+const SECTORS: {
+  id: Sector;
+  emoji: string;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "dairy",
+    emoji: "🐄",
+    label: "Milchvieh",
+    description: "Analyse von Milchleistung, Gesundheit und Fruchtbarkeit",
+  },
+  {
+    id: "biogas",
+    emoji: "⚡",
+    label: "Biogas",
+    description: "Analyse von Gasproduktion, Substrat und Anlagenleistung",
+  },
+  {
+    id: "arable",
+    emoji: "🌾",
+    label: "Ackerbau",
+    description: "Analyse von Erträgen, Fruchtfolge und Deckungsbeiträgen",
+  },
+];
+
+function sectorLabel(sector?: string): string {
+  return SECTORS.find((s) => s.id === sector)?.label ?? "Milchvieh";
+}
+
+function sectorEmoji(sector?: string): string {
+  return SECTORS.find((s) => s.id === sector)?.emoji ?? "🐄";
+}
 
 export function DatasetList() {
   const { data: datasets, isLoading } = useListDatasets();
@@ -44,18 +81,20 @@ export function DatasetList() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newSector, setNewSector] = useState<Sector>("dairy");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const openCreate = () => {
     setNewName("");
     setNewDescription("");
+    setNewSector("dairy");
     setShowCreateDialog(true);
   };
 
   const handleCreate = () => {
     if (!newName.trim() || createDataset.isPending) return;
     createDataset.mutate(
-      { data: { name: newName.trim(), description: newDescription.trim() } },
+      { data: { name: newName.trim(), description: newDescription.trim(), sector: newSector } },
       {
         onSuccess: (created) => {
           queryClient.invalidateQueries({ queryKey: getListDatasetsQueryKey() });
@@ -138,6 +177,14 @@ export function DatasetList() {
                 <Link href={`/app/overview?datasetId=${ds.id}`}>
                   <div className="p-6 pr-14">
                     <CardHeader className="p-0 mb-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xl" aria-label={sectorLabel(ds.sector)}>
+                          {sectorEmoji(ds.sector)}
+                        </span>
+                        <span className="text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                          {sectorLabel(ds.sector)}
+                        </span>
+                      </div>
                       <CardTitle className="group-hover:text-primary transition-colors">{ds.name}</CardTitle>
                       <CardDescription>{ds.description || "Keine Beschreibung"}</CardDescription>
                     </CardHeader>
@@ -173,11 +220,35 @@ export function DatasetList() {
 
       {/* Create dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Neuen Betrieb anlegen</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-5 py-2">
+            {/* Sector picker */}
+            <div className="space-y-2">
+              <Label>Betriebstyp *</Label>
+              <div className="grid grid-cols-3 gap-3">
+                {SECTORS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setNewSector(s.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-center transition-all focus:outline-none focus:ring-2 focus:ring-primary/50",
+                      newSector === s.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 bg-transparent",
+                    )}
+                  >
+                    <span className="text-2xl">{s.emoji}</span>
+                    <span className="text-sm font-semibold leading-none">{s.label}</span>
+                    <span className="text-[11px] text-muted-foreground leading-snug">{s.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="ds-name">Name des Betriebs *</Label>
               <Input

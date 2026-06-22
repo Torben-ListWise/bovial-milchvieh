@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq } from "drizzle-orm";
-import { db, masterDataTable, type MasterDataEntry } from "@workspace/db";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { db, masterDataTable, datasetsTable, type MasterDataEntry } from "@workspace/db";
 import {
   ListMasterDataResponse,
   CreateMasterDataBody,
@@ -10,28 +10,46 @@ import {
   DeleteMasterDataParams,
 } from "@workspace/api-zod";
 import { requireAuth, requireOperator } from "../lib/auth";
+import { normalizeSector, serializeMasterData } from "../lib/serializers";
 
 const router: IRouter = Router();
 
-function serialize(e: MasterDataEntry) {
-  return {
-    id: e.id,
-    category: e.category,
-    key: e.key,
-    value: e.value,
-    unit: e.unit ?? null,
-    notes: e.notes ?? null,
-    createdAt: e.createdAt,
-  };
-}
-
 // Readable by any authenticated user (trusted reference data); writes operator-only.
-router.get("/masterdata", requireAuth, async (_req: Request, res: Response) => {
+// Optional ?datasetId query param: filter to entries matching that dataset's sector.
+router.get("/masterdata", requireAuth, async (req: Request, res: Response) => {
+  const datasetId = req.query.datasetId as string | undefined;
+
+  if (datasetId) {
+    // Load dataset to determine sector
+    const [d] = await db
+      .select({ sector: datasetsTable.sector })
+      .from(datasetsTable)
+      .where(eq(datasetsTable.id, datasetId));
+
+    if (d) {
+      const sector = normalizeSector((d as any).sector);
+      // Map sector key to the sector tag stored in master_data
+      const sectorTag = sector === "dairy" ? "dairy" : sector === "biogas" ? "biogas" : "arable";
+      const rows = await db
+        .select()
+        .from(masterDataTable)
+        .where(
+          or(
+            isNull(masterDataTable.sector),
+            eq(masterDataTable.sector, sectorTag),
+          ),
+        )
+        .orderBy(desc(masterDataTable.createdAt));
+      res.json(ListMasterDataResponse.parse(rows.map(serializeMasterData)));
+      return;
+    }
+  }
+
   const rows = await db
     .select()
     .from(masterDataTable)
     .orderBy(desc(masterDataTable.createdAt));
-  res.json(ListMasterDataResponse.parse(rows.map(serialize)));
+  res.json(ListMasterDataResponse.parse(rows.map(serializeMasterData)));
 });
 
 router.post(
@@ -52,9 +70,10 @@ router.post(
         value: parsed.data.value,
         unit: parsed.data.unit,
         notes: parsed.data.notes,
+        sector: (parsed.data as any).sector ?? null,
       })
       .returning();
-    res.status(201).json(serialize(created));
+    res.status(201).json(serializeMasterData(created));
   },
 );
 
@@ -78,6 +97,7 @@ router.patch(
         ...(d.value !== undefined ? { value: d.value } : {}),
         ...(d.unit !== undefined ? { unit: d.unit } : {}),
         ...(d.notes !== undefined ? { notes: d.notes } : {}),
+        ...((d as any).sector !== undefined ? { sector: (d as any).sector } : {}),
       })
       .where(eq(masterDataTable.id, entryId))
       .returning();
@@ -85,7 +105,7 @@ router.patch(
       res.status(404).json({ error: "Eintrag nicht gefunden" });
       return;
     }
-    res.json(UpdateMasterDataResponse.parse(serialize(updated)));
+    res.json(UpdateMasterDataResponse.parse(serializeMasterData(updated)));
   },
 );
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { useUser, useClerk } from "@clerk/react";
+import { useGetDataset } from "@workspace/api-client-react";
 import { 
   Home, 
   BarChart2, 
@@ -20,6 +21,48 @@ import {
   BookOpen,
   LayoutList,
 } from "lucide-react";
+
+const SECTOR_META: Record<string, { emoji: string; label: string }> = {
+  dairy:  { emoji: "🐄", label: "Milchvieh" },
+  biogas: { emoji: "⚡", label: "Biogas" },
+  arable: { emoji: "🌾", label: "Ackerbau" },
+};
+
+function DatasetAwareHeader({
+  viewMode,
+  navItems,
+  currentPath,
+  datasetId,
+}: {
+  viewMode: 'customer' | 'operator';
+  navItems: { name: string; href: string }[];
+  currentPath: string;
+  datasetId: string | null;
+}) {
+  const { data: dataset } = useGetDataset(datasetId!, {
+    query: { enabled: !!datasetId && viewMode === 'customer' },
+  });
+
+  const sectorMeta = dataset ? (SECTOR_META[(dataset as any).sector ?? "dairy"] ?? SECTOR_META.dairy) : null;
+
+  return (
+    <header className="h-16 border-b bg-card flex items-center px-6 shrink-0 gap-3">
+      <div className="flex items-center text-sm text-muted-foreground">
+        {viewMode === 'operator' ? 'Operator Dashboard' : 'Datenanalyse'}
+        <ChevronRight className="w-4 h-4 mx-2" />
+        <span className="text-foreground font-medium">
+          {navItems.find(i => currentPath.startsWith(i.href))?.name || "App"}
+        </span>
+      </div>
+      {sectorMeta && (
+        <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-2.5 py-1 rounded-full">
+          <span>{sectorMeta.emoji}</span>
+          {sectorMeta.label}
+        </span>
+      )}
+    </header>
+  );
+}
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -198,15 +241,12 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-background min-w-0">
-        <header className="h-16 border-b bg-card flex items-center px-6 shrink-0">
-          <div className="flex items-center text-sm text-muted-foreground">
-            {viewMode === 'operator' ? 'Operator Dashboard' : 'Milchvieh Datenanalyse'}
-            <ChevronRight className="w-4 h-4 mx-2" />
-            <span className="text-foreground font-medium">
-              {navItems.find(i => currentPath.startsWith(i.href))?.name || "App"}
-            </span>
-          </div>
-        </header>
+        <DatasetAwareHeader
+          viewMode={viewMode}
+          navItems={navItems}
+          currentPath={currentPath}
+          datasetId={datasetId}
+        />
         <div
           className={cn(
             "flex-1 relative min-h-0",

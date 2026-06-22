@@ -5,12 +5,14 @@ import {
   messagesTable,
   activityLogTable,
   rulesTable,
+  datasetsTable,
   type Analysis,
   type Message,
 } from "@workspace/db";
 import { runAgent, MissingApiKeyError, type Chart, type Citation } from "./agent";
 import { categorizeQuestion } from "./categorize";
 import { logger } from "./logger";
+import { normalizeSector } from "./serializers";
 import Anthropic from "@anthropic-ai/sdk";
 
 const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -58,6 +60,18 @@ export async function processQuestion(
       content: m.content as string,
     }));
 
+  // Load dataset sector for sector-specific agent context
+  let sector = "dairy";
+  try {
+    const [ds] = await db
+      .select({ sector: datasetsTable.sector })
+      .from(datasetsTable)
+      .where(eq(datasetsTable.id, analysis.datasetId));
+    if (ds) sector = normalizeSector((ds as any).sector);
+  } catch {
+    // fallback to dairy
+  }
+
   let content: string;
   let charts: Chart[] = [];
   let citations: Citation[] = [];
@@ -95,6 +109,7 @@ export async function processQuestion(
     const result = await runAgent({
       datasetId: analysis.datasetId,
       conversation,
+      sector,
       systemExtra: rulesContext || undefined,
       onProgress: async (step: string | null) => {
         // The previous step is now complete — move it to completedSteps

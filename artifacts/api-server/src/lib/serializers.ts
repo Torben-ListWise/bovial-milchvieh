@@ -1,4 +1,4 @@
-import type { Dataset, SourceFile } from "@workspace/db";
+import type { Dataset, SourceFile, MasterDataEntry } from "@workspace/db";
 
 export function mapDatasetStatus(
   status: string,
@@ -45,6 +45,13 @@ export function deriveFileKind(
   return "other";
 }
 
+export function normalizeSector(
+  sector: string | null | undefined,
+): "dairy" | "biogas" | "arable" {
+  if (sector === "biogas" || sector === "arable") return sector;
+  return "dairy";
+}
+
 export function serializeDataset(
   d: Dataset,
   fileCount: number,
@@ -59,6 +66,7 @@ export function serializeDataset(
     fileCount,
     rowCount,
     status: mapDatasetStatus(d.status),
+    sector: normalizeSector((d as any).sector),
     periodStart: d.periodStart ?? null,
     periodEnd: d.periodEnd ?? null,
   };
@@ -98,5 +106,18 @@ export function serializeFile(f: SourceFile, includeDetail = false) {
     ...base,
     columns,
     previewRows: (f.previewRows as Record<string, unknown>[] | null) ?? [],
+  };
+}
+
+export function serializeMasterData(e: MasterDataEntry) {
+  return {
+    id: e.id,
+    category: e.category,
+    key: e.key,
+    value: e.value,
+    unit: e.unit ?? null,
+    notes: e.notes ?? null,
+    sector: (e as any).sector ?? null,
+    createdAt: e.createdAt,
   };
 }

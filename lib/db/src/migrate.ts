@@ -29,6 +29,14 @@ export async function ensureExtensions(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Migration: sector column on datasets (default: dairy for backwards compat)
+  await pool.query(
+    "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'dairy'"
+  );
+  // Migration: sector column on master_data (NULL = applies to all sectors)
+  await pool.query(
+    "ALTER TABLE master_data ADD COLUMN IF NOT EXISTS sector TEXT"
+  );
   // Seed default Milchvieh templates if table is empty
   const { rows } = await pool.query("SELECT COUNT(*)::int as c FROM analysis_templates");
   if ((rows[0]?.c ?? 0) === 0) {
@@ -44,7 +52,70 @@ export async function ensureExtensions(): Promise<void> {
       ('Fütterungseffizienz', '🌾', 'Kraftfuttereinsatz und Milch-Futter-Verhältnis', 'Analysiere Kraftfuttereinsatz und Milch-Futter-Verhältnis. Falls Fütterungsdaten vorhanden: Optimierungspotenzial und Vergleich mit Richtwerten.', 'milchvieh', 80),
       ('Top-3 Handlungsempfehlungen', '💡', 'Die dringendsten Maßnahmen mit Begründung', 'Analysiere alle verfügbaren Kennzahlen und formuliere die drei dringendsten konkreten Handlungsempfehlungen mit Begründung und erwarteter Wirkung.', 'milchvieh', 90),
       ('Betriebsvergleich Richtwerte', '📊', 'Ist-Wert vs. Zielwert vs. Abweichung', 'Vergleiche alle Kern-KPIs mit den Stammdaten-Richtwerten. Erstelle eine Übersichtstabelle: Ist-Wert vs. Zielwert vs. Abweichung. Färbe kritische Werte hervor.', 'milchvieh', 100),
-      ('Investitionsprüfung', '💰', 'Wirtschaftlichkeitsprüfung einer geplanten Investition', 'Ich möchte eine Investition wirtschaftlich prüfen. Lies zunächst meine aktuellen Betriebsdaten (Herdengröße, Milchleistung, relevante KPIs). Stelle mir dann die notwendigen Fragen (Investitionssumme, Laufzeit, Zinssatz, erwarteter Nutzen), um Amortisation und Rentabilität zu berechnen.', NULL, 110)
+      ('Investitionsprüfung', '💰', 'Wirtschaftlichkeitsprüfung einer geplanten Investition', 'Ich möchte eine Investition wirtschaftlich prüfen. Lies zunächst meine aktuellen Betriebsdaten (Herdengröße, Milchleistung, relevante KPIs). Stelle mir dann die notwendigen Fragen (Investitionssumme, Laufzeit, Zinssatz, erwarteter Nutzen), um Amortisation und Rentabilität zu berechnen.', NULL, 110),
+      ('Gasproduktions-Trend', '⚡', 'Gasproduktion der letzten 12 Monate', 'Zeige den Gasproduktions-Trend der letzten 12 Monate (m³/h). Identifiziere Einbrüche und prüfe Korrelation mit Substrat-Input.', 'biogas', 200),
+      ('Methangehalt-Analyse', '🧪', 'Methangehalt-Verlauf und kritische Abweichungen', 'Analysiere den Methangehalt-Verlauf. Liegt er konstant über 52%? Gibt es kritische Abweichungen?', 'biogas', 210),
+      ('Substrat-Effizienz', '🌽', 'Gasausbeute je Substratart und Zeitraum', 'Berechne die spezifische Gasausbeute je Substratart und Zeitraum. Welches Substrat liefert den höchsten Ertrag pro Tonne oTS?', 'biogas', 220),
+      ('Betriebsstunden & Verfügbarkeit', '🔋', 'Ausfallzeiten und Verfügbarkeit der Anlage', 'Zeige Betriebsstunden, Ausfallzeiten und Verfügbarkeit der Anlage. Gibt es Häufungen bei Ausfällen?', 'biogas', 230),
+      ('Gesamt-Performance-Überblick (Biogas)', '📊', 'Vollständiger Betriebsspiegel der Biogasanlage', 'Erstelle einen vollständigen Betriebsspiegel der Biogasanlage: alle Kern-KPIs, Vergleich mit Richtwerten, Top-3 Handlungsempfehlungen.', 'biogas', 240),
+      ('Ertrags-Trend nach Kultur', '🌾', 'Erträge der letzten Jahre je Kulturart', 'Zeige Erträge (dt/ha) der letzten Jahre je Kulturart. Vergleiche mit den Stammdaten-Richtwerten.', 'ackerbau', 300),
+      ('Flächenverteilung & Fruchtfolge', '🗺️', 'Flächenverteilung nach Kulturen und Fruchtfolgenbewertung', 'Zeige die aktuelle Flächenverteilung nach Kulturen als Kreisdiagramm. Bewerte die Fruchtfolge.', 'ackerbau', 310),
+      ('Niederschlag vs. Ertrag', '💧', 'Zusammenhang Niederschlag und Erträge', 'Analysiere den Zusammenhang zwischen Niederschlag/Bewässerung und Erträgen. Gibt es kritische Trockenphasen?', 'ackerbau', 320),
+      ('Deckungsbeiträge', '💰', 'Deckungsbeiträge je Kulturart', 'Berechne und vergleiche die Deckungsbeiträge (€/ha) je Kulturart. Welche Kultur ist wirtschaftlich am stärksten?', 'ackerbau', 330),
+      ('Gesamt-Betriebsspiegel (Ackerbau)', '📊', 'Vollständiger Betriebsspiegel Ackerbau', 'Erstelle einen vollständigen Betriebsspiegel: alle Kern-KPIs, Vergleich Richtwerte, Top-3 Empfehlungen.', 'ackerbau', 340)
+    `);
+  } else {
+    // Seed Biogas and Ackerbau templates if not yet present
+    const { rows: biogasRows } = await pool.query(
+      "SELECT COUNT(*)::int as c FROM analysis_templates WHERE category_tag = 'biogas'"
+    );
+    if ((biogasRows[0]?.c ?? 0) === 0) {
+      await pool.query(`
+        INSERT INTO analysis_templates (title, emoji, short_description, prompt_text, category_tag, sort_order) VALUES
+        ('Gasproduktions-Trend', '⚡', 'Gasproduktion der letzten 12 Monate', 'Zeige den Gasproduktions-Trend der letzten 12 Monate (m³/h). Identifiziere Einbrüche und prüfe Korrelation mit Substrat-Input.', 'biogas', 200),
+        ('Methangehalt-Analyse', '🧪', 'Methangehalt-Verlauf und kritische Abweichungen', 'Analysiere den Methangehalt-Verlauf. Liegt er konstant über 52%? Gibt es kritische Abweichungen?', 'biogas', 210),
+        ('Substrat-Effizienz', '🌽', 'Gasausbeute je Substratart und Zeitraum', 'Berechne die spezifische Gasausbeute je Substratart und Zeitraum. Welches Substrat liefert den höchsten Ertrag pro Tonne oTS?', 'biogas', 220),
+        ('Betriebsstunden & Verfügbarkeit', '🔋', 'Ausfallzeiten und Verfügbarkeit der Anlage', 'Zeige Betriebsstunden, Ausfallzeiten und Verfügbarkeit der Anlage. Gibt es Häufungen bei Ausfällen?', 'biogas', 230),
+        ('Gesamt-Performance-Überblick (Biogas)', '📊', 'Vollständiger Betriebsspiegel der Biogasanlage', 'Erstelle einen vollständigen Betriebsspiegel der Biogasanlage: alle Kern-KPIs, Vergleich mit Richtwerten, Top-3 Handlungsempfehlungen.', 'biogas', 240)
+      `);
+    }
+    const { rows: ackerbauRows } = await pool.query(
+      "SELECT COUNT(*)::int as c FROM analysis_templates WHERE category_tag = 'ackerbau'"
+    );
+    if ((ackerbauRows[0]?.c ?? 0) === 0) {
+      await pool.query(`
+        INSERT INTO analysis_templates (title, emoji, short_description, prompt_text, category_tag, sort_order) VALUES
+        ('Ertrags-Trend nach Kultur', '🌾', 'Erträge der letzten Jahre je Kulturart', 'Zeige Erträge (dt/ha) der letzten Jahre je Kulturart. Vergleiche mit den Stammdaten-Richtwerten.', 'ackerbau', 300),
+        ('Flächenverteilung & Fruchtfolge', '🗺️', 'Flächenverteilung nach Kulturen und Fruchtfolgenbewertung', 'Zeige die aktuelle Flächenverteilung nach Kulturen als Kreisdiagramm. Bewerte die Fruchtfolge.', 'ackerbau', 310),
+        ('Niederschlag vs. Ertrag', '💧', 'Zusammenhang Niederschlag und Erträge', 'Analysiere den Zusammenhang zwischen Niederschlag/Bewässerung und Erträgen. Gibt es kritische Trockenphasen?', 'ackerbau', 320),
+        ('Deckungsbeiträge', '💰', 'Deckungsbeiträge je Kulturart', 'Berechne und vergleiche die Deckungsbeiträge (€/ha) je Kulturart. Welche Kultur ist wirtschaftlich am stärksten?', 'ackerbau', 330),
+        ('Gesamt-Betriebsspiegel (Ackerbau)', '📊', 'Vollständiger Betriebsspiegel Ackerbau', 'Erstelle einen vollständigen Betriebsspiegel: alle Kern-KPIs, Vergleich Richtwerte, Top-3 Empfehlungen.', 'ackerbau', 340)
+      `);
+    }
+  }
+  // Seed default Biogas and Ackerbau master data if not yet present
+  const { rows: biogasMd } = await pool.query(
+    "SELECT COUNT(*)::int as c FROM master_data WHERE sector = 'biogas'"
+  );
+  if ((biogasMd[0]?.c ?? 0) === 0) {
+    await pool.query(`
+      INSERT INTO master_data (category, key, value, unit, notes, sector) VALUES
+      ('Richtwerte', 'Methangehalt Zielwert', '52', '%', 'Mindest-Methangehalt für wirtschaftlichen Betrieb', 'biogas'),
+      ('Richtwerte', 'Spezifische Gasausbeute Zielwert', '300', 'm³/t oTS', 'Mindestwert für spezifische Gasausbeute', 'biogas'),
+      ('Richtwerte', 'Verfügbarkeit Zielwert', '95', '%', 'Anlagenverfügbarkeit als Zielwert', 'biogas'),
+      ('Richtwerte', 'Wirkungsgrad elektrisch Zielwert', '38', '%', 'Elektrischer Wirkungsgrad BHKW', 'biogas')
+    `);
+  }
+  const { rows: ackerbauMd } = await pool.query(
+    "SELECT COUNT(*)::int as c FROM master_data WHERE sector = 'arable'"
+  );
+  if ((ackerbauMd[0]?.c ?? 0) === 0) {
+    await pool.query(`
+      INSERT INTO master_data (category, key, value, unit, notes, sector) VALUES
+      ('Richtwerte', 'Weizen Ertrag Richtwert', '80', 'dt/ha', 'Regionaler Durchschnittsertrag Winterweizen', 'arable'),
+      ('Richtwerte', 'Raps Ertrag Richtwert', '40', 'dt/ha', 'Regionaler Durchschnittsertrag Winterraps', 'arable'),
+      ('Richtwerte', 'Mais Ertrag Richtwert', '400', 'dt/ha', 'Regionaler Durchschnittsertrag Silomais', 'arable'),
+      ('Richtwerte', 'Gerste Ertrag Richtwert', '70', 'dt/ha', 'Regionaler Durchschnittsertrag Wintergerste', 'arable')
     `);
   }
 }
