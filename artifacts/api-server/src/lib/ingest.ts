@@ -598,7 +598,7 @@ export async function ingestKnowledgeDoc(docId: string): Promise<void> {
   }
 }
 
-async function refreshDatasetStatus(datasetId: string): Promise<void> {
+export async function refreshDatasetStatus(datasetId: string): Promise<void> {
   const files = await db
     .select()
     .from(sourceFilesTable)

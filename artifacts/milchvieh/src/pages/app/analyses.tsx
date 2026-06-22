@@ -131,14 +131,24 @@ function AnalysisSourceBadge({ source }: { source?: string | null }) {
   return null;
 }
 
+function NewDataBadge() {
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 shrink-0">
+      Neue Daten
+    </span>
+  );
+}
+
 function AnalysisHistoryPanel({
   analyses,
   activeAnalysisId,
+  latestFileUploadAt,
   onSelect,
   onNew,
 }: {
   analyses: Analysis[];
   activeAnalysisId: string | null;
+  latestFileUploadAt: number;
   onSelect: (id: string) => void;
   onNew: () => void;
 }) {
@@ -158,21 +168,26 @@ function AnalysisHistoryPanel({
         </button>
       </div>
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {analyses.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => onSelect(a.id)}
-            className={cn(
-              "flex items-center gap-2 text-xs rounded-md px-2 py-1.5 text-left w-full transition-colors",
-              activeAnalysisId === a.id
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <span className="flex-1 truncate min-w-0">{a.title}</span>
-            <AnalysisSourceBadge source={a.source} />
-          </button>
-        ))}
+        {analyses.map((a) => {
+          const analysisTime = new Date(a.updatedAt ?? a.createdAt).getTime();
+          const isStale = latestFileUploadAt > 0 && analysisTime < latestFileUploadAt;
+          return (
+            <button
+              key={a.id}
+              onClick={() => onSelect(a.id)}
+              className={cn(
+                "flex items-center gap-2 text-xs rounded-md px-2 py-1.5 text-left w-full transition-colors",
+                activeAnalysisId === a.id
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <span className="flex-1 truncate min-w-0">{a.title}</span>
+              {isStale && <NewDataBadge />}
+              <AnalysisSourceBadge source={a.source} />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -215,7 +230,7 @@ function HistoricalFiles({ files }: { files: FileItem[] }) {
             {f.status === "error" && (
               <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
             )}
-            {(f.status === "uploaded" || f.status === "parsing" || f.status === "mapping") && (
+            {(f.status === "uploaded" || f.status === "parsing" || f.status === "mapping" || f.status === "processing") && (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
             )}
             <span className="text-[10px] text-muted-foreground/70 shrink-0">
@@ -935,9 +950,8 @@ export function AnalysesPage() {
   const analysesListItems = analysesList ?? [];
 
   const autoAnalysis = analysesListItems.find((a) => (a as any).templateRef === "auto_erstanalyse" || a.source === "auto");
-  const readyFiles = historicalFiles.filter((f) => f.status === "ready");
-  const latestFileTime = readyFiles.length > 0
-    ? Math.max(...readyFiles.map((f) => new Date(f.createdAt).getTime()))
+  const latestFileTime = historicalFiles.length > 0
+    ? Math.max(...historicalFiles.map((f) => new Date(f.createdAt).getTime()))
     : 0;
   const autoAnalysisTime = autoAnalysis ? new Date((autoAnalysis as any).createdAt).getTime() : 0;
   const showNeueDatatenBanner =
@@ -954,6 +968,7 @@ export function AnalysesPage() {
           <AnalysisHistoryPanel
             analyses={analysesListItems}
             activeAnalysisId={activeAnalysisId}
+            latestFileUploadAt={latestFileTime}
             onSelect={(id) => setActiveAnalysisId(id)}
             onNew={handleNewAnalysis}
           />
@@ -1003,6 +1018,7 @@ export function AnalysesPage() {
         <AnalysisHistoryPanel
           analyses={analysesListItems}
           activeAnalysisId={activeAnalysisId}
+          latestFileUploadAt={latestFileTime}
           onSelect={(id) => { setActiveAnalysisId(id); pendingQuestionRef.current = ""; }}
           onNew={handleNewAnalysis}
         />

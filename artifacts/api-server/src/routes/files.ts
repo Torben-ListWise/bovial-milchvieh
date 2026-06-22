@@ -21,7 +21,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { serializeFile } from "../lib/serializers";
-import { ingestFile, remapFile } from "../lib/ingest";
+import { ingestFile, remapFile, refreshDatasetStatus } from "../lib/ingest";
 import { ObjectStorageService, ObjectAclConflictError } from "../lib/objectStorage";
 
 const router: IRouter = Router();
@@ -139,6 +139,7 @@ router.delete("/files/:fileId", requireAuth, async (req: Request, res: Response)
   }
   await db.delete(dataRowsTable).where(eq(dataRowsTable.fileId, fileId));
   await db.delete(sourceFilesTable).where(eq(sourceFilesTable.id, fileId));
+  await refreshDatasetStatus(f.datasetId);
   res.status(204).end();
 });
 
