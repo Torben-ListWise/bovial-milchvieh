@@ -550,6 +550,11 @@ export async function ingestKnowledgeDoc(docId: string): Promise<void> {
     let text = "";
     if (doc.fileType === "pptx") {
       text = await extractPptxText(buf);
+    } else if (doc.fileType === "excel" || doc.fileType === "csv" || doc.fileType === "tsv") {
+      const rows = parseSpreadsheet(buf, doc.filename);
+      text = rows.map((row) => row.join("\t")).join("\n");
+    } else if (doc.fileType === "txt") {
+      text = decodeBuffer(buf);
     } else {
       text = await extractPdfText(buf);
     }

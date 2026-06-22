@@ -78,7 +78,13 @@ router.post(
       return;
     }
     const { filename, contentType, size, title } = parsed.data;
-    const fileType = filename.toLowerCase().endsWith(".pptx") ? "pptx" : "pdf";
+    const l = filename.toLowerCase();
+    const fileType = l.endsWith(".pptx") ? "pptx"
+      : l.endsWith(".xlsx") || l.endsWith(".xls") ? "excel"
+      : l.endsWith(".csv") ? "csv"
+      : l.endsWith(".tsv") ? "tsv"
+      : l.endsWith(".txt") ? "txt"
+      : "pdf";
     const docTitle =
       title?.trim() ||
       filename.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").trim();

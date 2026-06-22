@@ -171,16 +171,16 @@ export function KnowledgePage() {
     }
   }
 
+  const ALLOWED_EXTS = [".pdf", ".pptx", ".xlsx", ".xls", ".csv", ".tsv", ".txt"];
+
   function addFiles(files: File[]) {
-    const valid = files.filter(
-      (f) =>
-        f.name.toLowerCase().endsWith(".pdf") ||
-        f.name.toLowerCase().endsWith(".pptx"),
+    const valid = files.filter((f) =>
+      ALLOWED_EXTS.some((ext) => f.name.toLowerCase().endsWith(ext)),
     );
     if (valid.length === 0) {
       toast({
         title: "Ungültiges Format",
-        description: "Nur PDF und PPTX werden unterstützt.",
+        description: "Unterstützte Formate: PDF, PPTX, Excel, CSV, TSV, TXT.",
         variant: "destructive",
       });
       return;
@@ -223,7 +223,7 @@ export function KnowledgePage() {
           Wissensbibliothek
         </h1>
         <p className="text-muted-foreground mt-1">
-          PDFs und PowerPoints hochladen. Der Assistent durchsucht diese Dokumente
+          Dokumente hochladen (PDF, PPTX, Excel, CSV, TXT). Der Assistent durchsucht diese Dokumente
           semantisch bei Fachfragen.
         </p>
       </div>
@@ -247,14 +247,14 @@ export function KnowledgePage() {
             )}
           >
             <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
-            <p className="font-medium text-sm">PDF oder PPTX hierher ziehen</p>
+            <p className="font-medium text-sm">Datei hierher ziehen</p>
             <p className="text-xs text-muted-foreground mt-1">
-              oder klicken zum Auswählen
+              PDF, PPTX, Excel, CSV, TSV, TXT — oder klicken zum Auswählen
             </p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.pptx"
+              accept=".pdf,.pptx,.xlsx,.xls,.csv,.tsv,.txt"
               multiple
               className="hidden"
               onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
