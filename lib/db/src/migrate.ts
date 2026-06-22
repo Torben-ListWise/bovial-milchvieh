@@ -41,6 +41,13 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"
   );
+  // Performance: HNSW vector index for fast cosine similarity search on knowledge chunks
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
+    ON knowledge_chunks
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64)
+  `);
   // Seed default Milchvieh templates if table is empty
   const { rows } = await pool.query("SELECT COUNT(*)::int as c FROM analysis_templates");
   if ((rows[0]?.c ?? 0) === 0) {
