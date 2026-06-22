@@ -35,6 +35,10 @@ export const embeddingModelReady: Promise<void> = new Promise<void>(
   },
 );
 
+// Prevent Node.js from crashing with UnhandledPromiseRejection if warmup fails
+// before any consumer has attached a .catch() to embeddingModelReady.
+embeddingModelReady.catch(() => {});
+
 let _model: FeatureExtractionPipeline | null = null;
 
 async function getModel(): Promise<FeatureExtractionPipeline> {
