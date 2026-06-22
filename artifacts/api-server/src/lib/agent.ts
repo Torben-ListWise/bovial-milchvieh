@@ -213,6 +213,22 @@ const TOOLS: BetaTool[] = [
     },
   },
   {
+    name: "calculate_investment",
+    description:
+      "Berechnet Wirtschaftlichkeit einer Investition deterministisch: Annuität, Break-even-Jahr, 10-Jahres-Cashflow. Aufrufen wenn alle Parameter vom Nutzer bestätigt wurden.",
+    input_schema: {
+      type: "object",
+      properties: {
+        investmentCost: { type: "number", description: "Investitionssumme in €" },
+        financingYears: { type: "number", description: "Finanzierungsdauer in Jahren (1–30)" },
+        interestRatePct: { type: "number", description: "Zinssatz in Prozent, z.B. 3.5 für 3,5%" },
+        annualBenefit: { type: "number", description: "Jährlicher Nettonutzen in € (Einsparungen + Mehrerlös)" },
+        subsidy: { type: "number", description: "Förderbetrag in € (optional, default 0)" },
+      },
+      required: ["investmentCost", "financingYears", "interestRatePct", "annualBenefit"],
+    },
+  },
+  {
     name: "emit_chart",
     description:
       "Erstellt ein interaktives Diagramm. Bei strukturierten DB-Daten: source='timeseries'|'group'|'ranking' + metric. Bei PDF-Dokumenten: source='document' + data-Array direkt übergeben.",
@@ -284,7 +300,17 @@ WICHTIG — GÜLTIGE DATENQUELLEN:
 
 WENN IN EINEM FOLGEGESPRÄCH EINE GRAFIK GEWÜNSCHT WIRD UND NUR PDF-DATEN VORHANDEN SIND:
 - Extrahiere die relevanten Zahlen direkt aus dem Dokumenttext und rufe emit_chart mit einem manuell konstruierten data-Array auf.
-- Stell NICHT in Frage, ob die Zahlen aus der vorherigen Antwort korrekt waren — sie sind korrekt belegt (aus dem Dokument).`;
+- Stell NICHT in Frage, ob die Zahlen aus der vorherigen Antwort korrekt waren — sie sind korrekt belegt (aus dem Dokument).
+
+RÜCKFRAGEN-VERHALTEN:
+- Bei Investitions-, Wirtschaftlichkeits- oder Planungsfragen: Rufe ZUERST get_schema und get_kpis auf.
+  Fasse die relevanten Betriebsdaten kurz zusammen. Stelle danach maximal 3 konkrete Rückfragen als
+  nummerierte Liste (Investitionssumme, Laufzeit, Zinssatz, erwarteter Jahresnutzen). Rechne erst
+  wenn der Nutzer die Parameter bestätigt oder geliefert hat.
+- Bei unklaren Fragen (fehlender Zeitraum, fehlende Tier-Angabe, unklare Metrik): Stelle maximal
+  2 kurze Rückfragen bevor du analysierst. Beispiel: "Für welchen Zeitraum soll ich auswerten?"
+- Erfinde NIEMALS Annahmen für fehlende Parameter ohne explizite Bestätigung durch den Nutzer.
+- Wenn alle Parameter klar sind: direkt rechnen, keine unnötigen Rückfragen.`;
 
 interface RunOptions {
   datasetId: string;
@@ -454,6 +480,78 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           .trim();
         return { text: rawText };
       }
+      case "calculate_investment": {
+        const investmentCost = input.investmentCost as number;
+        const financingYears = Math.max(1, Math.min(30, input.financingYears as number));
+        const interestRatePct = input.interestRatePct as number;
+        const annualBenefit = input.annualBenefit as number;
+        const subsidy = (input.subsidy as number | undefined) ?? 0;
+
+        const effectiveCost = investmentCost - subsidy;
+        const i = interestRatePct / 100;
+
+        let annuity: number;
+        if (i === 0) {
+          annuity = effectiveCost / financingYears;
+        } else {
+          annuity =
+            (effectiveCost * i * Math.pow(1 + i, financingYears)) /
+            (Math.pow(1 + i, financingYears) - 1);
+        }
+
+        annuity = Math.round(annuity * 100) / 100;
+
+        const cashflowTable: {
+          jahr: number;
+          annualBenefit: number;
+          annuity: number;
+          netEffect: number;
+          cumulative: number;
+        }[] = [];
+
+        let cumulative = 0;
+        let breakEvenYear: number | null = null;
+
+        for (let year = 1; year <= 10; year++) {
+          const netEffect = Math.round((annualBenefit - annuity) * 100) / 100;
+          cumulative = Math.round((cumulative + netEffect) * 100) / 100;
+          cashflowTable.push({
+            jahr: year,
+            annualBenefit: Math.round(annualBenefit * 100) / 100,
+            annuity: Math.round(annuity * 100) / 100,
+            netEffect,
+            cumulative,
+          });
+          if (breakEvenYear === null && cumulative > 0) {
+            breakEvenYear = year;
+          }
+        }
+
+        let rating: "wirtschaftlich" | "grenzwertig" | "nicht empfohlen";
+        if (breakEvenYear !== null && breakEvenYear <= financingYears) {
+          rating = "wirtschaftlich";
+        } else if (breakEvenYear !== null && breakEvenYear <= financingYears * 1.3) {
+          rating = "grenzwertig";
+        } else {
+          rating = "nicht empfohlen";
+        }
+
+        return {
+          annuity,
+          breakEvenYear,
+          rating,
+          effectiveCost,
+          cashflowTable,
+          summary: {
+            investmentCost,
+            subsidy,
+            effectiveCost,
+            financingYears,
+            interestRatePct,
+            annualBenefit,
+          },
+        };
+      }
       case "search_knowledge": {
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
@@ -575,6 +673,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_master_data": return "Lade Stammdaten";
       case "read_document": return "Lese Dokumententext";
       case "search_knowledge": return "Durchsuche Wissensdatenbank";
+      case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
       case "emit_chart": return `Erstelle Diagramm`;
       default: return "Verarbeite Daten";
     }
@@ -591,6 +690,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
     "read_document",
     "search_knowledge",
+    "calculate_investment",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {

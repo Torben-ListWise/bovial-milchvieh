@@ -65,6 +65,7 @@ function normalizeStep(step: string): { emoji: string; label: string } {
   if (step.startsWith("Berechne alle"))    return { emoji: "📊", label: "Berechne alle Kennzahlen" };
   if (step.startsWith("Berechne Statistik")) return { emoji: "📊", label: "Berechne Statistiken" };
   if (step.startsWith("Berechne Zeitreihe")) return { emoji: "📈", label: "Berechne Zeitreihe" };
+  if (step.startsWith("Berechne Investition")) return { emoji: "💰", label: "Berechne Investitionswirtschaftlichkeit" };
   if (step.startsWith("Erstelle Diagramm")) return { emoji: "📊", label: "Erstelle Diagramm" };
   if (step.startsWith("Erstelle Rangliste")) return { emoji: "🏆", label: "Erstelle Rangliste" };
   if (step.startsWith("Erkenne Ausreißer")) return { emoji: "⚠️", label: "Erkenne Ausreißer" };
@@ -435,6 +436,16 @@ function StreamingText({ text, animate }: { text: string; animate: boolean }) {
     : text;
 
   return <MarkdownContent text={displayText} />;
+}
+
+// ── Heuristic: is this message a back-question from the agent? ────────────────
+
+function isBackQuestion(content: string | null | undefined): boolean {
+  if (!content) return false;
+  const trimmed = content.trim();
+  if (trimmed.length >= 400) return false;
+  const lastChar = trimmed[trimmed.length - 1];
+  return lastChar === "?";
 }
 
 // ── Follow-up question chips ───────────────────────────────────────────────────
@@ -837,6 +848,16 @@ export function AnalysesPage() {
     }
   }, [analysis?.messages?.length, currentStep, systemMessages.length, isAgentWorking]);
 
+  // Auto-focus input when agent finishes with a back-question
+  useEffect(() => {
+    if (isAgentWorking) return;
+    const msgs = analysis?.messages ?? [];
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg?.role === "assistant" && isBackQuestion(lastMsg.content)) {
+      inputRef.current?.focus();
+    }
+  }, [isAgentWorking]);
+
   // ── Panel resize drag handlers ────────────────────────────────────────────
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
@@ -1101,7 +1122,8 @@ export function AnalysesPage() {
                 {msg.role === "assistant" &&
                   idx === lastAssistantIdx &&
                   !isAgentWorking &&
-                  (msg.followUpQuestions?.length ?? 0) > 0 && (
+                  (msg.followUpQuestions?.length ?? 0) > 0 &&
+                  !isBackQuestion(msg.content) && (
                     <div className="mt-3">
                       <FollowUpChips
                         questions={msg.followUpQuestions!}
