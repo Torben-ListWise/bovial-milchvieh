@@ -33,6 +33,7 @@ export const knowledgeDocumentsTable = pgTable("knowledge_documents", {
   errorMessage: text("error_message"),
   chunkCount: integer("chunk_count"),
   size: integer("size"),
+  sourceUrl: text("source_url"),
   uploadedBy: text("uploaded_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

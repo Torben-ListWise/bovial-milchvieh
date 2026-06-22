@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import {
   db,
   knowledgeDocumentsTable,
@@ -8,6 +9,7 @@ import {
 import { requireAuth, requireOperator } from "../lib/auth";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { ingestKnowledgeDoc } from "../lib/ingest";
+import { scrapeUrl, validateUrl, canonicalizeUrl } from "../lib/scraper";
 import { logger } from "../lib/logger";
 
 interface KnowledgeUploadUrlBodyType {
@@ -61,6 +63,7 @@ router.get(
         chunkCount: d.chunkCount ?? null,
         size: d.size ?? null,
         errorMessage: d.errorMessage ?? null,
+        sourceUrl: d.sourceUrl ?? null,
         createdAt: d.createdAt,
       })),
     );
@@ -124,6 +127,113 @@ router.post(
       .returning();
 
     res.json({ uploadURL, objectPath, docId: doc.id, title: docTitle });
+  },
+);
+
+router.post(
+  "/knowledge/ingest-url",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const body = req.body as unknown;
+    if (
+      typeof body !== "object" || body === null ||
+      typeof (body as any).url !== "string" || !(body as any).url
+    ) {
+      res.status(400).json({ error: "Ungültige Eingabe: 'url' fehlt" });
+      return;
+    }
+    const rawUrl: string = (body as any).url.trim();
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      res.status(400).json({ error: "Ungültige URL" });
+      return;
+    }
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      res.status(400).json({ error: "Nur http:// und https:// URLs sind erlaubt" });
+      return;
+    }
+
+    // SSRF check before anything else
+    try {
+      await validateUrl(rawUrl);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "URL nicht erlaubt" });
+      return;
+    }
+
+    const canonicalUrl = canonicalizeUrl(rawUrl);
+
+    // Deduplication: check both the raw and canonical forms
+    const allDocs = await db
+      .select({ sourceUrl: knowledgeDocumentsTable.sourceUrl })
+      .from(knowledgeDocumentsTable)
+      .where(eq(knowledgeDocumentsTable.sourceUrl, canonicalUrl))
+      .limit(1);
+    const isDuplicate =
+      allDocs.length > 0 ||
+      (canonicalUrl !== rawUrl &&
+        (await db
+          .select({ sourceUrl: knowledgeDocumentsTable.sourceUrl })
+          .from(knowledgeDocumentsTable)
+          .where(eq(knowledgeDocumentsTable.sourceUrl, rawUrl))
+          .limit(1)
+          .then((r) => r.length > 0)));
+    if (isDuplicate) {
+      res.status(409).json({
+        error: "Diese URL wurde bereits zur Wissensbibliothek hinzugefügt",
+      });
+      return;
+    }
+
+    // Create doc row immediately with a placeholder objectPath so the frontend
+    // can start polling. The real path is set once the upload succeeds.
+    const placeholder = `knowledge/url-${randomUUID()}.txt`;
+    const [doc] = await db
+      .insert(knowledgeDocumentsTable)
+      .values({
+        title: parsedUrl.hostname,
+        filename: parsedUrl.hostname,
+        fileType: "txt",
+        objectPath: placeholder,
+        status: "processing",
+        sourceUrl: canonicalUrl,
+        uploadedBy: req.userId!,
+      })
+      .returning();
+
+    // Return immediately so the frontend can start polling.
+    res.json({ docId: doc.id });
+
+    // Run scrape + upload + ingest entirely in background.
+    void (async () => {
+      try {
+        const scraped = await scrapeUrl(rawUrl);
+        const buf = Buffer.from(scraped.text, "utf-8");
+        const objectPath = await objectStorage.uploadBytesAsEntity(placeholder, buf, "text/plain");
+
+        await db
+          .update(knowledgeDocumentsTable)
+          .set({
+            title: scraped.title || parsedUrl.hostname,
+            objectPath,
+            size: buf.length,
+          })
+          .where(eq(knowledgeDocumentsTable.id, doc.id));
+
+        await ingestKnowledgeDoc(doc.id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "URL konnte nicht geladen werden";
+        logger.warn({ err, url: rawUrl, docId: doc.id }, "URL-Ingestion fehlgeschlagen");
+        await db
+          .update(knowledgeDocumentsTable)
+          .set({ status: "error", errorMessage: message })
+          .where(eq(knowledgeDocumentsTable.id, doc.id));
+      }
+    })();
   },
 );
 

@@ -183,6 +183,23 @@ export class ObjectStorageService {
     return `/objects/${entityId}`;
   }
 
+  async uploadBytesAsEntity(
+    subpath: string,
+    buf: Buffer,
+    contentType: string,
+  ): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const dir = privateObjectDir.endsWith("/")
+      ? privateObjectDir
+      : `${privateObjectDir}/`;
+    const fullPath = `${dir}${subpath}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    await file.save(buf, { contentType, resumable: false });
+    return `/objects/${subpath}`;
+  }
+
   async trySetObjectEntityAclPolicy(
     rawPath: string,
     aclPolicy: ObjectAclPolicy

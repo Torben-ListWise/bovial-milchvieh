@@ -788,6 +788,8 @@ export interface KnowledgeDocument {
   size?: number | null;
   /** @nullable */
   errorMessage?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
   createdAt: string;
 }
 

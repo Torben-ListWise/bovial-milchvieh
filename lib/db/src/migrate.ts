@@ -37,6 +37,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE master_data ADD COLUMN IF NOT EXISTS sector TEXT"
   );
+  // Migration: source_url column on knowledge_documents (for URL-ingested entries)
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"
+  );
   // Seed default Milchvieh templates if table is empty
   const { rows } = await pool.query("SELECT COUNT(*)::int as c FROM analysis_templates");
   if ((rows[0]?.c ?? 0) === 0) {
