@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Home as HomeIcon, Loader2, Trash2 } from "lucide-react";
+import { Plus, Home as HomeIcon, Loader2, Trash2, Milk, Zap, Wheat } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -66,8 +66,10 @@ function sectorLabel(sector?: string): string {
   return SECTORS.find((s) => s.id === sector)?.label ?? "Milchvieh";
 }
 
-function sectorEmoji(sector?: string): string {
-  return SECTORS.find((s) => s.id === sector)?.emoji ?? "🐄";
+function SectorIcon({ sector, className }: { sector?: string; className?: string }) {
+  const icons: Record<string, React.ElementType> = { dairy: Milk, biogas: Zap, arable: Wheat };
+  const Icon = icons[sector ?? "dairy"] ?? Milk;
+  return <Icon className={className} />;
 }
 
 export function DatasetList() {
@@ -178,9 +180,7 @@ export function DatasetList() {
                   <div className="p-6 pr-14">
                     <CardHeader className="p-0 mb-4">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xl" aria-label={sectorLabel(ds.sector)}>
-                          {sectorEmoji(ds.sector)}
-                        </span>
+                        <SectorIcon sector={ds.sector} className="w-5 h-5 text-primary/70" />
                         <span className="text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
                           {sectorLabel(ds.sector)}
                         </span>

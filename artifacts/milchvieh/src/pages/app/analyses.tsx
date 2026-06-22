@@ -37,6 +37,8 @@ import {
   Loader2, ChevronRight, Upload,
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
   Plus, X, RefreshCw,
+  BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
+  Layers, Database, Search, Cog,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -60,19 +62,19 @@ interface SystemMsg {
 
 // ── Progress label normalization ─────────────────────────────────────────────
 
-function normalizeStep(step: string): { emoji: string; label: string } {
-  if (step.startsWith("Lese"))             return { emoji: "📖", label: "Lese Datenschema" };
-  if (step.startsWith("Berechne alle"))    return { emoji: "📊", label: "Berechne alle Kennzahlen" };
-  if (step.startsWith("Berechne Statistik")) return { emoji: "📊", label: "Berechne Statistiken" };
-  if (step.startsWith("Berechne Zeitreihe")) return { emoji: "📈", label: "Berechne Zeitreihe" };
-  if (step.startsWith("Berechne Investition")) return { emoji: "💰", label: "Berechne Investitionswirtschaftlichkeit" };
-  if (step.startsWith("Erstelle Diagramm")) return { emoji: "📊", label: "Erstelle Diagramm" };
-  if (step.startsWith("Erstelle Rangliste")) return { emoji: "🏆", label: "Erstelle Rangliste" };
-  if (step.startsWith("Erkenne Ausreißer")) return { emoji: "⚠️", label: "Erkenne Ausreißer" };
-  if (step.startsWith("Aggregiere"))      return { emoji: "🔢", label: "Aggregiere Daten nach Gruppe" };
-  if (step.startsWith("Lade"))            return { emoji: "📚", label: "Lade Stammdaten" };
-  if (step.startsWith("Überprüfe"))       return { emoji: "🔍", label: "Überprüfe Ergebnisse" };
-  return { emoji: "⚙️", label: step };
+function normalizeStep(step: string): { icon: React.ElementType; label: string } {
+  if (step.startsWith("Lese"))               return { icon: BookOpen,       label: "Lese Datenschema" };
+  if (step.startsWith("Berechne alle"))      return { icon: Calculator,     label: "Berechne alle Kennzahlen" };
+  if (step.startsWith("Berechne Statistik")) return { icon: BarChart2,      label: "Berechne Statistiken" };
+  if (step.startsWith("Berechne Zeitreihe")) return { icon: TrendingUp,     label: "Berechne Zeitreihe" };
+  if (step.startsWith("Berechne Investition")) return { icon: Coins,        label: "Berechne Investitionswirtschaftlichkeit" };
+  if (step.startsWith("Erstelle Diagramm"))  return { icon: BarChart3,      label: "Erstelle Diagramm" };
+  if (step.startsWith("Erstelle Rangliste")) return { icon: Trophy,         label: "Erstelle Rangliste" };
+  if (step.startsWith("Erkenne Ausreißer"))  return { icon: AlertTriangle,  label: "Erkenne Ausreißer" };
+  if (step.startsWith("Aggregiere"))         return { icon: Layers,         label: "Aggregiere Daten nach Gruppe" };
+  if (step.startsWith("Lade"))               return { icon: Database,       label: "Lade Stammdaten" };
+  if (step.startsWith("Überprüfe"))          return { icon: Search,         label: "Überprüfe Ergebnisse" };
+  return { icon: Cog, label: step };
 }
 
 // ── Analysis history list ─────────────────────────────────────────────────────
@@ -80,21 +82,24 @@ function normalizeStep(step: string): { emoji: string; label: string } {
 function AnalysisSourceBadge({ source }: { source?: string | null }) {
   if (source === "auto") {
     return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 shrink-0">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
         Auto
       </span>
     );
   }
   if (source === "template") {
     return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 shrink-0">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700 shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
         Vorlage
       </span>
     );
   }
   if (source === "report") {
     return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground shrink-0">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
         Bericht
       </span>
     );
@@ -104,7 +109,8 @@ function AnalysisSourceBadge({ source }: { source?: string | null }) {
 
 function NewDataBadge() {
   return (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 shrink-0">
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 shrink-0">
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
       Neue Daten
     </span>
   );
@@ -384,16 +390,16 @@ function AgentStepsTimeline({
   completedSteps: string[];
   currentStep: string | null;
 }) {
-  const dedupedSteps: { emoji: string; label: string; count: number }[] = [];
+  const dedupedSteps: { icon: React.ElementType; label: string; count: number }[] = [];
   const labelIndexMap = new Map<string, number>();
   for (const step of completedSteps) {
-    const { emoji, label } = normalizeStep(step);
+    const { icon, label } = normalizeStep(step);
     const existing = labelIndexMap.get(label);
     if (existing !== undefined) {
       dedupedSteps[existing].count += 1;
     } else {
       labelIndexMap.set(label, dedupedSteps.length);
-      dedupedSteps.push({ emoji, label, count: 1 });
+      dedupedSteps.push({ icon, label, count: 1 });
     }
   }
 
@@ -407,16 +413,20 @@ function AgentStepsTimeline({
         <Bot className="w-3.5 h-3.5 text-primary" />
       </div>
       <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-1.5 min-w-[220px]">
-        {dedupedSteps.map(({ emoji, label, count }, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground/70">
-            <Check className="w-3 h-3 text-green-500 shrink-0" />
-            <span>{emoji} {label}{count > 1 ? ` ×${count}` : ""}</span>
-          </div>
-        ))}
+        <div className="relative before:absolute before:left-[5px] before:top-3 before:bottom-3 before:w-px before:bg-border">
+          {dedupedSteps.map(({ icon: StepIcon, label, count }, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground/70 py-0.5">
+              <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center shrink-0 z-10">
+                <StepIcon className="w-2 h-2 text-white" />
+              </div>
+              <span>{label}{count > 1 ? ` ×${count}` : ""}</span>
+            </div>
+          ))}
+        </div>
         {normalizedCurrent && !currentAlreadyCompleted ? (
           <div className="flex items-center gap-2 text-sm text-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
-            <span>{normalizedCurrent.emoji} {normalizedCurrent.label}…</span>
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-primary animate-pulse shrink-0" />
+            <span>{normalizedCurrent.label}…</span>
           </div>
         ) : !normalizedCurrent && dedupedSteps.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -556,7 +566,7 @@ function StarterQuestions({
   if (!hasFiles) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4">
           <UploadCloud className="w-8 h-8 text-primary" />
         </div>
         <h3 className="text-xl font-semibold mb-2">Noch keine Daten hochgeladen</h3>
@@ -578,7 +588,7 @@ function StarterQuestions({
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
-      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4">
         <Bot className="w-6 h-6 text-primary" />
       </div>
       <h3 className="text-lg font-semibold mb-1">Womit kann ich helfen?</h3>
@@ -610,10 +620,10 @@ function StarterQuestions({
                     runTemplate.mutate({ datasetId, templateId: t.id })
                   }
                   disabled={runTemplate.isPending}
-                  className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-60"
+                  className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-150 disabled:opacity-60"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl leading-none mt-0.5">{t.emoji}</span>
+                    <span className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center text-xl leading-none shrink-0">{t.emoji}</span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">
                         {t.title}
@@ -1196,7 +1206,7 @@ export function AnalysesPage() {
         e.preventDefault();
         handleSubmit();
       }}
-      className="p-3 border-t border-border bg-background shrink-0"
+      className="p-3 bg-card/80 backdrop-blur-sm border-t border-border shrink-0"
     >
       <div className="flex gap-2 items-center">
         <Input
@@ -1208,7 +1218,7 @@ export function AnalysesPage() {
               ? "Folgefrage stellen…"
               : "Stellen Sie eine Frage zu Ihren Daten…"
           }
-          className="flex-1"
+          className="flex-1 rounded-xl border-border/60 bg-card shadow-inner focus-within:ring-2 focus-within:ring-primary/30"
           disabled={isPending}
         />
         <Button

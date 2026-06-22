@@ -8,6 +8,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { deDE } from "@clerk/localizations";
 import { useEffect, useRef, useState } from "react";
 import { useGetCurrentUser, setAuthTokenGetter } from "@workspace/api-client-react";
+import { ArrowRight, MessageCircle, ShieldCheck } from "lucide-react";
 
 import { AppLayout } from "@/components/layout";
 import { DatasetList } from "@/pages/app/datasets";
@@ -56,8 +57,8 @@ const clerkAppearance = {
     colorInput: "hsl(0 0% 100%)",
     colorInputForeground: "hsl(160 20% 15%)",
     colorNeutral: "hsl(40 20% 88%)",
-    fontFamily: "Inter, sans-serif",
-    borderRadius: "0.5rem",
+    fontFamily: "Plus Jakarta Sans, sans-serif",
+    borderRadius: "0.625rem",
   },
   elements: {
     rootBox: "w-full flex justify-center",
@@ -111,7 +112,7 @@ function LandingPage() {
         </div>
         <div className="flex items-center gap-4">
           <a href={`${basePath}/sign-in`} className="text-sm font-medium hover:underline text-foreground">Anmelden</a>
-          <a href={`${basePath}/sign-up`} className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity">Registrieren</a>
+          <a href={`${basePath}/sign-up`} className="text-sm font-medium bg-primary text-primary-foreground px-5 py-2 rounded-full shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">Registrieren</a>
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center px-6 py-12">
@@ -124,8 +125,9 @@ function LandingPage() {
               Laden Sie Ihre Herdenmanagement-Exporte und Milchkontrolldaten hoch. Stellen Sie Fragen in einfachem Deutsch. Erhalten Sie klare, fundierte Antworten basierend auf Ihren echten Daten.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href={`${basePath}/sign-up`} className="inline-flex items-center justify-center text-lg font-medium bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 shadow-md transition-all hover:translate-y-[-2px]">
+              <a href={`${basePath}/sign-up`} className="inline-flex items-center justify-center gap-2 text-lg font-medium bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
                 Jetzt kostenlos starten
+                <ArrowRight className="w-5 h-5" />
               </a>
               <a href={`${basePath}/sign-in`} className="inline-flex items-center justify-center text-lg font-medium bg-secondary text-secondary-foreground px-8 py-4 rounded-lg hover:bg-secondary/80 transition-all">
                 Anmelden
@@ -133,10 +135,16 @@ function LandingPage() {
             </div>
             <div className="grid grid-cols-2 gap-6 pt-8 border-t border-border/50">
               <div>
+                <div className="bg-primary/10 rounded-lg p-2 w-fit mb-3">
+                  <MessageCircle className="w-5 h-5 text-primary" />
+                </div>
                 <h3 className="font-semibold text-lg mb-2">Einfach Fragen</h3>
                 <p className="text-sm text-muted-foreground">„Warum ist die Zellzahl in Laktation 2 gestiegen?“ – der Assistent antwortet auf Deutsch.</p>
               </div>
               <div>
+                <div className="bg-primary/10 rounded-lg p-2 w-fit mb-3">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                </div>
                 <h3 className="font-semibold text-lg mb-2">Geprüfte Daten</h3>
                 <p className="text-sm text-muted-foreground">Jede Zahl ist belegt. Keine erfundenen Werte, sondern direkte Verweise auf Ihre Rohdaten.</p>
               </div>
@@ -144,7 +152,7 @@ function LandingPage() {
           </div>
           <div className="relative">
             {/* Abstract representation of the app interface */}
-            <div className="aspect-[4/3] bg-card rounded-2xl shadow-2xl border overflow-hidden flex flex-col">
+            <div className="aspect-[4/3] bg-card rounded-2xl shadow-2xl ring-1 ring-border/50 overflow-hidden flex flex-col">
               <div className="h-12 border-b flex items-center px-4 gap-2 bg-muted/30">
                 <div className="w-3 h-3 rounded-full bg-red-400"></div>
                 <div className="w-3 h-3 rounded-full bg-amber-400"></div>

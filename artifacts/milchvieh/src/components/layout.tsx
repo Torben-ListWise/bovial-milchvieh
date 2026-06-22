@@ -20,12 +20,15 @@ import {
   ArrowLeftRight,
   BookOpen,
   LayoutList,
+  Milk,
+  Zap,
+  Wheat,
 } from "lucide-react";
 
-const SECTOR_META: Record<string, { emoji: string; label: string }> = {
-  dairy:  { emoji: "🐄", label: "Milchvieh" },
-  biogas: { emoji: "⚡", label: "Biogas" },
-  arable: { emoji: "🌾", label: "Ackerbau" },
+const SECTOR_META: Record<string, { icon: React.ElementType; label: string }> = {
+  dairy:  { icon: Milk,  label: "Milchvieh" },
+  biogas: { icon: Zap,   label: "Biogas" },
+  arable: { icon: Wheat, label: "Ackerbau" },
 };
 
 function DatasetAwareHeader({
@@ -46,7 +49,7 @@ function DatasetAwareHeader({
   const sectorMeta = dataset ? (SECTOR_META[(dataset as any).sector ?? "dairy"] ?? SECTOR_META.dairy) : null;
 
   return (
-    <header className="h-16 border-b bg-card flex items-center px-6 shrink-0 gap-3">
+    <header className="h-16 border-b bg-card/95 backdrop-blur-sm flex items-center px-6 shrink-0 gap-3">
       <div className="flex items-center text-sm text-muted-foreground">
         {viewMode === 'operator' ? 'Operator Dashboard' : 'Datenanalyse'}
         <ChevronRight className="w-4 h-4 mx-2" />
@@ -56,7 +59,7 @@ function DatasetAwareHeader({
       </div>
       {sectorMeta && (
         <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-2.5 py-1 rounded-full">
-          <span>{sectorMeta.emoji}</span>
+          <sectorMeta.icon className="w-3.5 h-3.5" />
           {sectorMeta.label}
         </span>
       )}
@@ -188,7 +191,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
                         "flex items-center rounded-md text-sm font-medium transition-colors cursor-pointer",
                         navCollapsed ? "px-2 py-2 justify-center" : "px-3 py-2",
                         isActive 
-                          ? "bg-primary/10 text-primary" 
+                          ? "border-l-2 border-primary bg-primary/8 text-primary" 
                           : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                       )}
                     >
@@ -201,6 +204,8 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
             })}
           </ul>
         </nav>
+
+        <hr className="my-0 border-border/40 mx-2" />
         
         <div className="p-2 border-t">
           <div
@@ -210,7 +215,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
             )}
           >
             <div
-              className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0 text-sm"
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-primary font-bold shrink-0 text-sm"
               title={navCollapsed ? (user?.firstName || user?.emailAddresses[0]?.emailAddress || "Benutzer") : undefined}
             >
               {user?.firstName?.charAt(0) || user?.emailAddresses[0]?.emailAddress?.charAt(0) || "U"}

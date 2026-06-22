@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, Bot, X, ArrowRight, ChevronRight, Loader2 } from "lucide-react";
+
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 
@@ -183,7 +184,7 @@ export function DatasetOverview() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {overview.kpis.map((kpi) => (
-          <Card key={kpi.key}>
+          <Card key={kpi.key} className="bg-gradient-to-b from-card to-muted/20">
             <CardContent className="p-6">
               <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
               <div className="mt-2 flex items-baseline gap-2">
@@ -193,11 +194,25 @@ export function DatasetOverview() {
                 </span>
               </div>
               {kpi.deltaPct !== null && kpi.deltaPct !== undefined && (
-                <div className={`mt-2 flex items-center text-sm ${kpi.trend === 'up' ? 'text-green-600' : kpi.trend === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {kpi.trend === 'up' && <TrendingUp className="w-4 h-4 mr-1" />}
-                  {kpi.trend === 'down' && <TrendingDown className="w-4 h-4 mr-1" />}
-                  {kpi.trend === 'flat' && <Minus className="w-4 h-4 mr-1" />}
-                  <span>{Math.abs(kpi.deltaPct).toLocaleString('de-DE')}% zum Vormonat</span>
+                <div className="mt-2">
+                  {kpi.trend === 'up' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                      <TrendingUp className="w-3 h-3" />
+                      +{Math.abs(kpi.deltaPct).toLocaleString('de-DE')}%
+                    </span>
+                  )}
+                  {kpi.trend === 'down' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      <TrendingDown className="w-3 h-3" />
+                      -{Math.abs(kpi.deltaPct).toLocaleString('de-DE')}%
+                    </span>
+                  )}
+                  {kpi.trend === 'flat' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
+                      <Minus className="w-3 h-3" />
+                      {Math.abs(kpi.deltaPct).toLocaleString('de-DE')}%
+                    </span>
+                  )}
                 </div>
               )}
               {kpi.basis && <p className="mt-1 text-xs text-muted-foreground">Basis: {kpi.basis}</p>}
