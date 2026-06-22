@@ -384,27 +384,41 @@ function AgentStepsTimeline({
   completedSteps: string[];
   currentStep: string | null;
 }) {
+  const dedupedSteps: { emoji: string; label: string; count: number }[] = [];
+  const labelIndexMap = new Map<string, number>();
+  for (const step of completedSteps) {
+    const { emoji, label } = normalizeStep(step);
+    const existing = labelIndexMap.get(label);
+    if (existing !== undefined) {
+      dedupedSteps[existing].count += 1;
+    } else {
+      labelIndexMap.set(label, dedupedSteps.length);
+      dedupedSteps.push({ emoji, label, count: 1 });
+    }
+  }
+
+  const normalizedCurrent = currentStep ? normalizeStep(currentStep) : null;
+  const currentAlreadyCompleted =
+    normalizedCurrent !== null && labelIndexMap.has(normalizedCurrent.label);
+
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
         <Bot className="w-3.5 h-3.5 text-primary" />
       </div>
       <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-1.5 min-w-[220px]">
-        {completedSteps.map((step, i) => {
-          const { emoji, label } = normalizeStep(step);
-          return (
-            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground/70">
-              <Check className="w-3 h-3 text-green-500 shrink-0" />
-              <span>{emoji} {label}</span>
-            </div>
-          );
-        })}
-        {currentStep ? (
+        {dedupedSteps.map(({ emoji, label, count }, i) => (
+          <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground/70">
+            <Check className="w-3 h-3 text-green-500 shrink-0" />
+            <span>{emoji} {label}{count > 1 ? ` ×${count}` : ""}</span>
+          </div>
+        ))}
+        {normalizedCurrent && !currentAlreadyCompleted ? (
           <div className="flex items-center gap-2 text-sm text-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
-            <span>{normalizeStep(currentStep).emoji} {normalizeStep(currentStep).label}…</span>
+            <span>{normalizedCurrent.emoji} {normalizedCurrent.label}…</span>
           </div>
-        ) : completedSteps.length === 0 ? (
+        ) : !normalizedCurrent && dedupedSteps.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
             <span>Verbinde mit Agent…</span>
