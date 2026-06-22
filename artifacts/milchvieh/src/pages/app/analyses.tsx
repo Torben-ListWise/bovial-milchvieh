@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   getListAnalysesQueryKey,
+  useListAnalyses,
   useCreateAnalysis,
   useGetAnalysis,
   getGetAnalysisQueryKey,
@@ -13,6 +14,7 @@ import {
   useRegisterFile,
   useGetFile,
   type AnalysisDetail,
+  type Analysis,
 } from "@workspace/api-client-react";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { type AnalysisMessage } from "@workspace/api-client-react";
@@ -30,6 +32,7 @@ import {
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
   Loader2, ChevronRight, Upload,
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
+  Plus, X, RefreshCw,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -106,6 +109,73 @@ function normalizeStep(step: string): { emoji: string; label: string } {
   if (step.startsWith("Lade"))            return { emoji: "📚", label: "Lade Stammdaten" };
   if (step.startsWith("Überprüfe"))       return { emoji: "🔍", label: "Überprüfe Ergebnisse" };
   return { emoji: "⚙️", label: step };
+}
+
+// ── Analysis history list ─────────────────────────────────────────────────────
+
+function AnalysisSourceBadge({ source }: { source?: string | null }) {
+  if (source === "auto") {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 shrink-0">
+        Auto
+      </span>
+    );
+  }
+  if (source === "template") {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 shrink-0">
+        Vorlage
+      </span>
+    );
+  }
+  return null;
+}
+
+function AnalysisHistoryPanel({
+  analyses,
+  activeAnalysisId,
+  onSelect,
+  onNew,
+}: {
+  analyses: Analysis[];
+  activeAnalysisId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+}) {
+  if (analyses.length === 0) return null;
+  return (
+    <div className="px-3 pt-3 pb-1 border-b border-border/60">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+          Analysen
+        </p>
+        <button
+          onClick={onNew}
+          title="Neue Analyse"
+          className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+        {analyses.map((a) => (
+          <button
+            key={a.id}
+            onClick={() => onSelect(a.id)}
+            className={cn(
+              "flex items-center gap-2 text-xs rounded-md px-2 py-1.5 text-left w-full transition-colors",
+              activeAnalysisId === a.id
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <span className="flex-1 truncate min-w-0">{a.title}</span>
+            <AnalysisSourceBadge source={a.source} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Historical file pills ────────────────────────────────────────────────────
@@ -541,14 +611,54 @@ function ChartPanel({
   );
 }
 
+// ── Neue Daten verfügbar Banner ──────────────────────────────────────────────
+
+function NeueDatatenBanner({
+  onDismiss,
+  onNewAnalysis,
+}: {
+  onDismiss: () => void;
+  onNewAnalysis: () => void;
+}) {
+  return (
+    <div className="mx-3 mt-2 mb-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5 text-sm animate-in fade-in slide-in-from-top-1">
+      <RefreshCw className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-amber-900 text-xs leading-snug">
+          Neue Daten verfügbar
+        </p>
+        <p className="text-amber-700 text-xs mt-0.5 leading-snug">
+          Es wurden neue Dateien hochgeladen. Die Erstanalyse basiert noch auf den alten Daten.
+        </p>
+        <button
+          onClick={onNewAnalysis}
+          className="mt-1.5 text-xs text-amber-800 font-medium underline underline-offset-2 hover:text-amber-900"
+        >
+          Neue Analyse starten →
+        </button>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="p-0.5 rounded hover:bg-amber-200 text-amber-500 hover:text-amber-700 transition-colors shrink-0"
+        title="Schließen"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export function AnalysesPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const searchStr = useSearch();
 
-  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(() => {
+    return new URLSearchParams(searchStr).get("analysisId") ?? null;
+  });
   const [question, setQuestion] = useState("");
   const [mobileTab, setMobileTab] = useState<"chat" | "chart">("chat");
   const [isDragOver, setIsDragOver] = useState(false);
@@ -558,6 +668,7 @@ export function AnalysesPage() {
     return saved ? Math.max(200, Math.min(700, parseInt(saved, 10))) : 320;
   });
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const [neueDatatenDismissed, setNeueDatatenDismissed] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -578,6 +689,14 @@ export function AnalysesPage() {
     query: {
       enabled: !!datasetId,
       queryKey: getListFilesQueryKey(datasetId ?? ""),
+    },
+  });
+
+  const { data: analysesList } = useListAnalyses(datasetId ?? "", {
+    query: {
+      enabled: !!datasetId,
+      queryKey: getListAnalysesQueryKey(datasetId ?? ""),
+      refetchInterval: activeAnalysisId ? false : 5000,
     },
   });
 
@@ -810,14 +929,40 @@ export function AnalysesPage() {
   const hasFiles = !!(files && files.length > 0);
   const isPending = createAnalysis.isPending || ask.isPending;
 
-  // ── Chat zone renderer ─────────────────────────────────────────────────────
+  // ── Neue Daten verfügbar detection ─────────────────────────────────────────
 
-  const historicalFiles = (files ?? []) as FileItem[];
+  const historicalFiles = (files ?? []) as unknown as FileItem[];
+  const analysesListItems = analysesList ?? [];
+
+  const autoAnalysis = analysesListItems.find((a) => (a as any).templateRef === "auto_erstanalyse" || a.source === "auto");
+  const readyFiles = historicalFiles.filter((f) => f.status === "ready");
+  const latestFileTime = readyFiles.length > 0
+    ? Math.max(...readyFiles.map((f) => new Date(f.createdAt).getTime()))
+    : 0;
+  const autoAnalysisTime = autoAnalysis ? new Date((autoAnalysis as any).createdAt).getTime() : 0;
+  const showNeueDatatenBanner =
+    !neueDatatenDismissed &&
+    autoAnalysis != null &&
+    latestFileTime > autoAnalysisTime + 30_000; // 30s buffer for race
+
+  // ── Chat zone renderer ─────────────────────────────────────────────────────
 
   function renderChatContent() {
     if (!activeAnalysisId && !createAnalysis.isPending && systemMessages.length === 0) {
       return (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <AnalysisHistoryPanel
+            analyses={analysesListItems}
+            activeAnalysisId={activeAnalysisId}
+            onSelect={(id) => setActiveAnalysisId(id)}
+            onNew={handleNewAnalysis}
+          />
+          {showNeueDatatenBanner && (
+            <NeueDatatenBanner
+              onDismiss={() => setNeueDatatenDismissed(true)}
+              onNewAnalysis={handleNewAnalysis}
+            />
+          )}
           <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0">
             <HistoricalFiles files={historicalFiles} />
             <StarterQuestions hasFiles={hasFiles} onAsk={handleStarterQuestion} />
@@ -854,6 +999,13 @@ export function AnalysesPage() {
     );
 
     return (
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <AnalysisHistoryPanel
+          analyses={analysesListItems}
+          activeAnalysisId={activeAnalysisId}
+          onSelect={(id) => { setActiveAnalysisId(id); pendingQuestionRef.current = ""; }}
+          onNew={handleNewAnalysis}
+        />
       <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
         <HistoricalFiles files={historicalFiles} />
         <div className="space-y-5">
@@ -907,6 +1059,7 @@ export function AnalysesPage() {
 
           <div ref={bottomRef} />
         </div>
+      </div>
       </div>
     );
   }

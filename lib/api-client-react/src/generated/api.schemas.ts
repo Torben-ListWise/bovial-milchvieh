@@ -306,6 +306,7 @@ export const AnalysisSource = {
   user: 'user',
   auto: 'auto',
   report: 'report',
+  template: 'template',
 } as const;
 
 export interface Analysis {
@@ -318,6 +319,8 @@ export interface Analysis {
   tags?: string[];
   /** @nullable */
   source?: AnalysisSource;
+  /** @nullable */
+  templateRef?: string | null;
   messageCount?: number;
   createdAt: string;
   /** @nullable */
@@ -374,6 +377,7 @@ export const AnalysisDetailSource = {
   user: 'user',
   auto: 'auto',
   report: 'report',
+  template: 'template',
 } as const;
 
 export interface AnalysisDetail {
@@ -386,6 +390,8 @@ export interface AnalysisDetail {
   tags?: string[];
   /** @nullable */
   source?: AnalysisDetailSource;
+  /** @nullable */
+  templateRef?: string | null;
   /** @nullable */
   agentProgress?: string | null;
   createdAt: string;

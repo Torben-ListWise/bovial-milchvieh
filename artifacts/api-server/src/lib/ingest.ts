@@ -22,7 +22,7 @@ if (typeof (globalThis as any).Path2D === "undefined") {
 
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   db,
   sourceFilesTable,
@@ -43,8 +43,8 @@ import {
   CANONICAL_FIELD_MAP,
 } from "./canonical";
 import { evaluateWarnings } from "./warnings";
-import { runAgent } from "./agent";
 import { analysesTable, messagesTable } from "@workspace/db";
+import { processQuestion } from "./analysisService";
 import { logger } from "./logger";
 
 const objectStorage = new ObjectStorageService();
@@ -431,38 +431,65 @@ export async function ingestFile(fileId: string): Promise<void> {
     } catch (err) {
       logger.warn({ err, datasetId: file.datasetId }, "Warnungsauswertung fehlgeschlagen");
     }
-    // Automatische Erstanalyse nach erfolgreichem Ingest.
+    // Automatische Erstanalyse nach erfolgreichem Ingest (nur einmalig pro Dataset).
     try {
-      const [analysis] = await db
-        .insert(analysesTable)
-        .values({
-          datasetId: file.datasetId,
-          userId: file.userId,
-          title: "Automatische Erstanalyse",
-          category: "overview",
-          source: "auto",
-        })
-        .returning();
-      const question =
-        "Bitte erstelle eine kurze Erstanalyse der hochgeladenen Betriebsdaten: Welche Kennzahlen sind vorhanden, wie sieht die Datenqualität aus und gibt es erste auffällige Werte?";
-      const result = await runAgent({
-        datasetId: file.datasetId,
-        conversation: [{ role: "user", content: question }],
-      });
-      await db.insert(messagesTable).values({
-        analysisId: analysis.id,
-        role: "user",
-        content: question,
-      });
-      await db.insert(messagesTable).values({
-        analysisId: analysis.id,
-        role: "assistant",
-        content: result.text,
-        charts: result.charts as unknown as Record<string, unknown>[],
-        citations: result.citations as unknown as Record<string, unknown>[],
-      });
+      const existingAutoAnalysis = await db
+        .select({ id: analysesTable.id })
+        .from(analysesTable)
+        .where(
+          and(
+            eq(analysesTable.datasetId, file.datasetId),
+            eq((analysesTable as any).templateRef, "auto_erstanalyse")
+          ) as any
+        )
+        .limit(1);
+
+      const alreadyExists = existingAutoAnalysis.length > 0;
+
+      if (!process.env.ANTHROPIC_API_KEY) {
+        logger.warn({ datasetId: file.datasetId }, "Automatische Erstanalyse übersprungen: ANTHROPIC_API_KEY nicht gesetzt");
+      } else if (!alreadyExists) {
+        const betriebsspiegelPrompt = `Du erstellst jetzt automatisch einen vollständigen Betriebsspiegel. Gehe strukturiert vor:
+
+1. get_schema — welche Kennzahlen sind vorhanden, über welchen Zeitraum, wie viele Datensätze?
+2. get_kpis — alle Kern-KPIs berechnen; stelle die 4–6 wichtigsten als Diagramm dar (emit_chart)
+3. get_timeseries für die 2–3 relevantesten Kennzahlen (Milchleistung, Zellzahl o.ä.) — Trend der letzten Monate
+4. detect_anomalies — gibt es Ausreißer? Welche Tiere oder Zeiträume fallen auf?
+5. get_master_data — Richtwerte laden und wichtige KPIs einordnen (besser/schlechter als Ziel?)
+6. search_knowledge mit passender Suchanfrage für die auffälligsten Befunde — gibt es Fachinformationen dazu?
+
+Fasse am Ende in drei klaren Abschnitten zusammen:
+✅ Läuft gut — was ist in Ordnung oder überdurchschnittlich
+⚠️ Handlungsbedarf — was liegt unter dem Zielwert oder zeigt Probleme
+💡 Top-3 Empfehlungen — konkrete nächste Schritte mit Begründung
+
+Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete Zahlen mit Einheiten.`;
+
+        const [analysis] = await db
+          .insert(analysesTable)
+          .values({
+            datasetId: file.datasetId,
+            userId: file.userId,
+            title: "Betriebsspiegel",
+            category: "overview",
+            source: "auto",
+            templateRef: "auto_erstanalyse",
+            agentProgress: "Wird gestartet…",
+          } as any)
+          .returning();
+
+        setImmediate(() => {
+          processQuestion(analysis, betriebsspiegelPrompt).catch((err) => {
+            logger.warn({ err, analysisId: analysis.id }, "Automatische Erstanalyse fehlgeschlagen");
+          });
+        });
+
+        logger.info({ analysisId: analysis.id, datasetId: file.datasetId }, "Automatische Erstanalyse gestartet");
+      } else {
+        logger.info({ datasetId: file.datasetId }, "Automatische Erstanalyse bereits vorhanden — übersprungen");
+      }
     } catch (err) {
-      logger.warn({ err, datasetId: file.datasetId }, "Automatische Erstanalyse fehlgeschlagen");
+      logger.warn({ err, datasetId: file.datasetId }, "Automatische Erstanalyse konnte nicht gestartet werden");
     }
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {

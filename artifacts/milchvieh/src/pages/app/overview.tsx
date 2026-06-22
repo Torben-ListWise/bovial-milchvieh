@@ -1,9 +1,53 @@
-import { useGetDatasetOverview, getGetDatasetOverviewQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import { Link } from "wouter";
+import {
+  useGetDatasetOverview,
+  getGetDatasetOverviewQueryKey,
+  useListAnalyses,
+  getListAnalysesQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Bot, X, ArrowRight } from "lucide-react";
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
+
+function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; datasetId: string }) {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    return localStorage.getItem(`auto-banner-dismissed-${datasetId}`) === "1";
+  });
+
+  if (dismissed) return null;
+
+  function handleDismiss() {
+    localStorage.setItem(`auto-banner-dismissed-${datasetId}`, "1");
+    setDismissed(true);
+  }
+
+  return (
+    <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-5 py-3">
+      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+        <Bot className="w-4 h-4 text-primary" />
+      </div>
+      <p className="flex-1 text-sm font-medium text-foreground">
+        🤖 Erstanalyse bereit — Ihr vollständiger Betriebsspiegel wurde automatisch erstellt.
+      </p>
+      <Link href={`/app/analyses?datasetId=${datasetId}&analysisId=${analysisId}`}>
+        <div className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline shrink-0 cursor-pointer">
+          Ansehen
+          <ArrowRight className="w-4 h-4" />
+        </div>
+      </Link>
+      <button
+        onClick={handleDismiss}
+        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground shrink-0"
+        title="Schließen"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 export function DatasetOverview() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
@@ -11,6 +55,16 @@ export function DatasetOverview() {
   const { data: overview, isLoading } = useGetDatasetOverview(datasetId!, {
     query: { enabled: !!datasetId, queryKey: getGetDatasetOverviewQueryKey(datasetId!) }
   });
+
+  const { data: analyses } = useListAnalyses(datasetId!, {
+    query: {
+      enabled: !!datasetId,
+      queryKey: getListAnalysesQueryKey(datasetId!),
+      staleTime: 30_000,
+    },
+  });
+
+  const autoAnalysis = analyses?.find((a) => a.source === "auto" && a.templateRef === "auto_erstanalyse");
 
   if (datasetLoading || !datasetId) {
     return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
@@ -34,6 +88,10 @@ export function DatasetOverview() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {autoAnalysis && (
+        <AutoAnalysisBanner analysisId={autoAnalysis.id} datasetId={datasetId} />
+      )}
+
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-foreground">Übersicht</h1>
         {overview.warningCount > 0 && (

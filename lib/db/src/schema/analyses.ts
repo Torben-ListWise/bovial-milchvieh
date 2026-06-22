@@ -19,6 +19,7 @@ export const analysesTable = pgTable(
     pinned: boolean("pinned").notNull().default(false),
     tags: jsonb("tags").notNull().default([]),
     source: text("source").default("user"),
+    templateRef: text("template_ref"),
     agentProgress: text("agent_progress"),
     agentSteps: jsonb("agent_steps").default([]),
     createdAt: timestamp("created_at", { withTimezone: true })
