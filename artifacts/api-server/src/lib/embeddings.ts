@@ -49,14 +49,18 @@ export function chunkText(
   return chunks.slice(0, MAX_CHUNKS);
 }
 
-async function embedSingle(text: string, apiKey: string): Promise<number[]> {
+async function embedSingle(
+  text: string,
+  apiKey: string,
+  maxRetries = MAX_RETRIES,
+): Promise<number[]> {
   const url = `${GEMINI_API_BASE}/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
   const body = {
     content: { parts: [{ text }] },
     outputDimensionality: EMBEDDING_DIMENSIONS,
   };
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -83,14 +87,18 @@ async function embedSingle(text: string, apiKey: string): Promise<number[]> {
   throw new Error("Gemini Embedding: Maximale Wiederholungsversuche erreicht");
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+export async function embedTexts(
+  texts: string[],
+  options?: { maxRetries?: number },
+): Promise<number[][]> {
   if (texts.length === 0) return [];
 
   const apiKey = getApiKey();
   const results: number[][] = [];
+  const maxRetries = options?.maxRetries ?? MAX_RETRIES;
 
   for (let i = 0; i < texts.length; i++) {
-    const embedding = await embedSingle(texts[i], apiKey);
+    const embedding = await embedSingle(texts[i], apiKey, maxRetries);
     results.push(embedding);
     if (i < texts.length - 1) {
       await new Promise((r) => setTimeout(r, INTER_CHUNK_DELAY_MS));
