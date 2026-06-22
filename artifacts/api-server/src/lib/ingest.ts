@@ -219,6 +219,26 @@ async function extractPptxText(buf: Buffer): Promise<string> {
   }
 }
 
+async function extractDocxText(buf: Buffer): Promise<string> {
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    const docXml = zip.files["word/document.xml"];
+    if (!docXml) return "";
+    const xml = await docXml.async("string");
+    // Extract text runs, insert newline at paragraph boundaries
+    const text = xml
+      .replace(/<w:p[ >]/g, "\n<w:p ")
+      .replace(/<w:t[^>]*>([^<]*)<\/w:t>/g, "$1")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return text;
+  } catch (err) {
+    logger.warn({ err }, "DOCX-Textextraktion fehlgeschlagen");
+    return "";
+  }
+}
+
 // Scan up to the first MAX_HEADER_SCAN rows and return the index of the row
 // that has the most canonical-field header matches. Handles exports where
 // the first N rows are metadata / title lines before the actual data header.
@@ -550,6 +570,8 @@ export async function ingestKnowledgeDoc(docId: string): Promise<void> {
     let text = "";
     if (doc.fileType === "pptx") {
       text = await extractPptxText(buf);
+    } else if (doc.fileType === "docx") {
+      text = await extractDocxText(buf);
     } else if (doc.fileType === "excel" || doc.fileType === "csv" || doc.fileType === "tsv") {
       const rows = parseSpreadsheet(buf, doc.filename);
       text = rows.map((row) => row.join("\t")).join("\n");

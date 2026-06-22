@@ -171,7 +171,7 @@ export function KnowledgePage() {
     }
   }
 
-  const ALLOWED_EXTS = [".pdf", ".pptx", ".xlsx", ".xls", ".csv", ".tsv", ".txt"];
+  const ALLOWED_EXTS = [".pdf", ".pptx", ".ppt", ".xlsx", ".xls", ".ods", ".csv", ".tsv", ".txt", ".docx", ".doc"];
 
   function addFiles(files: File[]) {
     const valid = files.filter((f) =>
@@ -180,7 +180,7 @@ export function KnowledgePage() {
     if (valid.length === 0) {
       toast({
         title: "Ungültiges Format",
-        description: "Unterstützte Formate: PDF, PPTX, Excel, CSV, TSV, TXT.",
+        description: "Unterstützte Formate: PDF, Word, Excel, PowerPoint, CSV, TXT.",
         variant: "destructive",
       });
       return;
@@ -249,12 +249,12 @@ export function KnowledgePage() {
             <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
             <p className="font-medium text-sm">Datei hierher ziehen</p>
             <p className="text-xs text-muted-foreground mt-1">
-              PDF, PPTX, Excel, CSV, TSV, TXT — oder klicken zum Auswählen
+              PDF, Word, Excel, PowerPoint, CSV, TXT — oder klicken zum Auswählen
             </p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.pptx,.xlsx,.xls,.csv,.tsv,.txt"
+              accept=".pdf,.pptx,.ppt,.xlsx,.xls,.ods,.csv,.tsv,.txt,.docx,.doc"
               multiple
               className="hidden"
               onChange={(e) => addFiles(Array.from(e.target.files ?? []))}

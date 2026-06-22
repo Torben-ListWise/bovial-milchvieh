@@ -79,8 +79,9 @@ router.post(
     }
     const { filename, contentType, size, title } = parsed.data;
     const l = filename.toLowerCase();
-    const fileType = l.endsWith(".pptx") ? "pptx"
-      : l.endsWith(".xlsx") || l.endsWith(".xls") ? "excel"
+    const fileType = l.endsWith(".pptx") || l.endsWith(".ppt") ? "pptx"
+      : l.endsWith(".docx") || l.endsWith(".doc") ? "docx"
+      : l.endsWith(".xlsx") || l.endsWith(".xls") || l.endsWith(".ods") ? "excel"
       : l.endsWith(".csv") ? "csv"
       : l.endsWith(".tsv") ? "tsv"
       : l.endsWith(".txt") ? "txt"
