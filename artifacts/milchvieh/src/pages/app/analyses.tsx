@@ -305,7 +305,17 @@ function SystemMessageBubble({ msg }: { msg: SystemMsg }) {
 
 // ── Message bubble ───────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isNew }: { msg: AnalysisMessage; isNew: boolean }) {
+function MessageBubble({
+  msg,
+  isNew,
+  isLast,
+  isAgentWorking,
+}: {
+  msg: AnalysisMessage;
+  isNew: boolean;
+  isLast?: boolean;
+  isAgentWorking?: boolean;
+}) {
   const isAssistant = msg.role === "assistant";
   return (
     <div className={cn("flex gap-3", isAssistant ? "justify-start" : "justify-end")}>
@@ -324,8 +334,15 @@ function MessageBubble({ msg, isNew }: { msg: AnalysisMessage; isNew: boolean })
           )}
         >
           {msg.error ? (
-            <span className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="w-4 h-4" /> {msg.error}
+            <span className="flex flex-col gap-1">
+              <span className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {msg.content ?? msg.error}
+              </span>
+              {isLast && !isAgentWorking && (
+                <span className="text-xs text-muted-foreground pl-6">
+                  Bitte stelle deine Frage erneut.
+                </span>
+              )}
             </span>
           ) : isAssistant ? (
             <StreamingText text={msg.content ?? ""} animate={isNew} />
@@ -848,12 +865,12 @@ export function AnalysesPage() {
     }
   }, [analysis?.messages?.length, currentStep, systemMessages.length, isAgentWorking]);
 
-  // Auto-focus input when agent finishes with a back-question
+  // Auto-focus input when agent finishes with a back-question or an error
   useEffect(() => {
     if (isAgentWorking) return;
     const msgs = analysis?.messages ?? [];
     const lastMsg = msgs[msgs.length - 1];
-    if (lastMsg?.role === "assistant" && isBackQuestion(lastMsg.content)) {
+    if (lastMsg?.role === "assistant" && (isBackQuestion(lastMsg.content) || lastMsg.error != null)) {
       inputRef.current?.focus();
     }
   }, [isAgentWorking]);
@@ -1117,7 +1134,12 @@ export function AnalysesPage() {
             )}
             {msgs.map((msg, idx) => (
               <div key={msg.id}>
-                <MessageBubble msg={msg} isNew={isNewMessage(msg)} />
+                <MessageBubble
+                  msg={msg}
+                  isNew={isNewMessage(msg)}
+                  isLast={idx === msgs.length - 1}
+                  isAgentWorking={isAgentWorking}
+                />
                 {/* Follow-up chips after last assistant message, only when idle */}
                 {msg.role === "assistant" &&
                   idx === lastAssistantIdx &&
