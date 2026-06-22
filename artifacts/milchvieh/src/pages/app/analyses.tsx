@@ -38,7 +38,7 @@ import {
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
   Plus, X, RefreshCw,
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
-  Layers, Database, Search, Cog,
+  Layers, Database, Search, Cog, ArrowDown,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -776,6 +776,7 @@ export function AnalysesPage() {
   });
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
   const [neueDatatenDismissed, setNeueDatatenDismissed] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -1065,12 +1066,35 @@ export function AnalysesPage() {
     autoAnalysis != null &&
     latestFileTime > autoAnalysisTime + 30_000; // 30s buffer for race
 
+  // ── Scroll-to-bottom tracking ───────────────────────────────────────────────
+
+  function handleChatScroll() {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollButton(distFromBottom > 100);
+  }
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  const scrollToBottomButton = showScrollButton ? (
+    <button
+      onClick={scrollToBottom}
+      className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border shadow-md text-xs text-foreground hover:bg-accent transition-colors"
+    >
+      <ArrowDown className="w-3.5 h-3.5" />
+      Zur neuesten Antwort
+    </button>
+  ) : null;
+
   // ── Chat zone renderer ─────────────────────────────────────────────────────
 
   function renderChatContent() {
     if (!activeAnalysisId && !createAnalysis.isPending && systemMessages.length === 0) {
       return (
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
           <AnalysisHistoryPanel
             analyses={analysesListItems}
             activeAnalysisId={activeAnalysisId}
@@ -1084,7 +1108,7 @@ export function AnalysesPage() {
               onNewAnalysis={handleNewAnalysis}
             />
           )}
-          <div ref={chatScrollRef} className="flex-1 overflow-y-auto min-h-0">
+          <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto min-h-0">
             <HistoricalFiles files={historicalFiles} />
             <StarterQuestions
                 hasFiles={hasFiles}
@@ -1095,28 +1119,33 @@ export function AnalysesPage() {
                 }}
                 onAsk={handleStarterQuestion}
               />
+            <div ref={bottomRef} />
           </div>
+          {scrollToBottomButton}
         </div>
       );
     }
 
     if (createAnalysis.isPending && !activeAnalysisId) {
       return (
-        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
-          <HistoricalFiles files={historicalFiles} />
-          {systemMessages.map((m) => (
-            <SystemMessageBubble key={m.id} msg={m} />
-          ))}
-          <div className="flex gap-3 justify-end">
-            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
-              {pendingQuestionRef.current || question}
+        <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
+            <HistoricalFiles files={historicalFiles} />
+            {systemMessages.map((m) => (
+              <SystemMessageBubble key={m.id} msg={m} />
+            ))}
+            <div className="flex gap-3 justify-end">
+              <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
+                {pendingQuestionRef.current || question}
+              </div>
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
+                <User className="w-3.5 h-3.5 text-primary-foreground" />
+              </div>
             </div>
-            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
-              <User className="w-3.5 h-3.5 text-primary-foreground" />
-            </div>
+            <AgentStepsTimeline completedSteps={[]} currentStep={null} />
+            <div ref={bottomRef} />
           </div>
-          <AgentStepsTimeline completedSteps={[]} currentStep={null} />
-          <div ref={bottomRef} />
+          {scrollToBottomButton}
         </div>
       );
     }
@@ -1128,7 +1157,7 @@ export function AnalysesPage() {
     );
 
     return (
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
         <AnalysisHistoryPanel
           analyses={analysesListItems}
           activeAnalysisId={activeAnalysisId}
@@ -1136,7 +1165,7 @@ export function AnalysesPage() {
           onSelect={(id) => { setActiveAnalysisId(id); pendingQuestionRef.current = ""; }}
           onNew={handleNewAnalysis}
         />
-      <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
+      <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
         <HistoricalFiles files={historicalFiles} />
         <div className="space-y-5">
           {systemMessages.map((m) => (
@@ -1196,6 +1225,7 @@ export function AnalysesPage() {
           <div ref={bottomRef} />
         </div>
       </div>
+      {scrollToBottomButton}
       </div>
     );
   }
