@@ -2,8 +2,9 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureExtensions, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
-import { eq, isNotNull, desc } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
+import { warmupEmbeddingModel, LOCAL_MODEL_NAME } from "./lib/embeddings";
 
 const rawPort = process.env["PORT"];
 
@@ -17,6 +18,56 @@ const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
+/**
+ * Mark all 'ready' documents that were embedded with the old Gemini model
+ * (embeddingModel IS NULL) as 'pending' so they get re-embedded with the
+ * local model on the next resumePendingIngestions() call.
+ */
+async function markLegacyDocsForReembedding(): Promise<void> {
+  try {
+    // Find 'ready' docs where embeddingModel IS NULL (old Gemini API) or differs from local model
+    const toMigrate = await db
+      .select({
+        id: knowledgeDocumentsTable.id,
+        title: knowledgeDocumentsTable.title,
+      })
+      .from(knowledgeDocumentsTable)
+      .where(
+        and(
+          eq(knowledgeDocumentsTable.status, "ready"),
+          or(
+            isNull(knowledgeDocumentsTable.embeddingModel),
+            ne(knowledgeDocumentsTable.embeddingModel, LOCAL_MODEL_NAME),
+          ),
+        ),
+      );
+
+    if (toMigrate.length === 0) {
+      logger.info("Alle Dokumente sind bereits mit dem lokalen Modell eingebettet");
+      return;
+    }
+
+    logger.info(
+      { count: toMigrate.length, model: LOCAL_MODEL_NAME },
+      "Re-Embedding: Setze veraltete Dokumente auf 'pending'",
+    );
+
+    for (const doc of toMigrate) {
+      await db
+        .update(knowledgeDocumentsTable)
+        .set({ status: "pending" })
+        .where(eq(knowledgeDocumentsTable.id, doc.id));
+    }
+
+    logger.info(
+      { count: toMigrate.length },
+      "Re-Embedding: Dokumente bereit für Neu-Einbettung",
+    );
+  } catch (err) {
+    logger.warn({ err }, "markLegacyDocsForReembedding fehlgeschlagen");
+  }
 }
 
 async function resumePendingIngestions() {
@@ -35,7 +86,6 @@ async function resumePendingIngestions() {
       } catch (err) {
         logger.warn({ id: doc.id, err }, "Ingestion fehlgeschlagen — nächstes Dokument");
       }
-      await new Promise((r) => setTimeout(r, 2000));
     }
   } catch (err) {
     logger.warn({ err }, "resumePendingIngestions fehlgeschlagen");
@@ -109,7 +159,13 @@ ensureExtensions()
       logger.info({ port }, "Server listening");
       startScheduler();
       void clearOrphanedAnalyses();
-      void resumePendingIngestions();
+
+      // Load local embedding model in background, then migrate legacy docs and
+      // run any pending ingestions. Server is already accepting requests.
+      void warmupEmbeddingModel()
+        .then(() => markLegacyDocsForReembedding())
+        .then(() => resumePendingIngestions())
+        .catch((err) => logger.error({ err }, "Embedding-Startup fehlgeschlagen"));
     });
   })
   .catch((err) => {

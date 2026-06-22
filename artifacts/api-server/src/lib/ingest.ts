@@ -32,7 +32,7 @@ import {
   knowledgeChunksTable,
   type SourceFile,
 } from "@workspace/db";
-import { chunkText, embedTexts } from "./embeddings";
+import { chunkText, embedTexts, LOCAL_MODEL_NAME } from "./embeddings";
 import {
   ObjectStorageService,
   ObjectNotFoundError,
@@ -612,7 +612,7 @@ export async function ingestKnowledgeDoc(docId: string): Promise<void> {
 
     await db
       .update(knowledgeDocumentsTable)
-      .set({ status: "ready", chunkCount: chunks.length })
+      .set({ status: "ready", chunkCount: chunks.length, embeddingModel: LOCAL_MODEL_NAME })
       .where(eq(knowledgeDocumentsTable.id, docId));
   } catch (err) {
     logger.error({ err, docId }, "Knowledge-Ingestion fehlgeschlagen");

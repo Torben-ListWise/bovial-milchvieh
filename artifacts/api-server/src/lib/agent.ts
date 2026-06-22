@@ -12,7 +12,7 @@ import {
   knowledgeDocumentsTable,
   knowledgeChunksTable,
 } from "@workspace/db";
-import { embedTexts } from "./embeddings";
+import { embedQuery } from "./embeddings";
 import {
   getDatasetSchema,
   computeMetricStats,
@@ -575,13 +575,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
         try {
-          // Fast-fail: only 2 retries + 10s total timeout to avoid blocking the agent
-          // when background ingestion is saturating the Gemini rate limit.
-          const embedPromise = embedTexts([query], { maxRetries: 2 });
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Embedding-Timeout")), 10_000),
-          );
-          const [queryVec] = await Promise.race([embedPromise, timeoutPromise]);
+          const queryVec = await embedQuery(query);
           const vecStr = `[${queryVec.join(",")}]`;
           const rows = await db.execute(
             sql`
@@ -598,13 +592,6 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           );
           return { results };
         } catch (err) {
-          // On timeout or rate-limit: skip knowledge search gracefully instead of blocking
-          const isTimeout = err instanceof Error && err.message.includes("Timeout");
-          const isRateLimit = err instanceof Error && err.message.includes("Wiederholungsversuche");
-          if (isTimeout || isRateLimit) {
-            logger.warn({ err }, "search_knowledge: Embedding nicht verfügbar, übersprungen");
-            return { results: [], note: "Wissensdatenbank vorübergehend nicht verfügbar" };
-          }
           logger.error({ err }, "search_knowledge fehlgeschlagen");
           return { error: "Suche fehlgeschlagen" };
         }

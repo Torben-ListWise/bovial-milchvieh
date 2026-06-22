@@ -41,6 +41,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"
   );
+  // Migration: embedding_model column to track which model embedded each document
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS embedding_model TEXT"
+  );
   // Performance: HNSW vector index for fast cosine similarity search on knowledge chunks
   await pool.query(`
     CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx

@@ -1,22 +1,77 @@
+import { pipeline, env } from "@huggingface/transformers";
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import { logger } from "./logger";
 
-const EMBEDDING_MODEL = "gemini-embedding-001";
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const EMBEDDING_DIMENSIONS = 768;
-const MAX_RETRIES = 8;
-const INTER_CHUNK_DELAY_MS = 400;
+export const LOCAL_MODEL_NAME = "multilingual-e5-base";
+const HF_MODEL_ID = "Xenova/multilingual-e5-base";
+
 const MAX_CHUNKS = 500;
 const CHUNK_SIZE = 600;
 const CHUNK_OVERLAP = 100;
 
-function getApiKey(): string {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "GOOGLE_API_KEY ist nicht konfiguriert. Bitte hinterlegen Sie Ihren Google API-Schlüssel.",
-    );
+// Persist model weights across restarts in a local cache directory
+env.cacheDir = "./.hf-cache";
+
+// Singleton: loaded once on warmup, reused for all calls
+let _modelPromise: Promise<FeatureExtractionPipeline> | null = null;
+
+function getModel(): Promise<FeatureExtractionPipeline> {
+  if (!_modelPromise) {
+    _modelPromise = pipeline("feature-extraction", HF_MODEL_ID, {
+      dtype: "fp32",
+    }) as Promise<FeatureExtractionPipeline>;
   }
-  return apiKey;
+  return _modelPromise;
+}
+
+/**
+ * Pre-load the model at server startup. All embedTexts/embedQuery calls
+ * automatically wait for this — but calling warmup early avoids latency
+ * on the first real user request.
+ */
+export async function warmupEmbeddingModel(): Promise<void> {
+  try {
+    logger.info({ model: HF_MODEL_ID }, "Lade lokales Embedding-Modell...");
+    await getModel();
+    logger.info(
+      { model: HF_MODEL_ID },
+      "Embedding-Modell bereit (lokal, kein API-Key nötig)",
+    );
+  } catch (err) {
+    logger.error({ err }, "Embedding-Modell konnte nicht geladen werden");
+    throw err;
+  }
+}
+
+async function embedOne(text: string): Promise<number[]> {
+  const model = await getModel();
+  // pooling: "mean" + normalize: true handles mean pooling + L2 normalization
+  // required by nomic-embed-text-v1.5 for correct cosine similarity
+  const output = await model(text, { pooling: "mean", normalize: true });
+  return Array.from(output.data as Float32Array);
+}
+
+/**
+ * Embed document chunks for ingestion.
+ * Uses "passage: " prefix as required by multilingual-e5-base.
+ * No rate limiting — runs locally.
+ */
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  const results: number[][] = [];
+  for (const text of texts) {
+    results.push(await embedOne(`passage: ${text}`));
+  }
+  return results;
+}
+
+/**
+ * Embed a search query.
+ * Uses "query: " prefix as required by multilingual-e5-base for retrieval accuracy.
+ */
+export async function embedQuery(text: string): Promise<number[]> {
+  return embedOne(`query: ${text}`);
 }
 
 export function chunkText(
@@ -47,63 +102,4 @@ export function chunkText(
   }
 
   return chunks.slice(0, MAX_CHUNKS);
-}
-
-async function embedSingle(
-  text: string,
-  apiKey: string,
-  maxRetries = MAX_RETRIES,
-): Promise<number[]> {
-  const url = `${GEMINI_API_BASE}/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
-  const body = {
-    content: { parts: [{ text }] },
-    outputDimensionality: EMBEDDING_DIMENSIONS,
-  };
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (res.status === 429) {
-      const delay = Math.min(Math.pow(2, attempt + 1) * 1000, 60000);
-      logger.warn({ attempt: attempt + 1, delayMs: delay }, "Rate-Limit — Retry nach Backoff");
-      await new Promise((r) => setTimeout(r, delay));
-      continue;
-    }
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error(`Gemini Embedding API Fehler ${res.status}: ${errText}`);
-    }
-
-    const json = (await res.json()) as { embedding: { values: number[] } };
-    return json.embedding.values;
-  }
-
-  throw new Error("Gemini Embedding: Maximale Wiederholungsversuche erreicht");
-}
-
-export async function embedTexts(
-  texts: string[],
-  options?: { maxRetries?: number },
-): Promise<number[][]> {
-  if (texts.length === 0) return [];
-
-  const apiKey = getApiKey();
-  const results: number[][] = [];
-  const maxRetries = options?.maxRetries ?? MAX_RETRIES;
-
-  for (let i = 0; i < texts.length; i++) {
-    const embedding = await embedSingle(texts[i], apiKey, maxRetries);
-    results.push(embedding);
-    if (i < texts.length - 1) {
-      await new Promise((r) => setTimeout(r, INTER_CHUNK_DELAY_MS));
-    }
-  }
-
-  return results;
 }
