@@ -1622,6 +1622,7 @@ export function AnalysesPage() {
   });
 
   const { startStream, stopStream } = useAnalysisStream({
+    getToken,
     onDelta: streaming.onDelta,
     onProgress: streaming.onProgress,
     onChart: streaming.onChart,

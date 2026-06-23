@@ -465,9 +465,9 @@ async function callWithRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<
       return await fn();
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
-      if (status === 500 && attempt < maxAttempts) {
-        const delay = 500 * attempt;
-        logger.warn({ attempt, delay }, "Anthropic 500 — Wiederhole...");
+      if ((status === 500 || status === 529) && attempt < maxAttempts) {
+        const delay = 1000 * attempt;
+        logger.warn({ attempt, delay, status }, "Anthropic transient error — Wiederhole...");
         await new Promise((r) => setTimeout(r, delay));
         lastErr = err;
         continue;

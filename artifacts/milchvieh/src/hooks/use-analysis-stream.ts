@@ -8,6 +8,8 @@ export type StreamCallbacks = {
   onSources: (sources: string[]) => void;
   onDone: () => void;
   onFallback?: () => void;
+  /** Return a Clerk JWT; required because the stream endpoint uses Bearer auth. */
+  getToken: () => Promise<string | null>;
 };
 
 const MAX_RETRIES = 3;
@@ -33,10 +35,13 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
 
     (async () => {
       try {
+        const token = await callbacksRef.current.getToken();
         const res = await fetch(`${API_BASE}/api/analyses/${analysisId}/stream`, {
           signal: ctrl.signal,
-          headers: { Accept: "text/event-stream" },
-          credentials: "include",
+          headers: {
+            Accept: "text/event-stream",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         });
 
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
