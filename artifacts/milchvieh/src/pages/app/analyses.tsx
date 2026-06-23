@@ -1022,6 +1022,12 @@ export function AnalysesPage() {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = 0;
   }, [analysis?.messages?.length]);
 
+  // Scroll to bottom immediately when the user switches to a different analysis.
+  useEffect(() => {
+    if (!activeAnalysisId) return;
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+  }, [activeAnalysisId]);
+
   // Auto-scroll to bottom when new messages or system messages arrive.
   // Skip when the newest message is a user message — the effect above
   // already scrolled to top; we only want to scroll down when the
