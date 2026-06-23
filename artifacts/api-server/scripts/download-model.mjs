@@ -3,7 +3,8 @@
  * local .hf-cache directory so the server starts instantly without needing
  * to fetch ~280 MB from HuggingFace on first use.
  *
- * Run automatically as part of `build.mjs`. Safe to run repeatedly —
+ * Run automatically via the `postinstall` script in package.json whenever
+ * `pnpm install` is executed. Safe to run repeatedly —
  * exits immediately if the model files are already present.
  */
 

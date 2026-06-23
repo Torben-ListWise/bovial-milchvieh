@@ -38,7 +38,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The `artifacts/api-server/.hf-cache` directory (~280 MB) is git-ignored. The embedding model (`Xenova/multilingual-e5-base`) is downloaded automatically by the `postinstall` script when you run `pnpm install`. Do not commit `.hf-cache` to git.
 
 ## Pointers
 
