@@ -3,8 +3,10 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import { logger } from "./logger";
 
 export const EMBEDDING_DIMENSIONS = 768;
-export const LOCAL_MODEL_NAME = "nomic-embed-text-v1.5";
-const HF_MODEL_ID = "Xenova/nomic-embed-text-v1.5";
+export const LOCAL_MODEL_NAME = "multilingual-e5-base";
+// nomic-embed-text-v1.5 ONNX requires onnx-community license acceptance (gated).
+// multilingual-e5-base is fully public, 768-dim, excellent German support.
+const HF_MODEL_ID = "Xenova/multilingual-e5-base";
 
 const MAX_CHUNKS = 500;
 const CHUNK_SIZE = 600;
@@ -12,12 +14,6 @@ const CHUNK_OVERLAP = 100;
 
 // Persist model weights across restarts in a local cache directory
 env.cacheDir = "./.hf-cache";
-
-// Support optional HF token — required to download the gated nomic model
-// (user must accept nomic license at huggingface.co/Xenova/nomic-embed-text-v1.5)
-if (process.env.HF_TOKEN) {
-  env.authToken = process.env.HF_TOKEN;
-}
 
 // ────────────────────────────────────────────────────────────────────
 // Exported stable promise — resolves when the model is fully loaded.
@@ -79,24 +75,24 @@ async function embedOne(text: string): Promise<number[]> {
 
 /**
  * Embed document chunks for ingestion.
- * Uses "search_document: " prefix as required by nomic-embed-text-v1.5.
+ * Uses "passage: " prefix as required by multilingual-e5-base.
  * No rate limiting — runs locally.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
   const results: number[][] = [];
   for (const text of texts) {
-    results.push(await embedOne(`search_document: ${text}`));
+    results.push(await embedOne(`passage: ${text}`));
   }
   return results;
 }
 
 /**
  * Embed a search query.
- * Uses "search_query: " prefix for nomic-embed-text-v1.5 retrieval accuracy.
+ * Uses "query: " prefix for multilingual-e5-base retrieval accuracy.
  */
 export async function embedQuery(text: string): Promise<number[]> {
-  return embedOne(`search_query: ${text}`);
+  return embedOne(`query: ${text}`);
 }
 
 export function chunkText(

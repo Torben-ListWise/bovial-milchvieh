@@ -6,9 +6,9 @@ description: Local embedding model setup — which model works, which doesn't, a
 ## Rule
 Use `Xenova/multilingual-e5-base` via `@huggingface/transformers` for all embeddings.
 
-**Why:** `Xenova/nomic-embed-text-v1.5` is a gated HuggingFace model requiring account consent — returns HTTP 401 from Replit even though the model is "public". `multilingual-e5-base` is genuinely open, returns 307→CDN without auth, and has excellent German-language support (critical for dairy farm content).
+**Why:** `Xenova/nomic-embed-text-v1.5` was the original spec target but no longer exists — Xenova org renamed to `onnx-community`. `onnx-community/nomic-embed-text-v1.5` is a gated model requiring separate license acceptance at onnx-community (even with HF_TOKEN set), returns 404 for the @huggingface/transformers library when license not accepted. `multilingual-e5-base` is fully open (307 without auth), 768-dim, proven to work for German dairy content.
 
-## Required text prefixes (e5-base convention)
+## Required text prefixes (multilingual-e5 convention)
 - Document ingestion: `passage: <text>`
 - Query at search time: `query: <text>`
 
@@ -19,9 +19,17 @@ Wrong prefixes silently degrade retrieval quality.
 - `HF_MODEL_ID = "Xenova/multilingual-e5-base"` in embeddings.ts
 - Dimensions: 768 — matches HNSW index and existing schema
 - Cache: `env.cacheDir = "./.hf-cache"` (relative to process CWD = api-server root)
-- First load: ~26s (model download ~280MB ONNX); subsequent loads from disk cache
-- `embedTexts()` uses `passage:` prefix; `embedQuery()` uses `query:` prefix
+- First load: ~25s (model download ~280MB); subsequent loads from disk cache
+- `HF_TOKEN` secret is set but not needed for this model (can be ignored)
 
-## Migration logic (markLegacyDocsForReembedding)
-- On startup: docs where `embedding_model IS NULL OR embedding_model != LOCAL_MODEL_NAME` and `status = 'ready'` are reset to `pending` for re-ingestion
-- Docs stuck in `processing` state (e.g. from crashed URL scrapes) must be manually reset to `pending` via SQL — the migration only targets `ready` docs
+## Exported embeddingModelReady promise
+- `embeddingModelReady: Promise<void>` exported from embeddings.ts
+- Resolves when warmup completes, rejects on failure
+- Has `.catch(() => {})` guard to prevent unhandled rejection crashing Node.js v24
+- All embed functions await this internally — callers don't need to worry about ordering
+- `warmupEmbeddingModel()` called after `app.listen()` so server is already accepting requests
+
+## Re-embedding migration (reembedLegacyDocs in index.ts)
+- On startup: after warmup, drops HNSW index, re-ingests each legacy doc (embedding_model IS NULL or != LOCAL_MODEL_NAME), recreates HNSW index
+- `ingestKnowledgeDoc()` is atomic per doc: delete old chunks → embed → insert → set embedding_model
+- Docs stuck in `processing` state are NOT auto-reset — must be manually reset via SQL to `pending`
