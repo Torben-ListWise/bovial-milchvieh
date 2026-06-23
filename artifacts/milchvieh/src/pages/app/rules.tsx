@@ -30,6 +30,7 @@ import { Plus, Sliders, Activity, Trash2, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 // Canonical metric keys exposed to users with German labels
 const METRIC_OPTIONS = [
@@ -236,6 +237,7 @@ function RuleDialog({
 
 export function RulesPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Rule | null>(null);
 
@@ -248,6 +250,10 @@ export function RulesPage() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListRulesQueryKey() });
         setDialogOpen(false);
+        toast({ title: "Regel erstellt" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Regel konnte nicht gespeichert werden." });
       },
     },
   });
@@ -258,6 +264,10 @@ export function RulesPage() {
         queryClient.invalidateQueries({ queryKey: getListRulesQueryKey() });
         setDialogOpen(false);
         setEditTarget(null);
+        toast({ title: "Regel aktualisiert" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Regel konnte nicht aktualisiert werden." });
       },
     },
   });
@@ -266,6 +276,10 @@ export function RulesPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListRulesQueryKey() });
+        toast({ title: "Regel gelöscht" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Regel konnte nicht gelöscht werden." });
       },
     },
   });

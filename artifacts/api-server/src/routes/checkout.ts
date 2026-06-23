@@ -5,14 +5,20 @@ import Stripe from "stripe";
 
 const router: IRouter = Router();
 
+// Instantiate Stripe once at module load — not on every request.
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: "2025-05-28.basil" })
+  : null;
+
 const STRIPE_PLANS: Record<string, { priceId: string; name: string }> = {
   starter: {
     priceId: process.env.STRIPE_PRICE_STARTER ?? "",
-    name: "Starter",
+    name: "Professional",
   },
   pro: {
     priceId: process.env.STRIPE_PRICE_PRO ?? "",
-    name: "Pro",
+    name: "Premium",
   },
 };
 
@@ -26,8 +32,7 @@ router.post(
   "/api/checkout/create-session",
   requireAuth,
   async (req: Request, res: Response): Promise<void> => {
-    const secretKey = process.env.STRIPE_SECRET_KEY;
-    if (!secretKey) {
+    if (!stripe) {
       res.status(503).json({
         error: "Stripe ist derzeit nicht konfiguriert. Bitte kontaktiere den Support.",
       });
@@ -51,8 +56,6 @@ router.post(
     }
 
     try {
-      const stripe = new Stripe(secretKey, { apiVersion: "2025-05-28.basil" });
-
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         customer_email: req.appUser?.email ?? undefined,
@@ -64,15 +67,6 @@ router.post(
           planKey,
         },
         locale: "de",
-        consent_collection: {
-          terms_of_service: "required",
-        },
-        custom_text: {
-          terms_of_service_acceptance: {
-            message:
-              "Ich habe die [AGB]({{terms_url}}) und [Datenschutzerklärung]({{privacy_url}}) gelesen und stimme ihnen zu.",
-          },
-        },
       });
 
       res.json({ url: session.url });

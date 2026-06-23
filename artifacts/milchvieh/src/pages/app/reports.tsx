@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useAuth } from "@clerk/react";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -15,6 +16,7 @@ export function ReportsPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
   const { getToken } = useAuth();
+  const { toast } = useToast();
 
   const { data: reports, isLoading } = useListReports(
     datasetId ?? "",
@@ -25,23 +27,38 @@ export function ReportsPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListReportsQueryKey(datasetId ?? "") });
-      }
+        toast({ title: "Bericht wird generiert", description: "Er erscheint in wenigen Sekunden in der Liste." });
+      },
+      onError: () => {
+        toast({
+          variant: "destructive",
+          title: "Fehler",
+          description: "Bericht konnte nicht erstellt werden. Bitte versuche es erneut.",
+        });
+      },
     }
   });
 
   const handleDownload = async (reportId: string, title: string) => {
-    const token = await getToken();
-    const resp = await fetch(`${API_BASE}/api/reports/${reportId}/pdf`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!resp.ok) return;
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title.replace(/[^a-z0-9äöü_\-]/gi, "_")}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const token = await getToken();
+      const resp = await fetch(`${API_BASE}/api/reports/${reportId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        toast({ variant: "destructive", title: "Download fehlgeschlagen", description: "Bericht konnte nicht geladen werden." });
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title.replace(/[^a-z0-9äöü_\-]/gi, "_")}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ variant: "destructive", title: "Netzwerkfehler", description: "Download fehlgeschlagen. Bitte Verbindung prüfen." });
+    }
   };
 
   if (datasetLoading || !datasetId) {

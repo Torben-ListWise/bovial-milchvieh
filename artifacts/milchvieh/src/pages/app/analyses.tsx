@@ -1015,10 +1015,11 @@ function BackQuestionForm({
             </div>
             <textarea
               rows={1}
+              maxLength={4_000}
               disabled={skipped[i]}
               value={answers[i]}
               onChange={(e) => {
-                const v = e.target.value;
+                const v = e.target.value.slice(0, 4_000);
                 setAnswers((prev) => prev.map((a, idx) => (idx === i ? v : a)));
               }}
               placeholder="Deine Antwort…"
@@ -2514,7 +2515,8 @@ export function AnalysesPage() {
         <Input
           ref={inputRef}
           value={question}
-          onChange={(e) => setQuestion(e.target.value)}
+          onChange={(e) => setQuestion(e.target.value.slice(0, 4_000))}
+          maxLength={4_000}
           placeholder={
             activeAnalysisId
               ? "Folgefrage stellen…"

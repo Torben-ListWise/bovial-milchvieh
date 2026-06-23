@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useUpdateMe, useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Sparkles } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const FOCUS_OPTIONS: { value: string; label: string; emoji: string; description: string }[] = [
   { value: "milchvieh", label: "Milchvieh", emoji: "🐄", description: "Milchkühe, Herde, Eutergesundheit" },
@@ -45,11 +46,15 @@ export function FocusAreasOnboardingDialog({
   const [selected, setSelected] = useState<string[]>([]);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const updateMe = useUpdateMe({
     mutation: {
       onSuccess: (data) => {
         queryClient.setQueryData(getGetCurrentUserQueryKey(), data);
         onClose();
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Betriebsschwerpunkt konnte nicht gespeichert werden." });
       },
     },
   });

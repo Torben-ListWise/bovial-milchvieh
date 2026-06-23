@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   datasetsTable,
@@ -101,14 +101,23 @@ router.get(
       .from(analysesTable)
       .where(eq(analysesTable.datasetId, datasetId))
       .orderBy(desc(analysesTable.pinned), desc(analysesTable.updatedAt));
-    const out = [];
-    for (const a of rows) {
-      const [c] = await db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(messagesTable)
-        .where(eq(messagesTable.analysisId, a.id));
-      out.push(serializeAnalysis(a, c?.c ?? 0));
-    }
+
+    // Single aggregation query — avoids N+1 individual COUNT queries.
+    const ids = rows.map((r) => r.id);
+    const msgCounts =
+      ids.length > 0
+        ? await db
+            .select({
+              analysisId: messagesTable.analysisId,
+              cnt: sql<number>`count(*)::int`.as("cnt"),
+            })
+            .from(messagesTable)
+            .where(inArray(messagesTable.analysisId, ids))
+            .groupBy(messagesTable.analysisId)
+        : [];
+    const countByAnalysis = new Map(msgCounts.map((r) => [r.analysisId, r.cnt]));
+
+    const out = rows.map((a) => serializeAnalysis(a, countByAnalysis.get(a.id) ?? 0));
     res.json(ListAnalysesResponse.parse(out));
   },
 );
@@ -127,9 +136,9 @@ router.post(
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }
-    const question = parsed.data.question?.trim();
+    const question = parsed.data.question?.trim().slice(0, 4_000);
     const title =
-      parsed.data.title?.trim() ||
+      parsed.data.title?.trim().slice(0, 200) ||
       (question
         ? question.length > 60
           ? question.slice(0, 57) + "..."
@@ -315,6 +324,10 @@ router.post(
     const parsed = AskQuestionBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Frage darf nicht leer sein" });
+      return;
+    }
+    if (parsed.data.question.length > 4_000) {
+      res.status(400).json({ error: "Frage zu lang (maximal 4 000 Zeichen)." });
       return;
     }
     const a = await ownAnalysis(analysisId, req.userId!);

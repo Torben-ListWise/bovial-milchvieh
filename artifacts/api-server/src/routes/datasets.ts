@@ -75,6 +75,14 @@ router.post("/datasets", requireAuth, async (req: Request, res: Response) => {
     res.status(400).json({ error: "Ungültige Eingabe" });
     return;
   }
+  if (parsed.data.name.length > 200) {
+    res.status(400).json({ error: "Name zu lang (max. 200 Zeichen)" });
+    return;
+  }
+  if (parsed.data.description && parsed.data.description.length > 1_000) {
+    res.status(400).json({ error: "Beschreibung zu lang (max. 1000 Zeichen)" });
+    return;
+  }
   const sector = normalizeSector(parsed.data.sector ?? "dairy");
   const [created] = await db
     .insert(datasetsTable)
@@ -105,6 +113,14 @@ router.patch("/datasets/:datasetId", requireAuth, async (req: Request, res: Resp
   const parsed = UpdateDatasetBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Ungültige Eingabe" });
+    return;
+  }
+  if (parsed.data.name && parsed.data.name.length > 200) {
+    res.status(400).json({ error: "Name zu lang (max. 200 Zeichen)" });
+    return;
+  }
+  if (parsed.data.description && parsed.data.description.length > 1_000) {
+    res.status(400).json({ error: "Beschreibung zu lang (max. 1000 Zeichen)" });
     return;
   }
   const d = await ownDataset(datasetId, req.userId!);

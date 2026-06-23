@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { useToast } from "@/hooks/use-toast";
 
 export function WarningsPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: warnings, isLoading } = useListWarnings(
     datasetId ?? "",
@@ -27,7 +29,10 @@ export function WarningsPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListWarningsQueryKey(datasetId ?? "") });
-      }
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Warnung konnte nicht aktualisiert werden." });
+      },
     }
   });
 

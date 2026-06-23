@@ -80,7 +80,11 @@ export async function getObjectAclPolicy(
     metadata?.metadata?.[ACL_POLICY_METADATA_KEY] ??
     metadata?.metadata?.[ACL_POLICY_METADATA_KEY_LEGACY];
   if (!raw) return null;
-  return JSON.parse(raw as string);
+  try {
+    return JSON.parse(raw as string);
+  } catch {
+    return null;
+  }
 }
 
 export async function canAccessObject({
