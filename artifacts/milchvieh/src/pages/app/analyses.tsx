@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, memo } from "react";
+import { useAuth } from "@clerk/react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
@@ -1440,6 +1441,7 @@ export function AnalysesPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getToken } = useAuth();
   const searchStr = useSearch();
 
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(() => {
@@ -1865,9 +1867,13 @@ export function AnalysesPage() {
 
     (async () => {
       try {
+        const token = await getToken();
+        const headers: Record<string, string> = { Accept: "text/event-stream" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
         const res = await fetch(`/api/analyses/${analysisId}/stream`, {
           signal: controller.signal,
-          headers: { Accept: "text/event-stream" },
+          headers,
           credentials: "include",
         });
         if (!res.ok || !res.body) return;
@@ -1920,8 +1926,8 @@ export function AnalysesPage() {
             }
           }
         }
-      } catch {
-        // stream closed or aborted — silently fall back to polling
+      } catch (err) {
+        console.error("[SSE] stream error:", err);
       }
     })();
   }

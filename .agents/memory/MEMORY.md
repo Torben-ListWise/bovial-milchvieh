@@ -7,3 +7,4 @@
 - [Milchvieh CORS config](milchvieh-cors.md) — never use origin:true with credentials:true; use REPLIT_DEV_DOMAIN + ALLOWED_ORIGINS allowlist
 - [Milchvieh PDF extraction](milchvieh-pdf-extraction.md) — use pdfjs-dist legacy/build directly; pdf-parse v1 bundles break on Node.js v24
 - [Milchvieh local embeddings](milchvieh-local-embeddings.md) — use Xenova/multilingual-e5-base via @huggingface/transformers (NOT nomic-embed-text-v1.5 — gated/401)
+- [Milchvieh SSE auth](milchvieh-sse-auth.md) — SSE fetch needs Bearer token (not cookies); every processQuestion background call needs SSE callbacks wired

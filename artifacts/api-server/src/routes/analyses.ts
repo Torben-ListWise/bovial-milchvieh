@@ -180,8 +180,14 @@ router.post(
 
     // Run the agent in the background after the response is sent
     if (question) {
+      const id = analysis.id;
       setImmediate(() => {
-        processQuestion(analysis, question).catch((err) => {
+        processQuestion(analysis, question, {
+          onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
+          onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
+          onDone: () => sseWriters.get(id)?.sendDone(),
+        }).catch((err) => {
+          sseWriters.get(id)?.sendError("Verarbeitungsfehler");
           logger.error({ err }, "Background processQuestion failed");
         });
       });
