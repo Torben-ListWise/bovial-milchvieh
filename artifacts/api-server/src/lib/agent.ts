@@ -292,11 +292,34 @@ const TOOLS: BetaTool[] = [
 
 const SECTOR_CONTEXT: Record<string, string> = {
   dairy: `BETRIEBSTYP: Milchviehbetrieb
-Du analysierst Daten eines Milchviehbetriebs. Relevante Kennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Fruchtbarkeit (ZKZ, Erstbesamungserfolg), Remontierung, Laktationsnummer, Abgänge.`,
+Du analysierst Daten eines Milchviehbetriebs. Relevante Kennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Fruchtbarkeit (ZKZ, Erstbesamungserfolg), Remontierung, Laktationsnummer, Abgänge.
+
+PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
+- Nach Konzeptionsraten/Besamungserfolg nach DIM-Gruppe: "freiwillige Wartezeit offene Tage Kosten Besamungszeitpunkt wirtschaftlich"
+- Nach Zellzahl-Auswertung: "Zellzahlgrenzwert wirtschaftlicher Schaden Eutergesundheit Qualitätsmilch"
+- Nach Milchleistung/Laktationskurve: "Persistenz Laktationskurve wirtschaftlich optimale Laktationslänge"
+- Nach Remontierungsrate/Abgängen: "Abgangsursachen wirtschaftlich optimale Nutzungsdauer Kuh"
+- Nach Zwischenkalbezeit (ZKZ): "Zwischenkalbezeit wirtschaftlich optimaler Wert Energiebilanz"`,
+
   biogas: `BETRIEBSTYP: Biogasanlage
-Du analysierst Daten einer Biogasanlage. Relevante Kennzahlen: Gasproduktion (m³/h), Methangehalt (%), Substrat-Input (t/d, FM), organische Trockensubstanz (oTS, %), spezifische Gasausbeute (m³/t oTS), elektrische Leistung (kWel), Betriebsstunden, Wirkungsgrad. Typische Zielwerte: Methangehalt >52%, spezifische Gasausbeute >300 m³/t oTS.`,
+Du analysierst Daten einer Biogasanlage. Relevante Kennzahlen: Gasproduktion (m³/h), Methangehalt (%), Substrat-Input (t/d, FM), organische Trockensubstanz (oTS, %), spezifische Gasausbeute (m³/t oTS), elektrische Leistung (kWel), Betriebsstunden, Wirkungsgrad. Typische Zielwerte: Methangehalt >52%, spezifische Gasausbeute >300 m³/t oTS.
+
+PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
+- Nach spezifischer Gasausbeute/Substrat-Mix: "Substratkosten Gasausbeute wirtschaftlich optimaler Substrateinsatz"
+- Nach Methangehalt-Abweichungen: "Methangehalt Spurenelemente Hemmung Biologie Fermenter"
+- Nach Betriebsstunden/Wirkungsgrad: "Verstromungswirkungsgrad BHKW Wartungsintervall wirtschaftlich"
+- Nach Raumbelastung/HRT: "hydraulische Verweilzeit Raumbelastung Prozessstabilität wirtschaftlich"
+- Nach Wärmeeinspeisung/-nutzung: "Wärmenutzung Biogasanlage wirtschaftlich NawaRo-Bonus"`,
+
   arable: `BETRIEBSTYP: Ackerbaubetrieb
-Du analysierst Daten eines Ackerbaubetriebs. Relevante Kennzahlen: Erträge (dt/ha), Fläche (ha), Kulturarten und Fruchtfolge, Bonituren, Niederschlag und Bewässerung, Düngebedarf (kg N/ha), Pflanzenschutzmittelaufwand, Deckungsbeiträge (€/ha). Vergleiche Erträge mit regionalen Durchschnittswerten falls in den Stammdaten vorhanden.`,
+Du analysierst Daten eines Ackerbaubetriebs. Relevante Kennzahlen: Erträge (dt/ha), Fläche (ha), Kulturarten und Fruchtfolge, Bonituren, Niederschlag und Bewässerung, Düngebedarf (kg N/ha), Pflanzenschutzmittelaufwand, Deckungsbeiträge (€/ha). Vergleiche Erträge mit regionalen Durchschnittswerten falls in den Stammdaten vorhanden.
+
+PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
+- Nach Ertragsunterschieden zwischen Kulturen: "Deckungsbeitrag Fruchtfolgeeffekt wirtschaftlich Kulturwahl"
+- Nach Düngungsintensität/Stickstoff: "N-Effizienz wirtschaftliche Düngerhöhe Ertragsschwelle Stickstoff"
+- Nach Pflanzenschutzaufwand: "Schadensschwelle wirtschaftlich Pflanzenschutz Wirkungskosten"
+- Nach Flächenertrag im Jahresvergleich: "Klimarisiko Ertragsschwankung Fruchtfolge Bodengesundheit wirtschaftlich"
+- Nach Bewässerungskosten/-mengen: "Bewässerungseffizienz wirtschaftlich Verdunstung Kulturwasserbedarf"`,
 };
 
 const SYSTEM_PROMPT_BASE = `Du bist ein vertrauenswürdiger Datenanalyse-Assistent. Du antwortest ausschließlich auf Deutsch in klarer, fachlich korrekter Sprache für Landwirtinnen und Landwirte. Sprich den Nutzer durchgängig mit "du" an — niemals mit "Sie".
@@ -361,7 +384,8 @@ PFLICHTSCHRITT nach jeder Berechnung mit Empfehlungscharakter:
   • Bei Zellzahl-Auswertung: suche nach "Zellzahlgrenzwert wirtschaftlicher Schaden Milchqualität"
   • Bei Milchleistung nach Laktationsnummer: suche nach "Abgangsalter Remontierung wirtschaftlich Laktationskurve"
 - Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert, die das statistische Optimum relativieren: NENNE SIE EXPLIZIT in deiner Antwort. Formuliere es klar: was sagen die Daten, was sagt die Praxis/Forschung, was ist die Empfehlung unter Berücksichtigung beider Perspektiven.
-- Wenn die Wissensbibliothek keinen relevanten Treffer liefert: ignoriere diesen Schritt und fahre ohne Wissensbezug fort.`;
+- Wenn die Wissensbibliothek keinen relevanten Treffer liefert: ignoriere diesen Schritt und fahre ohne Wissensbezug fort.
+- Die konkreten Suchbegriffe hängen vom Betriebstyp ab — der Betriebstyp-Abschnitt am Anfang des System-Prompts nennt typische Suchanfragen für deinen Sektor.`;
 
 interface RunOptions {
   datasetId: string;
