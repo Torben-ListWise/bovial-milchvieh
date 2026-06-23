@@ -3,8 +3,21 @@ import { logger } from "./logger";
 import { extractPdfText } from "./ingest";
 
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; MilchviehBot/1.0; +https://replit.com)";
-const FETCH_TIMEOUT_MS = 10_000;
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": USER_AGENT,
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache",
+  "Pragma": "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+};
+const FETCH_TIMEOUT_MS = 15_000;
 const MAX_PAGES = 20;
 const CONCURRENCY = 5;
 const MAX_REDIRECTS = 10;
@@ -108,7 +121,7 @@ async function fetchPageSafe(url: string): Promise<string | null> {
     let res: Response;
     try {
       res = await fetch(current, {
-        headers: { "User-Agent": USER_AGENT },
+        headers: BROWSER_HEADERS,
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         redirect: "manual",
       });
@@ -224,7 +237,7 @@ export function canonicalizeUrl(raw: string): string {
 async function fetchBinaryUrlSafe(url: string): Promise<{ buf: Buffer; contentType: string } | null> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT },
+      headers: BROWSER_HEADERS,
       signal: AbortSignal.timeout(30_000),
       redirect: "follow",
     });
