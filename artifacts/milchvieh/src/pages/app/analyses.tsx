@@ -933,7 +933,8 @@ function FollowUpChips({
           <button
             key={i}
             onClick={() => onAsk(q)}
-            className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left"
+            style={{ animationDelay: `${i * 60}ms` }}
+            className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left animate-in fade-in slide-in-from-bottom-2 fill-mode-both"
           >
             {q}
           </button>
