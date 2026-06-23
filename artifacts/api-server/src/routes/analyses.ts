@@ -52,6 +52,24 @@ async function ownAnalysis(
   return a ?? null;
 }
 
+/**
+ * Like ownAnalysis but also allows guests who have access to the dataset.
+ * Use for read-only and message-creation operations.
+ */
+async function canAccessAnalysis(
+  analysisId: string,
+  userId: string,
+): Promise<Analysis | null> {
+  const [a] = await db
+    .select()
+    .from(analysesTable)
+    .where(eq(analysesTable.id, analysisId));
+  if (!a) return null;
+  if (a.userId === userId) return a;
+  const canRead = await canReadDataset(a.datasetId, userId);
+  return canRead ? a : null;
+}
+
 function serializeAnalysis(a: Analysis, messageCount?: number) {
   return {
     id: a.id,
@@ -200,7 +218,7 @@ router.post(
 
 router.get("/analyses/:analysisId", requireAuth, async (req: Request, res: Response) => {
   const { analysisId } = GetAnalysisParams.parse(req.params);
-  const a = await ownAnalysis(analysisId, req.userId!);
+  const a = await canAccessAnalysis(analysisId, req.userId!);
   if (!a) {
     res.status(404).json({ error: "Analyse nicht gefunden" });
     return;
@@ -335,7 +353,7 @@ router.post(
       res.status(400).json({ error: "Frage zu lang (maximal 4 000 Zeichen)." });
       return;
     }
-    const a = await ownAnalysis(analysisId, req.userId!);
+    const a = await canAccessAnalysis(analysisId, req.userId!);
     if (!a) {
       res.status(404).json({ error: "Analyse nicht gefunden" });
       return;

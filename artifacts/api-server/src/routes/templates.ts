@@ -13,14 +13,17 @@ import { processQuestion } from "../lib/analysisService";
 import { normalizeSector } from "../lib/serializers";
 import { sseWriters } from "../lib/sseRegistry";
 import { checkQuota, incrementQuota } from "../lib/quota";
+import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
 
 async function getDatasetSector(datasetId: string, userId: string): Promise<string | null> {
+  const canRead = await canReadDataset(datasetId, userId);
+  if (!canRead) return null;
   const [d] = await db
-    .select({ id: datasetsTable.id, sector: datasetsTable.sector })
+    .select({ sector: datasetsTable.sector })
     .from(datasetsTable)
-    .where(and(eq(datasetsTable.id, datasetId), eq(datasetsTable.userId, userId)));
+    .where(eq(datasetsTable.id, datasetId));
   if (!d) return null;
   return normalizeSector((d as any).sector);
 }

@@ -26,13 +26,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Home as HomeIcon, Loader2, Trash2, Milk, Zap, Wheat } from "lucide-react";
+import { Plus, Home as HomeIcon, Loader2, Trash2, Milk, Zap, Wheat, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@clerk/react";
+import { useQuery } from "@tanstack/react-query";
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 type Sector = "dairy" | "biogas" | "arable";
 
@@ -72,7 +76,126 @@ function SectorIcon({ sector, className }: { sector?: string; className?: string
   return <Icon className={className} />;
 }
 
+type DatasetRow = {
+  id: string;
+  name: string;
+  description?: string | null;
+  sector?: string | null;
+  fileCount?: number;
+  status?: string;
+};
+
+function useHostDatasets(hostId: string) {
+  const { getToken } = useAuth();
+  return useQuery<DatasetRow[]>({
+    queryKey: ["host-datasets", hostId],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/datasets?hostId=${encodeURIComponent(hostId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Fehler beim Laden");
+      return res.json();
+    },
+    enabled: !!hostId,
+  });
+}
+
+function GuestDatasetList({ hostId }: { hostId: string }) {
+  const { data: datasets, isLoading } = useHostDatasets(hostId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-48" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-48 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex items-center gap-3">
+        <Users className="w-6 h-6 text-primary/70" />
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Geteilte Betriebe</h1>
+          <p className="text-muted-foreground mt-1">Du hast Lesezugriff auf diese Betriebe.</p>
+        </div>
+      </div>
+
+      {!datasets || datasets.length === 0 ? (
+        <Card className="border-dashed bg-secondary/30">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <Users className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Keine Betriebe gefunden</h3>
+            <p className="text-muted-foreground max-w-md">
+              Dieser Betrieb hat noch keine Datensätze angelegt.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {datasets.map((ds) => (
+            <Card key={ds.id} className="hover:border-primary/50 transition-colors group relative">
+              <Link href={`/app/overview?datasetId=${ds.id}&hostId=${hostId}`}>
+                <div className="p-6">
+                  <CardHeader className="p-0 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <SectorIcon sector={ds.sector ?? undefined} className="w-5 h-5 text-primary/70" />
+                      <span className="text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                        {sectorLabel(ds.sector ?? undefined)}
+                      </span>
+                      <span className="text-xs text-muted-foreground bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full ml-auto">
+                        Lesezugriff
+                      </span>
+                    </div>
+                    <CardTitle className="group-hover:text-primary transition-colors">{ds.name}</CardTitle>
+                    <CardDescription>{ds.description || "Keine Beschreibung"}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Dateien</div>
+                        <div className="font-semibold text-lg">{ds.fileCount ?? 0}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Status</div>
+                        <div className="font-medium text-primary mt-1">
+                          {ds.status === "ready" ? "Bereit" : ds.status === "empty" ? "Leer" : ds.status}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </div>
+              </Link>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DatasetList() {
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const hostId = params.get("hostId");
+
+  if (hostId) {
+    return <GuestDatasetList hostId={hostId} />;
+  }
+
+  return <OwnDatasetList />;
+}
+
+function OwnDatasetList() {
   const { data: datasets, isLoading } = useListDatasets();
   const createDataset = useCreateDataset();
   const deleteDataset = useDeleteDataset();
