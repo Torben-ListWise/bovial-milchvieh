@@ -216,6 +216,21 @@ const TOOLS: BetaTool[] = [
     },
   },
   {
+    name: "search_web",
+    description:
+      "Durchsucht das Internet nach aktuellen Fachinformationen. Aufrufen als Fallback wenn search_knowledge keine relevanten Treffer geliefert hat — z.B. für wirtschaftliche Richtwerte, Grenzwerte, Praxisempfehlungen zu landwirtschaftlichen Kennzahlen.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Suchanfrage auf Deutsch, z.B. 'freiwillige Wartezeit Milchkuh offene Tage wirtschaftlich Kosten'",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "calculate_investment",
     description:
       "Berechnet Wirtschaftlichkeit einer Investition deterministisch: Annuität, Break-even-Jahr, 10-Jahres-Cashflow. Aufrufen wenn alle Parameter vom Nutzer bestätigt wurden.",
@@ -381,7 +396,9 @@ PFLICHTSCHRITT nach jeder Berechnung mit Empfehlungscharakter:
 - Leite die Suchbegriffe direkt aus der berechneten Kennzahl ab: Kombiniere den Kennzahlennamen mit Begriffen wie "wirtschaftlich", "Kosten", "Praxis", "Optimum", "Empfehlung", "Grenzwert". Beispiel: für "Tageszunahmen Mastschwein" → suche "Tageszunahmen Schwein wirtschaftlich Futterkosten optimale Schlachtreife".
 - Ziel: Stelle das statistische Optimum IMMER der wirtschaftlichen Realität gegenüber. Ein Bestwert in den Daten ist nicht automatisch die beste Handlungsempfehlung — es kann wirtschaftliche, praktische oder biologische Gründe geben, warum ein etwas schlechterer Wert besser ist (z.B. frühere Ernte trotz niedrigerer Qualität spart Lagerkosten, frühere Besamung trotz niedrigerer Konzeptionsrate spart offene Tage, geringere Besatzdichte trotz niedrigerer Flächenproduktivität verbessert Tiergesundheit).
 - Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert: NENNE SIE EXPLIZIT. Strukturiere deine Antwort klar: (1) Was sagen die Betriebsdaten, (2) Was sagt die Fachliteratur/Forschung, (3) Konkrete Empfehlung unter Berücksichtigung beider Perspektiven.
-- Wenn die Wissensbibliothek keinen relevanten Treffer liefert: ignoriere diesen Schritt stillschweigend und fahre ohne Wissensbezug fort.`;
+- Wenn search_knowledge keine relevanten Treffer liefert (leere results oder nur sehr allgemeine Textstellen ohne Bezug zur Frage): rufe als nächstes search_web auf. Formuliere die Suchanfrage auf Deutsch, spezifisch für den Betriebstyp und die berechnete Kennzahl. Beispiel: statt "Konzeptionsrate" besser "freiwillige Wartezeit Milchkuh offene Tage wirtschaftlich Empfehlung".
+- Wenn search_web Ergebnisse liefert: nutze die Snippets als Kontextquelle und nenne sie als Quelle in der Antwort.
+- Wenn weder search_knowledge noch search_web etwas Relevantes liefern: ignoriere diesen Schritt stillschweigend.`;
 
 interface RunOptions {
   datasetId: string;
@@ -687,6 +704,52 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           return { error: "Suche fehlgeschlagen" };
         }
       }
+      case "search_web": {
+        const query = input.query as string;
+        const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+        if (!apiKey) {
+          return { error: "Keine Web-Suche konfiguriert (BRAVE_SEARCH_API_KEY fehlt)" };
+        }
+        try {
+          const url = new URL("https://api.search.brave.com/res/v1/web/search");
+          url.searchParams.set("q", query);
+          url.searchParams.set("count", "5");
+          url.searchParams.set("country", "de");
+          url.searchParams.set("search_lang", "de");
+          url.searchParams.set("text_decorations", "false");
+          const res = await fetch(url.toString(), {
+            headers: {
+              "Accept": "application/json",
+              "Accept-Encoding": "gzip",
+              "X-Subscription-Token": apiKey,
+            },
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!res.ok) {
+            return { error: `Web-Suche fehlgeschlagen: HTTP ${res.status}` };
+          }
+          const data = await res.json() as {
+            web?: { results?: { title: string; url: string; description?: string }[] };
+          };
+          const results = (data.web?.results ?? []).map((r) => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.description ?? "",
+          }));
+          if (results.length > 0) {
+            citations.push({
+              label: `Web: ${query}`,
+              value: results[0].url,
+              basis: null,
+              sourceType: "wissen",
+            });
+          }
+          return { results, query };
+        } catch (err) {
+          logger.error({ err }, "search_web fehlgeschlagen");
+          return { error: "Web-Suche fehlgeschlagen" };
+        }
+      }
       case "ask_farmer": {
         const qs = (input.questions as string[] | undefined) ?? [];
         for (const q of qs) {
@@ -792,6 +855,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_master_data": return "Lade Stammdaten";
       case "read_document": return "Lese Dokumententext";
       case "search_knowledge": return "Durchsuche Wissensdatenbank";
+      case "search_web": return "Durchsuche das Internet";
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
       case "emit_chart": return `Erstelle Diagramm`;
       case "ask_farmer": return "Formuliere Rückfragen";
