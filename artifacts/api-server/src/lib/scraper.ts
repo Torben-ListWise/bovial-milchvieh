@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { logger } from "./logger";
+import { extractPdfText } from "./ingest";
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; MilchviehBot/1.0; +https://replit.com)";
@@ -216,9 +217,47 @@ export function canonicalizeUrl(raw: string): string {
   }
 }
 
+/**
+ * Fetch a URL and return its body as a Buffer, or null on error.
+ * Used for direct PDF URL downloads.
+ */
+async function fetchBinaryUrlSafe(url: string): Promise<{ buf: Buffer; contentType: string } | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(30_000),
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "";
+    const arr = await res.arrayBuffer();
+    return { buf: Buffer.from(arr), contentType };
+  } catch {
+    return null;
+  }
+}
+
 export async function scrapeUrl(rootUrl: string): Promise<ScrapeResult> {
   const parsed = new URL(rootUrl);
   const rootHostname = parsed.hostname;
+
+  // Detect direct PDF URLs (by extension or content-type via HEAD probe)
+  const lowerPath = parsed.pathname.toLowerCase();
+  if (lowerPath.endsWith(".pdf")) {
+    const result = await fetchBinaryUrlSafe(rootUrl);
+    if (!result) {
+      throw new Error(`Root-URL nicht erreichbar: ${rootUrl}`);
+    }
+    if (!result.contentType.includes("application/pdf") && !result.contentType.includes("octet-stream")) {
+      throw new Error(`URL zeigt nicht auf eine PDF-Datei (Content-Type: ${result.contentType})`);
+    }
+    const text = await extractPdfText(result.buf);
+    if (!text || text.trim().length < 10) {
+      throw new Error("Kein Text in der PDF-Datei gefunden");
+    }
+    const filename = parsed.pathname.split("/").pop()?.replace(/\.pdf$/i, "") || rootHostname;
+    return { title: filename, text, pageCount: 1 };
+  }
 
   const rootHtml = await fetchPageSafe(rootUrl);
   if (!rootHtml) {

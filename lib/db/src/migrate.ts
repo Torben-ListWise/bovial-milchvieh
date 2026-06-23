@@ -57,12 +57,17 @@ export async function ensureExtensions(): Promise<void> {
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS embedding_model TEXT"
   );
   // Performance: HNSW vector index for fast cosine similarity search on knowledge chunks
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
-    ON knowledge_chunks
-    USING hnsw (embedding vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64)
-  `);
+  try {
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
+      ON knowledge_chunks
+      USING hnsw (embedding vector_cosine_ops)
+      WITH (m = 16, ef_construction = 64)
+    `);
+  } catch (err: any) {
+    // 23505 = duplicate key: index already exists (race condition with IF NOT EXISTS)
+    if (err?.code !== "23505") throw err;
+  }
   // Seed default Milchvieh templates if table is empty
   const { rows } = await pool.query("SELECT COUNT(*)::int as c FROM analysis_templates");
   if ((rows[0]?.c ?? 0) === 0) {
