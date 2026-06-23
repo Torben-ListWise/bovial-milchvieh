@@ -506,7 +506,29 @@ export async function ingestFile(fileId: string): Promise<void> {
       if (!process.env.ANTHROPIC_API_KEY) {
         logger.warn({ datasetId: file.datasetId }, "Automatische Erstanalyse übersprungen: ANTHROPIC_API_KEY nicht gesetzt");
       } else if (!alreadyExists) {
-        const betriebsspiegelPrompt = `Du erstellst jetzt automatisch einen vollständigen Betriebsspiegel. Gehe strukturiert vor:
+        const isPdfDocument = result.kind === "document";
+
+        const betriebsspiegelPrompt = isPdfDocument
+          ? `Du erstellst jetzt eine automatische Erstanalyse eines hochgeladenen PDF-Dokuments. Gehe strukturiert vor:
+
+1. get_schema — prüfe ob strukturierte Daten vorhanden sind (dokumentAvailable zeigt an, ob ein Dokument verfügbar ist)
+2. read_document — lies den vollständigen Dokumenttext
+3. Analysiere den Inhalt: Welche Kennzahlen, Zeitreihen und Kategorien sind erkennbar? Welcher Zeitraum wird abgedeckt?
+4. Erstelle 2–3 aussagekräftige Grafiken der wichtigsten Kennzahlen mit emit_chart(source='document'):
+   - Bei Zeitreihen (z.B. Quartalsverläufe von ECM, Zellzahl, PregRate): chartType='line', xKey='quartal' o.ä.
+   - Bei Vergleichen mehrerer Kennzahlen ohne Zeitbezug: chartType='bar'
+   - Bei zwei Kennzahlen mit sehr unterschiedlichen Skalen (z.B. kg ECM und Tsd./ml Zellzahl): Doppelachsen-Diagramm mit yAxisId='left'/'right'
+   Erstelle nur Grafiken, wenn mindestens 2 Datenpunkte im Dokumenttext vorhanden sind.
+5. Vergleiche gefundene Werte mit Richtwerten aus get_master_data, falls relevant.
+
+Fasse am Ende in drei klaren Abschnitten zusammen:
+✅ Positive Befunde — was läuft gut oder liegt über dem Richtwert
+⚠️ Handlungsbedarf — was liegt unter dem Zielwert oder zeigt Auffälligkeiten
+💡 Top-3 Empfehlungen — konkrete nächste Schritte mit Begründung
+
+Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete Zahlen mit Einheiten.
+Falls Zeitreihendaten oder Kennzahlen nicht klar aus dem Dokument extrahierbar sind, erkläre kurz, welche Informationen du gefunden hast und welche nicht.`
+          : `Du erstellst jetzt automatisch einen vollständigen Betriebsspiegel. Gehe strukturiert vor:
 
 1. get_schema — welche Kennzahlen sind vorhanden, über welchen Zeitraum, wie viele Datensätze?
 2. get_kpis — alle Kern-KPIs berechnen; stelle die 4–6 wichtigsten als Diagramm dar (emit_chart)
@@ -527,7 +549,7 @@ Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete 
           .values({
             datasetId: file.datasetId,
             userId: file.userId,
-            title: "Betriebsspiegel",
+            title: isPdfDocument ? "Dokumentenanalyse" : "Betriebsspiegel",
             category: "overview",
             source: "auto",
             templateRef: "auto_erstanalyse",
