@@ -1389,6 +1389,12 @@ components:
           type: string
         basis:
           type: ["string", "null"]
+        sourceType:
+          type: string
+          enum: [betriebsdaten, pdf, wissen]
+          nullable: true
+        shortLabel:
+          type: ["string", "null"]
     AskQuestionResponse:
       type: object
       required: [accepted]

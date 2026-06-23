@@ -438,7 +438,9 @@ export const GetAnalysisResponse = zod.object({
   "citations": zod.array(zod.object({
   "label": zod.string(),
   "value": zod.string(),
-  "basis": zod.string().nullish()
+  "basis": zod.string().nullish(),
+  "sourceType": zod.enum(["betriebsdaten", "pdf", "wissen"]).nullish(),
+  "shortLabel": zod.string().nullish()
 })).optional(),
   "followUpQuestions": zod.array(zod.string()).optional(),
   "error": zod.string().nullish(),

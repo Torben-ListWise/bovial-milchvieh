@@ -361,6 +361,9 @@ export interface Citation {
   value: string;
   /** @nullable */
   basis?: string | null;
+  sourceType?: 'betriebsdaten' | 'pdf' | 'wissen' | null;
+  /** @nullable */
+  shortLabel?: string | null;
 }
 
 export interface AskQuestionResponse {

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, memo } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Link, useSearch } from "wouter";
 import {
   getListAnalysesQueryKey,
@@ -648,19 +650,74 @@ function AgentWorkingBanner({ currentStep }: { currentStep: string | null }) {
   );
 }
 
+// ── Footnote preprocessing ────────────────────────────────────────────────────
+// Converts [N] markers in text to inline <sup> HTML, namespaced by msgId to
+// avoid duplicate DOM IDs when multiple ResultCards are rendered on one page.
+// Avoids matching markdown link syntax [text](url) — the pattern only matches
+// a bare number inside brackets not followed by (
+function preprocessFootnotes(text: string, ns: string): string {
+  return text.replace(/\[(\d{1,2})\](?!\()/g, (_, n) =>
+    `<sup class="cite-sup" id="cref-${ns}-${n}"><a href="#cite-${ns}-${n}" class="footnote-link">[${n}]</a></sup>`
+  );
+}
+
+// Strict sanitize schema: only allow <sup> and <a> elements introduced by
+// preprocessFootnotes. Everything else the LLM might emit as raw HTML is stripped.
+const FOOTNOTE_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "sup",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    sup: ["id", "class"],
+    a: [...((defaultSchema.attributes as Record<string, string[]>)?.a ?? []), "class"],
+  },
+};
+
 // ── Markdown renderer ────────────────────────────────────────────────────────
+
+const PROSE_CLASSES = "prose prose-sm max-w-none " +
+  "prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-3 prose-headings:mb-1 " +
+  "prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed " +
+  "prose-strong:text-foreground prose-strong:font-semibold " +
+  "prose-li:text-foreground prose-li:my-0.5 " +
+  "prose-ul:my-1 prose-ol:my-1 " +
+  "prose-ul:pl-4 prose-ol:pl-4 " +
+  "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
   return (
-    <div className="prose prose-sm max-w-none
-        prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-3 prose-headings:mb-1
-        prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed
-        prose-strong:text-foreground prose-strong:font-semibold
-        prose-li:text-foreground prose-li:my-0.5
-        prose-ul:my-1 prose-ol:my-1
-        prose-ul:pl-4 prose-ol:pl-4
-        [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+    <div className={PROSE_CLASSES}>
       <ReactMarkdown>{text}</ReactMarkdown>
+    </div>
+  );
+});
+
+// Variant used inside ResultCard — renders footnote superscripts safely.
+// rehypeRaw parses our pre-inserted <sup> tags; rehypeSanitize then strips
+// any other HTML the model might have emitted (XSS protection).
+const ResultMarkdownContent = memo(function ResultMarkdownContent({
+  text,
+  msgId,
+}: {
+  text: string;
+  msgId: string;
+}) {
+  const processed = preprocessFootnotes(text, msgId);
+  return (
+    <div className={
+      PROSE_CLASSES +
+      " [&_.cite-sup]:text-[0.65em] [&_.cite-sup]:align-super" +
+      " [&_.footnote-link]:text-primary/70 [&_.footnote-link]:hover:text-primary" +
+      " [&_.footnote-link]:font-semibold [&_.footnote-link]:no-underline [&_.footnote-link]:hover:underline"
+    }>
+      <ReactMarkdown
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, FOOTNOTE_SANITIZE_SCHEMA]]}
+      >
+        {processed}
+      </ReactMarkdown>
     </div>
   );
 });
@@ -937,17 +994,35 @@ const ResultCard = memo(function ResultCard({
       </div>
       {!collapsed && (
         <div className="px-4 py-3 space-y-3">
-          <MarkdownContent text={msg.content ?? ""} />
+          <ResultMarkdownContent text={msg.content ?? ""} msgId={msg.id} />
           {msg.citations && msg.citations.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {msg.citations.map((c, i) => (
-                <span
-                  key={i}
-                  className="text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
-                >
-                  {c.label}: {c.value}
-                </span>
-              ))}
+            <div className="pt-2 border-t border-border/40 space-y-1.5">
+              <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Quellen</p>
+              <div className="flex flex-wrap gap-1.5">
+                {msg.citations.map((c, i) => {
+                  const icon =
+                    c.sourceType === "betriebsdaten" ? "📊" :
+                    c.sourceType === "pdf" ? "📄" :
+                    c.sourceType === "wissen" ? "📚" : "📌";
+                  return (
+                    <span
+                      key={i}
+                      id={`cite-${msg.id}-${i + 1}`}
+                      title={c.basis ?? undefined}
+                      className="inline-flex items-center gap-1 text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
+                    >
+                      <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0">[{i + 1}]</span>
+                      <span>{icon}</span>
+                      <span className="font-medium">{c.label}</span>
+                      <span className="text-muted-foreground/70">·</span>
+                      <span className="text-muted-foreground">{c.value}</span>
+                      {c.basis && (
+                        <span className="text-[10px] text-muted-foreground/50 ml-0.5">({c.basis})</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
           {msg.charts && msg.charts.length > 0 && (

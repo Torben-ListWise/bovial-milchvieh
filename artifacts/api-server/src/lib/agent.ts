@@ -49,6 +49,8 @@ export interface Citation {
   label: string;
   value: string;
   basis?: string | null;
+  sourceType?: "betriebsdaten" | "pdf" | "wissen" | null;
+  shortLabel?: string | null;
 }
 export interface AgentResult {
   text: string;
@@ -286,6 +288,14 @@ STRIKTE REGELN:
 - Alle Zahlen stammen AUSSCHLIESSLICH aus den Werkzeug-Ergebnissen oder dem extrahierten Dokumenttext. Erfinde NIEMALS Zahlen, Mittelwerte oder Trends.
 - Wenn du eine Zahl nennst, muss sie aus einem Werkzeug oder einem Dokumenttext stammen.
 - Beginne immer mit get_schema, um zu wissen, welche Felder verfügbar sind.
+
+QUELLENANGABEN MIT NUMMERN:
+- Jedes Mal wenn du eine Zahl oder einen Richtwert aus einem Werkzeug nennst, setze direkt danach eine Fußnoten-Zahl: [1], [2], [3] etc.
+- Die Nummer entspricht der Reihenfolge, in der die Quellen im Laufe deiner Antwort erstmals verwendet werden (erste verwendete Quelle = [1], zweite neue Quelle = [2] usw.).
+- Werden mehrere Zahlen aus derselben Quelle (d.h. demselben Werkzeugaufruf) zitiert, verwende dieselbe Nummer.
+- Beispiel: „Die durchschnittliche Milchleistung beträgt 32,4 kg ECM/Tag [1]. Der Zellzahl-Mittelwert liegt bei 215 Tsd./ml [1]. Laut Wissensbibliothek gilt ein Zellzahl unter 100 Tsd./ml als unauffällig [2]."
+- Setze die Marker direkt hinter die Zahl oder den Wert, NICHT am Ende des Satzes, falls der Satz mehrere verschiedene Quellen enthält.
+- Verwende NUR diese Nummerierungsform [N] — keine anderen Markierungsformate.
 - Wenn ein Wert nicht berechnet werden kann oder Daten fehlen, sage das ehrlich.
 - Nutze emit_chart, um zentrale Aussagen mit einem passenden Diagramm zu untermauern (meist 1–3 Diagramme). Bei strukturierten DB-Daten: source='timeseries'|'group'|'ranking'. Bei PDF-Dokumenten: source='document' mit manuell konstruiertem data-Array.
 - Vergleiche Werte bei Bedarf mit den geprüften Stammdaten (get_master_data), falls vorhanden.
@@ -425,6 +435,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             label: stats.label,
             value: `Ø ${stats.mean}${stats.unit ? " " + stats.unit : ""}`,
             basis: basisText(stats.basis),
+            sourceType: "betriebsdaten",
           });
         }
         return stats ?? { error: "Keine Daten für diese Kennzahl" };
@@ -497,6 +508,21 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const rawText = docContext
           .replace(/^\n\nHOCHGELADENE DOKUMENTE.*?:\n/s, "")
           .trim();
+        // Push citations for each document (unique by name)
+        const seenDocNames = new Set<string>();
+        const docNameMatches = rawText.matchAll(/^--- Dokument: (.+?) ---$/gm);
+        for (const m of docNameMatches) {
+          const name = m[1].trim();
+          if (!seenDocNames.has(name)) {
+            seenDocNames.add(name);
+            citations.push({
+              label: name,
+              value: "PDF-Dokument",
+              basis: null,
+              sourceType: "pdf",
+            });
+          }
+        }
         return { text: rawText };
       }
       case "calculate_investment": {
@@ -590,6 +616,19 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           const results = (rows.rows as { chunk_text: string; title: string }[]).map(
             (r) => ({ title: r.title, text: r.chunk_text }),
           );
+          // Push one citation per unique document title found
+          const seenTitles = new Set<string>();
+          for (const r of results) {
+            if (!seenTitles.has(r.title)) {
+              seenTitles.add(r.title);
+              citations.push({
+                label: r.title,
+                value: "Wissensbibliothek",
+                basis: null,
+                sourceType: "wissen",
+              });
+            }
+          }
           return { results };
         } catch (err) {
           logger.error({ err }, "search_knowledge fehlgeschlagen");
@@ -799,6 +838,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         content:
           "Überprüfungsschritt: Stimmen alle genannten Zahlen exakt mit den " +
           "Tool-Ergebnissen oder dem Dokumenttext überein? " +
+          "WICHTIG: Behalte alle Fußnoten-Marker [1], [2], [3] etc. vollständig und unverändert in der Antwort. " +
+          "Entferne KEINE Nummern-Marker — sie sind Teil der Antwort. " +
           "Antworte NUR mit der fertigen Antwort — kein Kommentar zur Überprüfung, " +
           "keine Erklärung des Prozesses, kein 'Problem:' oder 'Korrigierte Antwort:'. " +
           "Gib ausschließlich den Text zurück, den der Landwirt lesen soll.",
