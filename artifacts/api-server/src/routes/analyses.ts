@@ -64,6 +64,7 @@ function serializeAnalysis(a: Analysis, messageCount?: number) {
     templateRef: (a as any).templateRef ?? null,
     agentProgress: (a as any).agentProgress ?? null,
     agentSteps: ((a as any).agentSteps as string[] | null) ?? [],
+    contextFileIds: ((a as any).contextFileIds as string[] | null) ?? [],
     messageCount: messageCount ?? 0,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt ?? null,
@@ -141,7 +142,10 @@ router.post(
         title,
         category: question ? categorizeQuestion(question) : null,
         source: "user",
-      })
+        ...(parsed.data.contextFileIds !== undefined
+          ? { contextFileIds: parsed.data.contextFileIds }
+          : {}),
+      } as any)
       .returning();
 
     if (question) {
@@ -211,8 +215,9 @@ router.patch("/analyses/:analysisId", requireAuth, async (req: Request, res: Res
       ...(parsed.data.category !== undefined ? { category: parsed.data.category } : {}),
       ...(parsed.data.pinned !== undefined ? { pinned: parsed.data.pinned } : {}),
       ...(parsed.data.tags !== undefined ? { tags: parsed.data.tags } : {}),
+      ...(parsed.data.contextFileIds !== undefined ? { contextFileIds: parsed.data.contextFileIds } : {}),
       updatedAt: new Date(),
-    })
+    } as any)
     .where(eq(analysesTable.id, analysisId))
     .returning();
   res.json(UpdateAnalysisResponse.parse(serializeAnalysis(updated)));

@@ -335,6 +335,7 @@ export interface Analysis {
   /** @nullable */
   agentProgress?: string | null;
   agentSteps?: string[];
+  contextFileIds?: string[];
   messageCount?: number;
   createdAt: string;
   /** @nullable */
@@ -344,6 +345,7 @@ export interface Analysis {
 export interface AnalysisInput {
   title?: string;
   question?: string;
+  contextFileIds?: string[];
 }
 
 export interface AnalysisUpdate {
@@ -351,6 +353,7 @@ export interface AnalysisUpdate {
   category?: string;
   pinned?: boolean;
   tags?: string[];
+  contextFileIds?: string[];
 }
 
 export interface Citation {
@@ -414,6 +417,7 @@ export interface AnalysisDetail {
   /** @nullable */
   agentProgress?: string | null;
   agentSteps?: string[];
+  contextFileIds?: string[];
   createdAt: string;
   messages: AnalysisMessage[];
 }

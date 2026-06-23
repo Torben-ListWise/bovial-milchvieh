@@ -373,6 +373,7 @@ export const ListAnalysesResponseItem = zod.object({
   "templateRef": zod.string().nullish(),
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
+  "contextFileIds": zod.array(zod.string()).default([]),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()
@@ -389,7 +390,8 @@ export const CreateAnalysisParams = zod.object({
 
 export const CreateAnalysisBody = zod.object({
   "title": zod.string().optional(),
-  "question": zod.string().optional()
+  "question": zod.string().optional(),
+  "contextFileIds": zod.array(zod.string().uuid()).optional()
 })
 
 
@@ -456,7 +458,8 @@ export const UpdateAnalysisBody = zod.object({
   "title": zod.string().optional(),
   "category": zod.string().optional(),
   "pinned": zod.boolean().optional(),
-  "tags": zod.array(zod.string()).optional()
+  "tags": zod.array(zod.string()).optional(),
+  "contextFileIds": zod.array(zod.string().uuid()).optional()
 })
 
 export const UpdateAnalysisResponse = zod.object({
@@ -470,6 +473,7 @@ export const UpdateAnalysisResponse = zod.object({
   "templateRef": zod.string().nullish(),
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
+  "contextFileIds": zod.array(zod.string()).default([]),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()

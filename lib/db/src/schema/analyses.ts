@@ -22,6 +22,7 @@ export const analysesTable = pgTable(
     templateRef: text("template_ref"),
     agentProgress: text("agent_progress"),
     agentSteps: jsonb("agent_steps").default([]),
+    contextFileIds: jsonb("context_file_ids").default([]),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

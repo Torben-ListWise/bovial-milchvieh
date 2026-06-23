@@ -5,6 +5,8 @@ import {
   getListAnalysesQueryKey,
   useListAnalyses,
   useCreateAnalysis,
+  useUpdateAnalysis,
+  useDeleteAnalysis,
   useGetAnalysis,
   getGetAnalysisQueryKey,
   useAskQuestion,
@@ -15,6 +17,7 @@ import {
   useRunTemplate,
   useRequestUploadUrl,
   useRegisterFile,
+  useDeleteFile,
   useGetFile,
   useGetCurrentUser,
   type AnalysisDetail,
@@ -51,6 +54,7 @@ import {
   Plus, X, RefreshCw,
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
   Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
+  Pin, MoreHorizontal, Trash2,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -134,50 +138,132 @@ function AnalysisHistoryPanel({
   latestFileUploadAt,
   onSelect,
   onNew,
+  onDeleteAnalysis,
+  onUpdateAnalysis,
 }: {
   analyses: Analysis[];
   activeAnalysisId: string | null;
   latestFileUploadAt: number;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onDeleteAnalysis: (id: string) => void;
+  onUpdateAnalysis: (id: string, patch: { pinned?: boolean }) => void;
 }) {
-  if (analyses.length === 0) return null;
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-projects-open") === "false"; } catch { return false; }
+  });
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem("sidebar-projects-open", String(!next)); } catch {}
+  }
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handler() { setOpenMenuId(null); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
   return (
-    <div className="px-3 pt-3 pb-1 border-b border-border/60">
+    <div className="px-3 pt-3 pb-1 border-b border-border/60 shrink-0">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
-          Analysen
-        </p>
+        <button
+          onClick={toggleCollapsed}
+          className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+        >
+          <ChevronDown className={cn("w-3 h-3 transition-transform duration-150", collapsed && "-rotate-90")} />
+          Projekte
+        </button>
         <button
           onClick={onNew}
-          title="Neue Analyse"
+          title="Neues Projekt"
           className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {analyses.map((a) => {
-          const analysisTime = new Date(a.updatedAt ?? a.createdAt).getTime();
-          const isStale = latestFileUploadAt > 0 && analysisTime < latestFileUploadAt;
-          return (
-            <button
-              key={a.id}
-              onClick={() => onSelect(a.id)}
-              className={cn(
-                "flex items-center gap-2 text-xs rounded-md px-2 py-1.5 text-left w-full transition-colors",
-                activeAnalysisId === a.id
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <span className="flex-1 truncate min-w-0">{a.title}</span>
-              {isStale && <NewDataBadge />}
-              <AnalysisSourceBadge source={a.source} />
-            </button>
-          );
-        })}
-      </div>
+      {!collapsed && (
+        <div className="flex flex-col gap-0.5 max-h-44 overflow-y-auto">
+          {analyses.length === 0 && (
+            <p className="text-xs text-muted-foreground/50 px-2 py-1">Noch keine Projekte</p>
+          )}
+          {analyses.map((a) => {
+            const analysisTime = new Date(a.updatedAt ?? a.createdAt).getTime();
+            const isStale = latestFileUploadAt > 0 && analysisTime < latestFileUploadAt;
+            const isConfirmingDelete = confirmDeleteId === a.id;
+
+            return (
+              <div key={a.id} className="relative group">
+                {isConfirmingDelete ? (
+                  <div className="flex items-center gap-1 text-[11px] rounded-md px-2 py-1.5 bg-destructive/10 border border-destructive/20">
+                    <span className="flex-1 text-destructive">Wirklich löschen?</span>
+                    <button
+                      onClick={() => { onDeleteAnalysis(a.id); setConfirmDeleteId(null); }}
+                      className="text-destructive font-medium hover:underline"
+                    >Ja</button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-muted-foreground hover:underline ml-1"
+                    >Nein</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setOpenMenuId(null); onSelect(a.id); }}
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs rounded-md px-2 py-1.5 text-left w-full transition-colors",
+                      activeAnalysisId === a.id
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {a.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary/70 fill-primary/60" />}
+                    <span className="flex-1 truncate min-w-0 pr-5">{a.title}</span>
+                    {isStale && <NewDataBadge />}
+                    <AnalysisSourceBadge source={a.source} />
+                  </button>
+                )}
+                {!isConfirmingDelete && (
+                  <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onMouseDown={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === a.id ? null : a.id); }}
+                      className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                      title="Optionen"
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5" />
+                    </button>
+                    {openMenuId === a.id && (
+                      <div
+                        className="absolute right-0 top-full mt-0.5 bg-popover border border-border rounded-md shadow-md z-50 min-w-[140px] py-1"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => { onUpdateAnalysis(a.id, { pinned: !a.pinned }); setOpenMenuId(null); }}
+                          className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                        >
+                          <Pin className="w-3 h-3" />
+                          {a.pinned ? "Loslösen" : "Anpinnen"}
+                        </button>
+                        <button
+                          onClick={() => { setConfirmDeleteId(a.id); setOpenMenuId(null); }}
+                          className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-destructive/10 text-destructive transition-colors text-left"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Löschen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -191,44 +277,84 @@ function fileKindIcon(kind?: string | null) {
   return <Sheet className="w-3.5 h-3.5 shrink-0" />;
 }
 
-function HistoricalFiles({ files }: { files: FileItem[] }) {
-  if (files.length === 0) return null;
+function HistoricalFiles({
+  files,
+  onDeleteFile,
+  activeContextFileIds,
+  collapsed,
+  onToggle,
+}: {
+  files: FileItem[];
+  onDeleteFile?: (id: string) => void;
+  activeContextFileIds?: string[];
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   return (
-    <div className="px-4 pt-3 pb-1">
-      <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
+    <div className="px-3 pt-2 pb-1 border-b border-border/60 shrink-0">
+      <button
+        onClick={onToggle}
+        className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-1.5 hover:text-muted-foreground transition-colors w-full"
+      >
+        <ChevronDown className={cn("w-3 h-3 transition-transform duration-150", collapsed && "-rotate-90")} />
         Hochgeladene Daten
-      </p>
-      <div className="flex flex-col gap-1.5">
-        {files.map((f) => (
-          <div
-            key={f.id}
-            className={cn(
-              "flex items-center gap-2 text-xs rounded-lg px-3 py-2 border",
-              f.status === "ready"
-                ? "bg-green-50/60 border-green-200/70 text-green-800"
-                : f.status === "error"
-                ? "bg-red-50/60 border-red-200/70 text-red-700"
-                : "bg-muted/60 border-border text-muted-foreground",
-            )}
-          >
-            {fileKindIcon(f.kind)}
-            <span className="flex-1 truncate font-medium">{f.name}</span>
-            {f.status === "ready" && (
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
-            )}
-            {f.status === "error" && (
-              <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-            )}
-            {(f.status === "uploaded" || f.status === "parsing" || f.status === "mapping" || f.status === "processing") && (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
-            )}
-            <span className="text-[10px] text-muted-foreground/70 shrink-0">
-              {format(new Date(f.createdAt), "dd.MM.", { locale: de })}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 border-t border-border/60" />
+      </button>
+      {!collapsed && (
+        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+          {files.length === 0 && (
+            <p className="text-xs text-muted-foreground/50 px-1 py-1">Keine Dateien hochgeladen</p>
+          )}
+          {files.map((f) => (
+            <div key={f.id} className="relative group">
+              {confirmDeleteId === f.id ? (
+                <div className="flex items-center gap-1 text-[11px] rounded-lg px-2 py-1.5 bg-destructive/10 border border-destructive/20">
+                  <span className="flex-1 text-destructive">Wirklich löschen?</span>
+                  <button onClick={() => { onDeleteFile?.(f.id); setConfirmDeleteId(null); }} className="text-destructive font-medium hover:underline">Ja</button>
+                  <button onClick={() => setConfirmDeleteId(null)} className="text-muted-foreground hover:underline ml-1">Nein</button>
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    "flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 border",
+                    f.status === "ready"
+                      ? "bg-green-50/60 border-green-200/70 text-green-800"
+                      : f.status === "error"
+                      ? "bg-red-50/60 border-red-200/70 text-red-700"
+                      : "bg-muted/60 border-border text-muted-foreground",
+                  )}
+                >
+                  {fileKindIcon(f.kind)}
+                  <span className="flex-1 truncate font-medium min-w-0">{f.name}</span>
+                  {activeContextFileIds?.includes(f.id) && (
+                    <span className="text-[9px] bg-muted border border-border rounded px-1 text-muted-foreground shrink-0 whitespace-nowrap">
+                      dieses Projekt
+                    </span>
+                  )}
+                  {f.status === "ready" && <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />}
+                  {f.status === "error" && <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                  {(f.status === "uploaded" || f.status === "parsing" || f.status === "mapping" || f.status === "processing") && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                  )}
+                  <span className="text-[10px] text-muted-foreground/70 shrink-0">
+                    {format(new Date(f.createdAt), "dd.MM.", { locale: de })}
+                  </span>
+                </div>
+              )}
+              {confirmDeleteId !== f.id && onDeleteFile && (
+                <button
+                  onClick={() => setConfirmDeleteId(f.id)}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                  title="Datei löschen"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -970,6 +1096,17 @@ export function AnalysesPage() {
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
   const [neueDatatenDismissed, setNeueDatatenDismissed] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [filesCollapsed, setFilesCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-files-open") === "false"; } catch { return false; }
+  });
+  const [pendingContextFileIds, setPendingContextFileIds] = useState<string[]>([]);
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
+  // Upload scope picker: null = no picker shown, otherwise the file being dropped
+  const [scopePicker, setScopePicker] = useState<{
+    file: File; uploadURL: string; objectPath: string; msgId: string;
+  } | null>(null);
+  const [scopePickerChoice, setScopePickerChoice] = useState<"all" | "project">("all");
+  const scopePickerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -987,6 +1124,10 @@ export function AnalysesPage() {
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
+
+  const updateAnalysis = useUpdateAnalysis();
+  const deleteAnalysis = useDeleteAnalysis();
+  const deleteFile = useDeleteFile();
 
   const { data: files } = useListFiles(datasetId ?? "", {
     query: {
@@ -1185,7 +1326,43 @@ export function AnalysesPage() {
   function handleNewAnalysis() {
     setActiveAnalysisId(null);
     setQuestion("");
+    setPendingContextFileIds([]);
+    setFilePickerOpen(false);
     inputRef.current?.focus();
+  }
+
+  function handleDeleteAnalysis(id: string) {
+    deleteAnalysis.mutate({ analysisId: id }, {
+      onSuccess: () => {
+        if (activeAnalysisId === id) {
+          setActiveAnalysisId(null);
+        }
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
+      },
+    });
+  }
+
+  function handleUpdateAnalysis(id: string, patch: { pinned?: boolean; contextFileIds?: string[] }) {
+    updateAnalysis.mutate({ analysisId: id, data: patch }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
+        queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
+      },
+    });
+  }
+
+  function handleDeleteFile(fileId: string) {
+    deleteFile.mutate({ fileId }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(datasetId ?? "") });
+      },
+    });
+  }
+
+  function toggleFilesCollapsed() {
+    const next = !filesCollapsed;
+    setFilesCollapsed(next);
+    try { localStorage.setItem("sidebar-files-open", String(!next)); } catch {}
   }
 
   async function handleSubmit(q?: string) {
@@ -1197,8 +1374,14 @@ export function AnalysesPage() {
     if (!activeAnalysisId) {
       createAnalysis.mutate({
         datasetId: datasetId!,
-        data: { title: text, question: text },
+        data: {
+          title: text,
+          question: text,
+          ...(pendingContextFileIds.length > 0 ? { contextFileIds: pendingContextFileIds } : {}),
+        },
       });
+      setPendingContextFileIds([]);
+      setFilePickerOpen(false);
     } else {
       ask.mutate({ analysisId: activeAnalysisId, data: { question: text } });
     }
@@ -1238,6 +1421,34 @@ export function AnalysesPage() {
         },
       });
 
+      updateSystemMsg(msgId, { status: "uploading" });
+
+      // If there's an active project, show the scope picker before uploading the actual file
+      if (activeAnalysisId) {
+        setScopePickerChoice("all");
+        setScopePicker({ file, uploadURL, objectPath, msgId });
+        // Auto-confirm after 5 seconds on default option ("all")
+        scopePickerTimerRef.current = setTimeout(() => {
+          void completeScopedUpload({ file, uploadURL, objectPath, msgId }, "all");
+          setScopePicker(null);
+        }, 5000);
+        return;
+      }
+
+      await doUpload(file, uploadURL, objectPath, msgId, null);
+    } catch {
+      updateSystemMsg(msgId, { status: "error" });
+    }
+  }
+
+  async function doUpload(
+    file: File,
+    uploadURL: string,
+    objectPath: string,
+    msgId: string,
+    attachToAnalysisId: string | null,
+  ) {
+    try {
       await fetch(uploadURL, {
         method: "PUT",
         headers: { "Content-Type": file.type || "application/octet-stream" },
@@ -1245,7 +1456,7 @@ export function AnalysesPage() {
       });
 
       const registered = await registerFile.mutateAsync({
-        datasetId,
+        datasetId: datasetId!,
         data: {
           objectPath,
           name: file.name,
@@ -1254,14 +1465,43 @@ export function AnalysesPage() {
         },
       });
 
-      queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(datasetId) });
+      queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(datasetId!) });
       updateSystemMsg(msgId, {
         status: "processing",
         fileId: (registered as any).id ?? undefined,
       });
+
+      // If scoped to a project, patch the analysis to attach this file
+      if (attachToAnalysisId && (registered as any).id) {
+        const currentAnalysis = queryClient.getQueryData(getGetAnalysisQueryKey(attachToAnalysisId)) as AnalysisDetail | undefined;
+        const existingIds = currentAnalysis?.contextFileIds ?? [];
+        const newId = (registered as any).id as string;
+        if (!existingIds.includes(newId)) {
+          updateAnalysis.mutate({
+            analysisId: attachToAnalysisId,
+            data: { contextFileIds: [...existingIds, newId] },
+          }, {
+            onSuccess: () => {
+              queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId!) });
+              queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(attachToAnalysisId) });
+            },
+          });
+        }
+      }
     } catch {
       updateSystemMsg(msgId, { status: "error" });
     }
+  }
+
+  async function completeScopedUpload(
+    data: { file: File; uploadURL: string; objectPath: string; msgId: string },
+    scope: "all" | "project",
+  ) {
+    if (scopePickerTimerRef.current) {
+      clearTimeout(scopePickerTimerRef.current);
+      scopePickerTimerRef.current = null;
+    }
+    await doUpload(data.file, data.uploadURL, data.objectPath, data.msgId, scope === "project" ? activeAnalysisId : null);
   }
 
   function handleDragOver(e: React.DragEvent) {
@@ -1324,19 +1564,85 @@ export function AnalysesPage() {
     </button>
   ) : null;
 
+  // ── Shared sidebar panels (always visible, above scroll area) ────────────────
+
+  const activeContextFileIds = analysis?.contextFileIds ?? [];
+
+  const sidebarPanels = (
+    <>
+      <AnalysisHistoryPanel
+        analyses={analysesListItems}
+        activeAnalysisId={activeAnalysisId}
+        latestFileUploadAt={latestFileTime}
+        onSelect={(id) => { setActiveAnalysisId(id); pendingQuestionRef.current = ""; setPendingContextFileIds([]); setFilePickerOpen(false); }}
+        onNew={handleNewAnalysis}
+        onDeleteAnalysis={handleDeleteAnalysis}
+        onUpdateAnalysis={handleUpdateAnalysis}
+      />
+      <HistoricalFiles
+        files={historicalFiles}
+        onDeleteFile={handleDeleteFile}
+        activeContextFileIds={activeContextFileIds}
+        collapsed={filesCollapsed}
+        onToggle={toggleFilesCollapsed}
+      />
+    </>
+  );
+
+  // ── New-project file picker block ─────────────────────────────────────────
+
+  const newProjectFilePicker = !activeAnalysisId && (
+    <div className="px-3 py-2 border-b border-border/60 shrink-0">
+      <button
+        onClick={() => setFilePickerOpen((v) => !v)}
+        className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors w-full"
+      >
+        <ChevronDown className={cn("w-3 h-3 transition-transform duration-150", !filePickerOpen && "-rotate-90")} />
+        Dateien auswählen
+        {pendingContextFileIds.length > 0 && (
+          <span className="ml-1 text-primary font-bold">({pendingContextFileIds.length})</span>
+        )}
+      </button>
+      {filePickerOpen && (
+        <div className="mt-1.5 flex flex-col gap-1 max-h-32 overflow-y-auto">
+          {historicalFiles.length === 0 && (
+            <p className="text-xs text-muted-foreground/50 px-1">Keine Dateien vorhanden</p>
+          )}
+          {historicalFiles.map((f) => {
+            const checked = pendingContextFileIds.includes(f.id);
+            return (
+              <label
+                key={f.id}
+                className="flex items-center gap-2 text-xs rounded px-1.5 py-1 cursor-pointer hover:bg-muted transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    setPendingContextFileIds((prev) =>
+                      checked ? prev.filter((id) => id !== f.id) : [...prev, f.id]
+                    );
+                  }}
+                  className="rounded border-border accent-primary"
+                />
+                {fileKindIcon(f.kind)}
+                <span className="flex-1 truncate text-foreground">{f.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   // ── Chat zone renderer ─────────────────────────────────────────────────────
 
   function renderChatContent() {
     if (!activeAnalysisId && !createAnalysis.isPending && systemMessages.length === 0) {
       return (
         <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
-          <AnalysisHistoryPanel
-            analyses={analysesListItems}
-            activeAnalysisId={activeAnalysisId}
-            latestFileUploadAt={latestFileTime}
-            onSelect={(id) => setActiveAnalysisId(id)}
-            onNew={handleNewAnalysis}
-          />
+          {sidebarPanels}
+          {newProjectFilePicker}
           {showNeueDatatenBanner && (
             <NeueDatatenBanner
               onDismiss={() => setNeueDatatenDismissed(true)}
@@ -1344,16 +1650,15 @@ export function AnalysesPage() {
             />
           )}
           <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto min-h-0">
-            <HistoricalFiles files={historicalFiles} />
             <StarterQuestions
-                hasFiles={hasFiles}
-                datasetId={datasetId}
-                onTemplateRun={(id) => {
-                  setActiveAnalysisId(id);
-                  queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
-                }}
-                onAsk={handleStarterQuestion}
-              />
+              hasFiles={hasFiles}
+              datasetId={datasetId!}
+              onTemplateRun={(id) => {
+                setActiveAnalysisId(id);
+                queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId!) });
+              }}
+              onAsk={handleStarterQuestion}
+            />
             <div ref={bottomRef} />
           </div>
           {scrollToBottomButton}
@@ -1364,8 +1669,8 @@ export function AnalysesPage() {
     if (createAnalysis.isPending && !activeAnalysisId) {
       return (
         <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
+          {sidebarPanels}
           <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-5 min-h-0">
-            <HistoricalFiles files={historicalFiles} />
             {systemMessages.map((m) => (
               <SystemMessageBubble key={m.id} msg={m} />
             ))}
@@ -1386,75 +1691,63 @@ export function AnalysesPage() {
     }
 
     const msgs = analysis?.messages ?? [];
+    const chatFollowUpQuestions = msgs.filter(m => m.role === "assistant").pop()?.followUpQuestions ?? [];
 
     return (
       <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
-        <AnalysisHistoryPanel
-          analyses={analysesListItems}
-          activeAnalysisId={activeAnalysisId}
-          latestFileUploadAt={latestFileTime}
-          onSelect={(id) => { setActiveAnalysisId(id); pendingQuestionRef.current = ""; }}
-          onNew={handleNewAnalysis}
-        />
-      <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
-        <HistoricalFiles files={historicalFiles} />
-        <div className="space-y-5">
-          {systemMessages.map((m) => (
-            <SystemMessageBubble key={m.id} msg={m} />
-          ))}
+        {sidebarPanels}
+        <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
+          <div className="space-y-5">
+            {systemMessages.map((m) => (
+              <SystemMessageBubble key={m.id} msg={m} />
+            ))}
 
-          {!analysis && activeAnalysisId ? (
-            <div className="flex items-center justify-center h-16">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-            {/* Show pending question bubble while background agent hasn't written messages yet */}
-            {msgs.length === 0 && isAgentWorking && pendingQuestionRef.current && (
-              <div className="flex gap-3 justify-end">
-                <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
-                  {pendingQuestionRef.current}
-                </div>
-                <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
-                  <User className="w-3.5 h-3.5 text-primary-foreground" />
-                </div>
+            {!analysis && activeAnalysisId ? (
+              <div className="flex items-center justify-center h-16">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
-            )}
-            {msgs.map((msg, idx) => {
-              // Assistant results (not errors, not back-questions) go to the right panel — skip here
-              if (
-                msg.role === "assistant" &&
-                !msg.error &&
-                !isBackQuestion(msg.content)
-              ) {
-                return null;
-              }
-              return (
-                <div key={msg.id}>
-                  <MessageBubble
-                    msg={msg}
-                    isNew={isNewMessage(msg)}
-                    isLast={idx === msgs.length - 1}
-                    isAgentWorking={isAgentWorking}
-                  />
+            ) : (
+              <>
+              {msgs.length === 0 && isAgentWorking && pendingQuestionRef.current && (
+                <div className="flex gap-3 justify-end">
+                  <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]">
+                    {pendingQuestionRef.current}
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0 mt-1">
+                    <User className="w-3.5 h-3.5 text-primary-foreground" />
+                  </div>
                 </div>
-              );
-            })}
-            </>
-          )}
+              )}
+              {msgs.map((msg, idx) => {
+                if (msg.role === "assistant" && !msg.error && !isBackQuestion(msg.content)) {
+                  return null;
+                }
+                return (
+                  <div key={msg.id}>
+                    <MessageBubble
+                      msg={msg}
+                      isNew={isNewMessage(msg)}
+                      isLast={idx === msgs.length - 1}
+                      isAgentWorking={isAgentWorking}
+                    />
+                  </div>
+                );
+              })}
+              </>
+            )}
 
-          {isAgentWorking && (
-            <AgentWorkingBanner currentStep={currentStep} />
-          )}
+            {isAgentWorking && (
+              <AgentWorkingBanner currentStep={currentStep} />
+            )}
 
           {chatFollowUpQuestions.length > 0 && (
             <FollowUpChips questions={chatFollowUpQuestions} onAsk={handleSubmit} />
           )}
 
-          <div ref={bottomRef} />
+            <div ref={bottomRef} />
+          </div>
         </div>
-      </div>
-      {scrollToBottomButton}
+        {scrollToBottomButton}
       </div>
     );
   }
@@ -1535,6 +1828,62 @@ export function AnalysesPage() {
             <UploadCloud className="w-10 h-10 text-primary mx-auto mb-2" />
             <p className="font-semibold text-foreground">Datei hier ablegen</p>
             <p className="text-sm text-muted-foreground mt-1">Excel, CSV oder PDF</p>
+          </div>
+        </div>
+      )}
+
+      {/* Upload scope picker */}
+      {scopePicker && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-background rounded-xl border border-border shadow-xl p-4 w-72">
+            <p className="text-sm font-semibold mb-1">Datei hochladen: {scopePicker.file.name}</p>
+            <p className="text-xs text-muted-foreground mb-3">Für welche Analysen soll diese Datei gelten?</p>
+            <div className="flex flex-col gap-2 mb-3">
+              <label className="flex items-start gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted/50 transition-colors">
+                <input
+                  type="radio"
+                  name="scope"
+                  value="all"
+                  checked={scopePickerChoice === "all"}
+                  onChange={() => setScopePickerChoice("all")}
+                  className="mt-0.5 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">Für alle Analysen</p>
+                  <p className="text-xs text-muted-foreground">Standard – Datei steht in allen Projekten zur Verfügung</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted/50 transition-colors">
+                <input
+                  type="radio"
+                  name="scope"
+                  value="project"
+                  checked={scopePickerChoice === "project"}
+                  onChange={() => setScopePickerChoice("project")}
+                  className="mt-0.5 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">Nur für dieses Projekt</p>
+                  <p className="text-xs text-muted-foreground">Datei wird dem aktuellen Projekt zugeordnet</p>
+                </div>
+              </label>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const data = scopePicker;
+                  setScopePicker(null);
+                  void completeScopedUpload(data, scopePickerChoice);
+                }}
+              >
+                Bestätigen
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground/60 mt-2 text-right">
+              Automatisch in 5 Sek. mit „Für alle" fortfahren
+            </p>
           </div>
         </div>
       )}
