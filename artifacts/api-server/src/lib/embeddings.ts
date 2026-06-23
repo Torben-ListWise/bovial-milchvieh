@@ -12,8 +12,12 @@ const MAX_CHUNKS = 500;
 const CHUNK_SIZE = 600;
 const CHUNK_OVERLAP = 100;
 
-// Persist model weights across restarts in a local cache directory
+// Model files are pre-downloaded into .hf-cache at build time via
+// scripts/download-model.mjs (called from build.mjs). Point the library at
+// that local directory so it never attempts a remote fetch at startup.
 env.cacheDir = "./.hf-cache";
+env.localModelPath = "./.hf-cache";
+env.allowRemoteModels = false;
 
 // ────────────────────────────────────────────────────────────────────
 // Exported stable promise — resolves when the model is fully loaded.
