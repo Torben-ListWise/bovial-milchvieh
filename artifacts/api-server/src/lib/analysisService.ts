@@ -28,9 +28,20 @@ export async function generateFollowUps(question: string, answer: string): Promi
       }],
     });
     const text = resp.content.find(b => b.type === "text")?.text?.trim() ?? "[]";
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed.slice(0, 3).map(String) : [];
-  } catch {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
+      logger.error({ err: parseErr, rawText: text }, "generateFollowUps: JSON.parse failed");
+      return [];
+    }
+    if (!Array.isArray(parsed)) {
+      logger.warn({ parsed }, "generateFollowUps: response is not an array");
+      return [];
+    }
+    return parsed.slice(0, 3).map(String);
+  } catch (err) {
+    logger.error({ err }, "generateFollowUps: LLM call failed");
     return [];
   }
 }

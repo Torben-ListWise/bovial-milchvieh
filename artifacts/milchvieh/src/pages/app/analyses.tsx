@@ -708,16 +708,22 @@ function FollowUpChips({
   onAsk: (q: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-1">
-      {questions.map((q, i) => (
-        <button
-          key={i}
-          onClick={() => onAsk(q)}
-          className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left"
-        >
-          {q}
-        </button>
-      ))}
+    <div className="flex flex-col gap-2 pl-10 animate-in fade-in slide-in-from-bottom-1">
+      <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+        <ChevronRight className="w-3 h-3" />
+        Weiter fragen
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {questions.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => onAsk(q)}
+            className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1165,8 +1171,10 @@ export function AnalysesPage() {
   chatWidthRef.current = chatWidth;
   // Track component mount time so we can detect "new" messages for animation
   const mountedAtRef = useRef(Date.now());
-  // Track previous isAgentWorking value to fire a one-shot refetch after agent ends
+  // Track previous isAgentWorking value to fire polling after agent ends
   const wasAgentWorkingRef = useRef(false);
+  const followUpPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const followUpPollingStartRef = useRef<number>(0);
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
@@ -1260,16 +1268,44 @@ export function AnalysesPage() {
   const currentStep = analysis?.agentProgress ?? null;
   const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
 
-  // Step 1 — Polling-Fix: one-shot refetch 3s after agent ends so followUpQuestions patch arrives
+  // Step 1 — Smart polling: after agent ends, poll every 1s (up to 12s) until
+  // followUpQuestions arrive, then stop. This is independent of LLM latency.
   useEffect(() => {
-    let t: ReturnType<typeof setTimeout> | undefined;
     if (activeAnalysisId && wasAgentWorkingRef.current && !isAgentWorking) {
-      t = setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(activeAnalysisId) });
-      }, 3000);
+      // Stop any previous interval
+      if (followUpPollingRef.current) {
+        clearInterval(followUpPollingRef.current);
+        followUpPollingRef.current = null;
+      }
+      followUpPollingStartRef.current = Date.now();
+      followUpPollingRef.current = setInterval(() => {
+        const elapsed = Date.now() - followUpPollingStartRef.current;
+        // Check if follow-up questions already landed in the cache
+        const cached = queryClient.getQueryData(
+          getGetAnalysisQueryKey(activeAnalysisId),
+        ) as AnalysisDetail | undefined;
+        const lastResult = [...(cached?.messages ?? [])]
+          .reverse()
+          .find((m) => m.role === "assistant" && !m.error && !isBackQuestion(m.content));
+        const hasQuestions =
+          ((lastResult?.followUpQuestions as string[] | null)?.length ?? 0) > 0;
+        if (hasQuestions || elapsed > 12_000) {
+          clearInterval(followUpPollingRef.current!);
+          followUpPollingRef.current = null;
+          return;
+        }
+        queryClient.invalidateQueries({
+          queryKey: getGetAnalysisQueryKey(activeAnalysisId),
+        });
+      }, 1000);
     }
     wasAgentWorkingRef.current = isAgentWorking;
-    return () => { if (t !== undefined) clearTimeout(t); };
+    return () => {
+      if (followUpPollingRef.current) {
+        clearInterval(followUpPollingRef.current);
+        followUpPollingRef.current = null;
+      }
+    };
   }, [isAgentWorking, activeAnalysisId]);
 
   // Step 2 — Compute follow-up chips for the chat panel
