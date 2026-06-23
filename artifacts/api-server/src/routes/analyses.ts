@@ -31,6 +31,18 @@ import { processQuestion } from "../lib/analysisService";
 
 const router: IRouter = Router();
 
+// ── SSE stream registry ───────────────────────────────────────────────────────
+// Keyed by analysisId. Writers are registered when the client opens the SSE
+// endpoint and removed on disconnect or when the agent sends "done".
+type SseWriter = {
+  sendDelta: (text: string) => void;
+  sendSources: (sources: string[]) => void;
+  sendProgress: (step: string) => void;
+  sendDone: () => void;
+  sendError: (msg: string) => void;
+};
+const sseWriters = new Map<string, SseWriter>();
+
 async function ownDatasetId(datasetId: string, userId: string): Promise<boolean> {
   const [d] = await db
     .select({ id: datasetsTable.id })
@@ -224,6 +236,53 @@ router.patch("/analyses/:analysisId", requireAuth, async (req: Request, res: Res
   res.json(UpdateAnalysisResponse.parse(serializeAnalysis(updated)));
 });
 
+// ── GET /analyses/:analysisId/stream ─────────────────────────────────────────
+// Server-Sent Events endpoint. The client opens this AFTER submitting a
+// question via POST. Auth via standard Bearer token (fetch + ReadableStream).
+router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Response) => {
+  const { analysisId } = req.params;
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
+
+  // Send an initial comment so the client knows the connection is open
+  res.write(": connected\n\n");
+
+  function sendEvent(event: string, data: unknown) {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  const writer: SseWriter = {
+    sendDelta: (text) => sendEvent("delta", { text }),
+    sendSources: (sources) => sendEvent("sources", { sources }),
+    sendProgress: (step) => sendEvent("progress", { step }),
+    sendDone: () => {
+      sendEvent("done", {});
+      res.end();
+      sseWriters.delete(analysisId);
+    },
+    sendError: (msg) => {
+      sendEvent("error", { message: msg });
+      res.end();
+      sseWriters.delete(analysisId);
+    },
+  };
+
+  sseWriters.set(analysisId, writer);
+
+  // Heartbeat every 15 s to keep the connection alive through proxies
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": heartbeat\n\n");
+  }, 15_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    sseWriters.delete(analysisId);
+  });
+});
+
 router.delete("/analyses/:analysisId", requireAuth, async (req: Request, res: Response) => {
   const { analysisId } = DeleteAnalysisParams.parse(req.params);
   const a = await ownAnalysis(analysisId, req.userId!);
@@ -261,7 +320,17 @@ router.post(
     res.status(200).json(AskQuestionResponse.parse({ accepted: true }));
 
     setImmediate(() => {
-      processQuestion(a, parsed.data.question).catch((err) => {
+      // Pass SSE callbacks via closure over the registry — the SSE connection
+      // may open slightly after this fires, so we look up the writer at call
+      // time (not now). By the time any text delta fires, the client has had
+      // ample time (≥1 tool-call round trip) to open the SSE connection.
+      const id = a.id;
+      processQuestion(a, parsed.data.question, {
+        onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
+        onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
+        onDone: () => sseWriters.get(id)?.sendDone(),
+      }).catch((err) => {
+        sseWriters.get(id)?.sendError("Verarbeitungsfehler");
         logger.error({ err }, "Background ask processQuestion failed");
       });
     });

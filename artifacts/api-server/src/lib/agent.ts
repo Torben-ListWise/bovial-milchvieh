@@ -407,6 +407,10 @@ interface RunOptions {
   sector?: string;
   systemExtra?: string;
   onProgress?: (step: string | null) => Promise<void>;
+  /** Called with each text token as Claude generates the answer. */
+  onTextDelta?: (delta: string) => void;
+  /** Called once per search_knowledge call with the unique document titles found. */
+  onSourceSearched?: (sources: string[]) => void;
 }
 
 async function fetchDocumentContext(datasetId: string): Promise<string> {
@@ -699,6 +703,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               });
             }
           }
+          // Notify SSE listener which documents were found
+          if (seenTitles.size > 0) {
+            opts.onSourceSearched?.(Array.from(seenTitles));
+          }
           return { results };
         } catch (err) {
           logger.error({ err }, "search_knowledge fehlgeschlagen");
@@ -913,7 +921,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const response = await client.beta.messages.create({
+    const stream = client.beta.messages.stream({
       model: MODEL,
       max_tokens: 8192,
       system: buildSystemBlocks(
@@ -926,6 +934,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       tool_choice: turn === 0 ? { type: "any" } : { type: "auto" },
       messages,
     });
+
+    // Stream text tokens to the SSE listener as they arrive
+    if (opts.onTextDelta) {
+      stream.on("text", (delta) => opts.onTextDelta!(delta));
+    }
+
+    const response = await stream.finalMessage();
     logger.debug({
       cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
       cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,

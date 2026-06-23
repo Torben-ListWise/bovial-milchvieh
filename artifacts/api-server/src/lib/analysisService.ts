@@ -46,11 +46,18 @@ export async function generateFollowUps(question: string, answer: string): Promi
   }
 }
 
+export type SseCallbacks = {
+  onTextDelta?: (delta: string) => void;
+  onSourceSearched?: (sources: string[]) => void;
+  onDone?: () => void;
+};
+
 // Insert the user message, run the agent grounded on deterministic compute,
 // persist the assistant answer, and log activity (metadata only).
 export async function processQuestion(
   analysis: Analysis,
   question: string,
+  sse?: SseCallbacks,
 ): Promise<Message> {
   // Outer try/finally ensures agentProgress is always cleared, even when an
   // early DB operation (user-message insert, history fetch, rules load) throws
@@ -136,6 +143,8 @@ export async function processQuestion(
           conversation,
           sector,
           systemExtra: rulesContext || undefined,
+          onTextDelta: sse?.onTextDelta,
+          onSourceSearched: sse?.onSourceSearched,
           onProgress: async (step: string | null) => {
             // The previous step is now complete — move it to completedSteps
             if (lastProgressStep) completedSteps.push(lastProgressStep);
@@ -189,6 +198,10 @@ export async function processQuestion(
         backQuestions: backQuestions.length > 0 ? backQuestions : null,
       } as any)
       .returning();
+
+    // Signal SSE listener that the final result (including citations, charts,
+    // follow-up questions) is now persisted and ready to reload from DB.
+    sse?.onDone?.();
 
     const category = analysis.category ?? categorizeQuestion(question);
     await db
