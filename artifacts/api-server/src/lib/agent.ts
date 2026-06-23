@@ -455,6 +455,27 @@ async function fetchDocumentContext(datasetId: string): Promise<string> {
   );
 }
 
+/** Retry any async fn on transient Anthropic 500s (flaky upstream). */
+async function callWithRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 500 && attempt < maxAttempts) {
+        const delay = 500 * attempt;
+        logger.warn({ attempt, delay }, "Anthropic 500 — Wiederhole...");
+        await new Promise((r) => setTimeout(r, delay));
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const client = getClient();
   const charts: Chart[] = [];
@@ -951,17 +972,19 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     // Use non-streaming messages.create — client.messages.stream() returns HTTP
     // 200 then sends an error event in the SSE body for claude-sonnet-4-5,
     // which the SDK surfaces as an _APIError with status=undefined.
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 8192,
-      system: buildSystemString(
-        docContext,
-        ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
-      ),
-      tools: TOOLS,
-      tool_choice: { type: "auto" },
-      messages,
-    });
+    const response = await callWithRetry(() =>
+      client.messages.create({
+        model: MODEL,
+        max_tokens: 8192,
+        system: buildSystemString(
+          docContext,
+          ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
+        ),
+        tools: TOOLS,
+        tool_choice: { type: "auto" },
+        messages,
+      }),
+    );
     logger.debug({
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
@@ -1054,12 +1077,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       // Do NOT pass tools — verification is a pure text review.
       // Include docContext so the verifier can see PDF content and won't
       // incorrectly flag document-sourced numbers as ungrounded.
-      const verifyResponse = await client.messages.create({
-        model: MODEL,
-        max_tokens: 4096,
-        system: buildSystemString(docContext, ((opts.systemExtra ?? "") + knowledgeTitles) || undefined),
-        messages: verifyMessages,
-      });
+      const verifyResponse = await callWithRetry(() =>
+        client.messages.create({
+          model: MODEL,
+          max_tokens: 4096,
+          system: buildSystemString(docContext, ((opts.systemExtra ?? "") + knowledgeTitles) || undefined),
+          messages: verifyMessages,
+        }),
+      );
       logger.debug({
         input_tokens: verifyResponse.usage.input_tokens,
         output_tokens: verifyResponse.usage.output_tokens,
