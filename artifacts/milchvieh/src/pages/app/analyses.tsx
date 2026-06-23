@@ -896,12 +896,18 @@ function BackQuestionForm({
 function FollowUpChips({
   questions,
   onAsk,
+  fading = false,
 }: {
   questions: string[];
   onAsk: (q: string) => void;
+  fading?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 pl-10 animate-in fade-in slide-in-from-bottom-1">
+    <div
+      className={`flex flex-col gap-2 pl-10 animate-in fade-in slide-in-from-bottom-1 transition-opacity duration-500 ${
+        fading ? "opacity-30 pointer-events-none" : "opacity-100"
+      }`}
+    >
       <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
         <ChevronRight className="w-3 h-3" />
         Weiter fragen
@@ -1352,6 +1358,7 @@ export function AnalysesPage() {
   const [mobileTab, setMobileTab] = useState<"chat" | "chart">("chat");
   const [isDragOver, setIsDragOver] = useState(false);
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
+  const [pinnedChips, setPinnedChips] = useState<string[]>([]);
   const [chatWidth, setChatWidth] = useState<number>(() => {
     const saved = sessionStorage.getItem("chatPanelWidth");
     return saved ? Math.max(200, Math.min(700, parseInt(saved, 10))) : 320;
@@ -1547,6 +1554,28 @@ export function AnalysesPage() {
     if (!lastAssistantMsgIdForForm) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lastAssistantMsgIdForForm]);
+
+  // Step 5 — Pin chips: update pinned set whenever fresh chips arrive
+  useEffect(() => {
+    if (chatFollowUpQuestions.length > 0) {
+      setPinnedChips(chatFollowUpQuestions);
+    }
+  }, [followUpQuestionsKey]);
+
+  // Clear pinned chips when the analysis switches
+  useEffect(() => {
+    setPinnedChips([]);
+  }, [activeAnalysisId]);
+
+  // Clear pinned chips once a new assistant message starts arriving
+  // (i.e. the agent has started responding to the new question)
+  const lastMsgId = (analysis?.messages ?? []).at(-1)?.id;
+  const lastMsgRole = (analysis?.messages ?? []).at(-1)?.role;
+  useEffect(() => {
+    if (lastMsgRole === "assistant") {
+      setPinnedChips([]);
+    }
+  }, [lastMsgId]);
 
   // ── Panel resize drag handlers ────────────────────────────────────────────
   useEffect(() => {
@@ -2057,8 +2086,12 @@ export function AnalysesPage() {
               <AgentWorkingBanner currentStep={currentStep} />
             )}
 
-          {chatFollowUpQuestions.length > 0 && (
-            <FollowUpChips questions={chatFollowUpQuestions} onAsk={handleSubmit} />
+          {pinnedChips.length > 0 && (
+            <FollowUpChips
+              questions={pinnedChips}
+              onAsk={handleSubmit}
+              fading={isAgentWorking}
+            />
           )}
 
             <div ref={bottomRef} />
