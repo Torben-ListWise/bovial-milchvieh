@@ -678,6 +678,24 @@ const FOOTNOTE_SANITIZE_SCHEMA = {
 
 // ── Markdown renderer ────────────────────────────────────────────────────────
 
+const LINK_CLASSES = "text-primary underline hover:text-primary/80";
+
+const EXTERNAL_LINK_COMPONENTS = {
+  a({ href, children }: { href?: string; children?: React.ReactNode }) {
+    if (href?.startsWith("http://") || href?.startsWith("https://")) {
+      return (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={LINK_CLASSES}>
+          {children}
+        </a>
+      );
+    }
+    if (href?.startsWith("#")) {
+      return <a href={href} className={LINK_CLASSES}>{children}</a>;
+    }
+    return <span className={LINK_CLASSES}>{children}</span>;
+  },
+};
+
 const PROSE_CLASSES = "prose prose-sm max-w-none " +
   "prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-3 prose-headings:mb-1 " +
   "prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed " +
@@ -690,7 +708,7 @@ const PROSE_CLASSES = "prose prose-sm max-w-none " +
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
   return (
     <div className={PROSE_CLASSES}>
-      <ReactMarkdown>{text}</ReactMarkdown>
+      <ReactMarkdown components={EXTERNAL_LINK_COMPONENTS}>{text}</ReactMarkdown>
     </div>
   );
 });
@@ -715,6 +733,7 @@ const ResultMarkdownContent = memo(function ResultMarkdownContent({
     }>
       <ReactMarkdown
         rehypePlugins={[rehypeRaw, [rehypeSanitize, FOOTNOTE_SANITIZE_SCHEMA]]}
+        components={EXTERNAL_LINK_COMPONENTS}
       >
         {processed}
       </ReactMarkdown>
