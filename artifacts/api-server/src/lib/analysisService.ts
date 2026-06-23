@@ -143,6 +143,7 @@ export async function processQuestion(
           conversation,
           sector,
           systemExtra: rulesContext || undefined,
+          userId: analysis.userId ?? undefined,
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
           onProgress: async (step: string | null) => {

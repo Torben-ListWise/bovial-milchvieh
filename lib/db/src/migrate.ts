@@ -168,6 +168,23 @@ export async function ensureExtensions(): Promise<void> {
       `);
     }
   }
+  // Migration: knowledge_missed_queries table for operator knowledge-gap analysis
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS knowledge_missed_queries (
+      id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      query      TEXT        NOT NULL,
+      top_score  TEXT,
+      customer_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS knowledge_missed_queries_customer_idx ON knowledge_missed_queries (customer_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS knowledge_missed_queries_created_idx ON knowledge_missed_queries (created_at)"
+  );
+
   // Migration: web_search_cache table for deduplicating external search calls
   await pool.query(`
     CREATE TABLE IF NOT EXISTS web_search_cache (

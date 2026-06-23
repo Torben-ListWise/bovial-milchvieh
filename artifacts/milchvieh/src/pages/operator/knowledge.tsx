@@ -21,6 +21,9 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
+  TrendingUp,
+  HelpCircle,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +96,119 @@ function CategoryBadge({ category }: { category: string }) {
       <Tag className="w-2.5 h-2.5" />
       {category}
     </Badge>
+  );
+}
+
+interface KnowledgeGapRow {
+  query: string;
+  frequency: number;
+  maxScore: number | null;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+function KnowledgeGapsCard() {
+  const { getToken } = useAuth();
+  const [enabled, setEnabled] = useState(false);
+
+  const { data: gaps, isLoading, refetch, isFetching } = useQuery<KnowledgeGapRow[]>({
+    queryKey: ["knowledge-gaps"],
+    enabled,
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/admin/knowledge-gaps?limit=50`, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Fehler beim Laden");
+      return res.json();
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <HelpCircle className="w-4 h-4 text-amber-500" />
+              Wissenslücken
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Fragen, bei denen die Bibliothek keine relevanten Treffer lieferte — sortiert nach Häufigkeit.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {enabled && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+                title="Aktualisieren"
+              >
+                <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+              </Button>
+            )}
+            {!enabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEnabled(true)}
+                className="gap-2"
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                Anzeigen
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      {enabled && (
+        <CardContent className="pt-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Laden...
+            </div>
+          ) : !gaps || gaps.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              <CheckCircle className="w-7 h-7 mx-auto mb-2 text-green-500 opacity-60" />
+              <p className="text-sm">Noch keine Wissenslücken aufgezeichnet.</p>
+              <p className="text-xs mt-0.5">Sobald ein Bauer eine Frage stellt, die keine Bibliotheks-Treffer erzielt, erscheint sie hier.</p>
+            </div>
+          ) : (
+            <div className="space-y-0 divide-y">
+              {gaps.map((gap, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-center rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold min-w-[2rem] h-7 px-1.5 shrink-0">
+                    {gap.frequency}×
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-snug break-words">{gap.query}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Letztes Mal: {new Date(gap.lastSeen).toLocaleDateString("de-DE")}
+                      {gap.maxScore !== null && (
+                        <span className="ml-2">
+                          · Top-Score: <span className={cn(
+                            "font-medium",
+                            gap.maxScore >= 0.45 ? "text-yellow-600" : "text-red-600"
+                          )}>{(gap.maxScore * 100).toFixed(0)}%</span>
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
@@ -648,6 +764,9 @@ export function KnowledgePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Knowledge Gaps */}
+      <KnowledgeGapsCard />
 
       {/* Document List */}
       <Card>

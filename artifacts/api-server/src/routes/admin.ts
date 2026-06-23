@@ -10,6 +10,7 @@ import {
   activityLogTable,
   analysisTemplatesTable,
   messagesTable,
+  knowledgeMissedQueriesTable,
 } from "@workspace/db";
 import {
   GetAdminStatsResponse,
@@ -251,6 +252,44 @@ router.delete(
       .delete(analysisTemplatesTable)
       .where(eq(analysisTemplatesTable.id, id));
     res.status(204).end();
+  },
+);
+
+router.get(
+  "/admin/knowledge-gaps",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const limit = Math.min(parseInt((req.query["limit"] as string | undefined) ?? "50", 10), 200);
+    const rows = await db.execute(
+      sql`
+        SELECT
+          query,
+          COUNT(*)::int AS frequency,
+          MAX(top_score::numeric) AS max_score,
+          MIN(created_at) AS first_seen,
+          MAX(created_at) AS last_seen
+        FROM knowledge_missed_queries
+        GROUP BY query
+        ORDER BY frequency DESC, last_seen DESC
+        LIMIT ${limit}
+      `,
+    );
+    res.json(
+      (rows.rows as {
+        query: string;
+        frequency: number;
+        max_score: string | null;
+        first_seen: string;
+        last_seen: string;
+      }[]).map((r) => ({
+        query: r.query,
+        frequency: r.frequency,
+        maxScore: r.max_score ? parseFloat(r.max_score) : null,
+        firstSeen: r.first_seen,
+        lastSeen: r.last_seen,
+      })),
+    );
   },
 );
 

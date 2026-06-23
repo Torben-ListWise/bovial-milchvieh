@@ -12,6 +12,7 @@ import {
   sourceFilesTable,
   knowledgeDocumentsTable,
   knowledgeChunksTable,
+  knowledgeMissedQueriesTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -418,6 +419,8 @@ interface RunOptions {
   conversation: { role: "user" | "assistant"; content: string }[];
   sector?: string;
   systemExtra?: string;
+  /** Clerk user ID of the customer running this analysis — used for knowledge-gap logging. */
+  userId?: string;
   onProgress?: (step: string | null) => Promise<void>;
   /** Called with each text token as Claude generates the answer. */
   onTextDelta?: (delta: string) => void;
@@ -704,7 +707,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           const allRows = rows.rows as { chunk_text: string; title: string; similarity: number }[];
           const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
           if (relevantRows.length === 0) {
-            logger.debug({ query, topScore: allRows[0] ? Number(allRows[0].similarity).toFixed(3) : "n/a" }, "search_knowledge: keine relevanten Treffer über Schwellenwert");
+            const topScore = allRows[0] ? Number(allRows[0].similarity).toFixed(3) : null;
+            logger.debug({ query, topScore: topScore ?? "n/a" }, "search_knowledge: keine relevanten Treffer über Schwellenwert");
+            db.insert(knowledgeMissedQueriesTable).values({
+              query,
+              topScore: topScore ?? null,
+              customerId: opts.userId ?? null,
+            }).catch((err) => logger.warn({ err }, "Fehler beim Speichern der missed query"));
             return { results: [], noRelevantResults: true };
           }
           const results = relevantRows.map(

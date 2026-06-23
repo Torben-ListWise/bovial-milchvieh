@@ -56,8 +56,29 @@ export const knowledgeChunksTable = pgTable(
   ],
 );
 
+export const knowledgeMissedQueriesTable = pgTable(
+  "knowledge_missed_queries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    query: text("query").notNull(),
+    topScore: text("top_score"),
+    customerId: text("customer_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("knowledge_missed_queries_customer_idx").on(table.customerId),
+    index("knowledge_missed_queries_created_idx").on(table.createdAt),
+  ],
+);
+
 export type KnowledgeDocument = typeof knowledgeDocumentsTable.$inferSelect;
 export type InsertKnowledgeDocument =
   typeof knowledgeDocumentsTable.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeChunksTable.$inferSelect;
 export type InsertKnowledgeChunk = typeof knowledgeChunksTable.$inferInsert;
+export type KnowledgeMissedQuery =
+  typeof knowledgeMissedQueriesTable.$inferSelect;
+export type InsertKnowledgeMissedQuery =
+  typeof knowledgeMissedQueriesTable.$inferInsert;
