@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
 import type {
   BetaMessageParam,
   BetaTool,
@@ -710,6 +711,28 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         if (!apiKey) {
           return { error: "Keine Web-Suche konfiguriert (BRAVE_SEARCH_API_KEY fehlt)" };
         }
+
+        // --- Cache check ---
+        const normalizedQuery = query.trim().toLowerCase().replace(/\s+/g, " ");
+        const queryHash = createHash("sha256").update(normalizedQuery).digest("hex");
+
+        try {
+          const cached = await db.execute(
+            sql`SELECT results FROM web_search_cache WHERE query_hash = ${queryHash} AND expires_at > NOW() LIMIT 1`
+          );
+          if (cached.rows.length > 0) {
+            const results = (cached.rows[0] as { results: { title: string; url: string; snippet: string }[] }).results;
+            logger.debug({ queryHash }, "search_web: Cache-Hit");
+            if (results.length > 0) {
+              citations.push({ label: `Web: ${query}`, value: results[0].url, basis: null, sourceType: "wissen" });
+            }
+            return { results, query, cached: true };
+          }
+        } catch (err) {
+          logger.warn({ err }, "search_web: Cache-Lookup fehlgeschlagen, fahre mit Live-Suche fort");
+        }
+
+        // --- Live search (Brave) ---
         try {
           const url = new URL("https://api.search.brave.com/res/v1/web/search");
           url.searchParams.set("q", query);
@@ -736,15 +759,25 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             url: r.url,
             snippet: r.description ?? "",
           }));
+
+          // --- Store in cache ---
           if (results.length > 0) {
-            citations.push({
-              label: `Web: ${query}`,
-              value: results[0].url,
-              basis: null,
-              sourceType: "wissen",
-            });
+            try {
+              await db.execute(
+                sql`INSERT INTO web_search_cache (query_hash, query, results)
+                    VALUES (${queryHash}, ${normalizedQuery}, ${JSON.stringify(results)}::jsonb)
+                    ON CONFLICT (query_hash) DO UPDATE
+                      SET results = EXCLUDED.results,
+                          created_at = NOW(),
+                          expires_at = NOW() + INTERVAL '7 days'`
+              );
+            } catch (err) {
+              logger.warn({ err }, "search_web: Cache-Speichern fehlgeschlagen");
+            }
+            citations.push({ label: `Web: ${query}`, value: results[0].url, basis: null, sourceType: "wissen" });
           }
-          return { results, query };
+
+          return { results, query, cached: false };
         } catch (err) {
           logger.error({ err }, "search_web fehlgeschlagen");
           return { error: "Web-Suche fehlgeschlagen" };

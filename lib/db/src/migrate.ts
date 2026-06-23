@@ -168,6 +168,21 @@ export async function ensureExtensions(): Promise<void> {
       `);
     }
   }
+  // Migration: web_search_cache table for deduplicating external search calls
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS web_search_cache (
+      id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      query_hash TEXT        NOT NULL UNIQUE,
+      query      TEXT        NOT NULL,
+      results    JSONB       NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days'
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS web_search_cache_expires_idx ON web_search_cache (expires_at)"
+  );
+
   // Seed default Biogas and Ackerbau master data if not yet present
   const { rows: biogasMd } = await pool.query(
     "SELECT COUNT(*)::int as c FROM master_data WHERE sector = 'biogas'"
