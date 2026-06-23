@@ -28,20 +28,9 @@ import { type Chart, type Citation } from "../lib/agent";
 import { logger } from "../lib/logger";
 import { categorizeQuestion } from "../lib/categorize";
 import { processQuestion } from "../lib/analysisService";
+import { sseWriters, type SseWriter } from "../lib/sseRegistry";
 
 const router: IRouter = Router();
-
-// ── SSE stream registry ───────────────────────────────────────────────────────
-// Keyed by analysisId. Writers are registered when the client opens the SSE
-// endpoint and removed on disconnect or when the agent sends "done".
-type SseWriter = {
-  sendDelta: (text: string) => void;
-  sendSources: (sources: string[]) => void;
-  sendProgress: (step: string) => void;
-  sendDone: () => void;
-  sendError: (msg: string) => void;
-};
-const sseWriters = new Map<string, SseWriter>();
 
 async function ownDatasetId(datasetId: string, userId: string): Promise<boolean> {
   const [d] = await db
@@ -252,13 +241,29 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  // Flush headers immediately so the client sees 200 + SSE content-type
+  // before any data arrives — critical for proxies and the browser's
+  // EventSource / fetch-based SSE consumers.
+  res.flushHeaders();
+
+  function flush() {
+    // Express may buffer res.write() calls; (res as any).flush() forces
+    // the underlying socket to drain immediately (works with compression
+    // middleware too via the flush() shim it injects).
+    if (typeof (res as any).flush === "function") (res as any).flush();
+  }
+
+  function sendEvent(event: string, data: unknown) {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    flush();
+  }
 
   // Send an initial comment so the client knows the connection is open
   res.write(": connected\n\n");
-
-  function sendEvent(event: string, data: unknown) {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  }
+  flush();
 
   const writer: SseWriter = {
     sendDelta: (text) => sendEvent("delta", { text }),

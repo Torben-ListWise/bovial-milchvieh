@@ -1917,6 +1917,7 @@ export function AnalysesPage() {
     (async () => {
       try {
         const token = await getToken();
+        console.log("[SSE] opening", analysisId, "token?", !!token);
         const headers: Record<string, string> = { Accept: "text/event-stream" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -1925,7 +1926,11 @@ export function AnalysesPage() {
           headers,
           credentials: "include",
         });
-        if (!res.ok || !res.body) return;
+        console.log("[SSE] response", res.status, res.ok);
+        if (!res.ok || !res.body) {
+          console.warn("[SSE] bad response, aborting");
+          return;
+        }
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -2256,6 +2261,7 @@ export function AnalysesPage() {
               onTemplateRun={(id) => {
                 setActiveAnalysisId(id);
                 queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId!) });
+                openSseStream(id);
               }}
               onAsk={handleStarterQuestion}
             />

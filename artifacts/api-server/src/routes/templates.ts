@@ -11,6 +11,7 @@ import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { processQuestion } from "../lib/analysisService";
 import { normalizeSector } from "../lib/serializers";
+import { sseWriters } from "../lib/sseRegistry";
 
 const router: IRouter = Router();
 
@@ -143,8 +144,14 @@ router.post(
 
     res.status(201).json({ analysisId: analysis.id });
 
+    const id = analysis.id;
     setImmediate(() => {
-      processQuestion(analysis, template.promptText).catch((err) => {
+      processQuestion(analysis, template.promptText, {
+        onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
+        onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
+        onDone: () => sseWriters.get(id)?.sendDone(),
+      }).catch((err) => {
+        sseWriters.get(id)?.sendError("Verarbeitungsfehler");
         logger.error({ err }, "Background template processQuestion failed");
       });
     });
