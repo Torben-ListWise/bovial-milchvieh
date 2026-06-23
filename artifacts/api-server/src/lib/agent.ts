@@ -373,19 +373,15 @@ RÜCKFRAGEN-VERHALTEN:
 - Erfinde NIEMALS Annahmen für fehlende Parameter ohne explizite Bestätigung durch den Nutzer.
 - Wenn alle Parameter klar sind: direkt rechnen, keine unnötigen Rückfragen.
 
-WISSENSBIBLIOTHEK — PROAKTIVE NUTZUNG:
-Die Wissensbibliothek enthält Fachliteratur, Beratungsberichte und wissenschaftliche Publikationen des Betriebs. Nutze sie PROAKTIV, nicht nur wenn du explizit danach gefragt wirst.
+WISSENSBIBLIOTHEK — PROAKTIVE NUTZUNG (gilt für ALLE Betriebstypen):
+Die Wissensbibliothek enthält Fachliteratur, Beratungsberichte und wissenschaftliche Publikationen des Betriebs. Nutze sie PROAKTIV — unabhängig davon ob es sich um einen Milchvieh-, Schweine-, Geflügel-, Ackerbau-, Gemüsebau-, Weinbau-, Obstbau-, Schaf-, Pferde- oder Biogasbetrieb handelt.
 
 PFLICHTSCHRITT nach jeder Berechnung mit Empfehlungscharakter:
-- Sobald du ein statistisches Optimum, einen Bestwert oder eine Rangliste aus den Betriebsdaten berechnest, rufe search_knowledge auf — suche nach wirtschaftlichem Kontext, Praxisempfehlungen oder Hintergrundinformationen zu genau dieser Kennzahl.
-- Ziel: Stelle das statistische Optimum IMMER der wirtschaftlichen Realität gegenüber. Ein Bestwert in den Daten ist nicht automatisch die beste Handlungsempfehlung.
-- Beispiele für Suchanfragen nach einer Berechnung:
-  • Bei Konzeptionsraten nach DIM: suche nach "freiwillige Wartezeit wirtschaftlich offene Tage Kosten Besatmungszeitpunkt"
-  • Bei Zellzahl-Auswertung: suche nach "Zellzahlgrenzwert wirtschaftlicher Schaden Milchqualität"
-  • Bei Milchleistung nach Laktationsnummer: suche nach "Abgangsalter Remontierung wirtschaftlich Laktationskurve"
-- Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert, die das statistische Optimum relativieren: NENNE SIE EXPLIZIT in deiner Antwort. Formuliere es klar: was sagen die Daten, was sagt die Praxis/Forschung, was ist die Empfehlung unter Berücksichtigung beider Perspektiven.
-- Wenn die Wissensbibliothek keinen relevanten Treffer liefert: ignoriere diesen Schritt und fahre ohne Wissensbezug fort.
-- Die konkreten Suchbegriffe hängen vom Betriebstyp ab — der Betriebstyp-Abschnitt am Anfang des System-Prompts nennt typische Suchanfragen für deinen Sektor.`;
+- Sobald du ein statistisches Optimum, einen Bestwert oder eine Rangliste aus den Betriebsdaten berechnest, rufe search_knowledge auf.
+- Leite die Suchbegriffe direkt aus der berechneten Kennzahl ab: Kombiniere den Kennzahlennamen mit Begriffen wie "wirtschaftlich", "Kosten", "Praxis", "Optimum", "Empfehlung", "Grenzwert". Beispiel: für "Tageszunahmen Mastschwein" → suche "Tageszunahmen Schwein wirtschaftlich Futterkosten optimale Schlachtreife".
+- Ziel: Stelle das statistische Optimum IMMER der wirtschaftlichen Realität gegenüber. Ein Bestwert in den Daten ist nicht automatisch die beste Handlungsempfehlung — es kann wirtschaftliche, praktische oder biologische Gründe geben, warum ein etwas schlechterer Wert besser ist (z.B. frühere Ernte trotz niedrigerer Qualität spart Lagerkosten, frühere Besamung trotz niedrigerer Konzeptionsrate spart offene Tage, geringere Besatzdichte trotz niedrigerer Flächenproduktivität verbessert Tiergesundheit).
+- Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert: NENNE SIE EXPLIZIT. Strukturiere deine Antwort klar: (1) Was sagen die Betriebsdaten, (2) Was sagt die Fachliteratur/Forschung, (3) Konkrete Empfehlung unter Berücksichtigung beider Perspektiven.
+- Wenn die Wissensbibliothek keinen relevanten Treffer liefert: ignoriere diesen Schritt stillschweigend und fahre ohne Wissensbezug fort.`;
 
 interface RunOptions {
   datasetId: string;
