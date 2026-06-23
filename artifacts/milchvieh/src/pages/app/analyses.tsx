@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, memo } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -156,6 +157,7 @@ function AnalysisHistoryPanel({
     try { return localStorage.getItem("sidebar-projects-open") === "false"; } catch { return false; }
   });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   function toggleCollapsed() {
@@ -233,32 +235,48 @@ function AnalysisHistoryPanel({
                 {!isConfirmingDelete && (
                   <div className="absolute right-1 top-1/2 -translate-y-1/2">
                     <button
-                      onMouseDown={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === a.id ? null : a.id); }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        if (openMenuId === a.id) {
+                          setOpenMenuId(null);
+                          setMenuRect(null);
+                        } else {
+                          setMenuRect(e.currentTarget.getBoundingClientRect());
+                          setOpenMenuId(a.id);
+                        }
+                      }}
                       className="p-0.5 rounded hover:bg-muted text-muted-foreground"
                       title="Optionen"
                     >
                       <MoreHorizontal className="w-3.5 h-3.5" />
                     </button>
-                    {openMenuId === a.id && (
+                    {openMenuId === a.id && menuRect && createPortal(
                       <div
-                        className="absolute right-0 top-full mt-0.5 bg-popover border border-border rounded-md shadow-md z-50 min-w-[140px] py-1"
+                        style={{
+                          position: "fixed",
+                          top: menuRect.bottom + 2,
+                          right: window.innerWidth - menuRect.right,
+                          zIndex: 9999,
+                        }}
+                        className="bg-popover border border-border rounded-md shadow-md min-w-[140px] py-1"
                         onMouseDown={(e) => e.stopPropagation()}
                       >
                         <button
-                          onClick={() => { onUpdateAnalysis(a.id, { pinned: !a.pinned }); setOpenMenuId(null); }}
+                          onClick={() => { onUpdateAnalysis(a.id, { pinned: !a.pinned }); setOpenMenuId(null); setMenuRect(null); }}
                           className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
                         >
                           <Pin className="w-3 h-3" />
                           {a.pinned ? "Loslösen" : "Anpinnen"}
                         </button>
                         <button
-                          onClick={() => { setConfirmDeleteId(a.id); setOpenMenuId(null); }}
+                          onClick={() => { setConfirmDeleteId(a.id); setOpenMenuId(null); setMenuRect(null); }}
                           className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-destructive/10 text-destructive transition-colors text-left"
                         >
                           <Trash2 className="w-3 h-3" />
                           Löschen
                         </button>
-                      </div>
+                      </div>,
+                      document.body
                     )}
                   </div>
                 )}

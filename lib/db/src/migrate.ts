@@ -186,19 +186,28 @@ export async function ensureExtensions(): Promise<void> {
   );
 
   // Migration: web_search_cache table for deduplicating external search calls
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS web_search_cache (
-      id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      query_hash TEXT        NOT NULL UNIQUE,
-      query      TEXT        NOT NULL,
-      results    JSONB       NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days'
-    )
-  `);
-  await pool.query(
-    "CREATE INDEX IF NOT EXISTS web_search_cache_expires_idx ON web_search_cache (expires_at)"
-  );
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS web_search_cache (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        query_hash TEXT        NOT NULL UNIQUE,
+        query      TEXT        NOT NULL,
+        results    JSONB       NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days'
+      )
+    `);
+  } catch (err: any) {
+    // 23505 = pg_type race: type name already exists (table created in prior run)
+    if (err?.code !== "23505") throw err;
+  }
+  try {
+    await pool.query(
+      "CREATE INDEX IF NOT EXISTS web_search_cache_expires_idx ON web_search_cache (expires_at)"
+    );
+  } catch (err: any) {
+    if (err?.code !== "23505") throw err;
+  }
 
   // Seed default Biogas and Ackerbau master data if not yet present
   const { rows: biogasMd } = await pool.query(
