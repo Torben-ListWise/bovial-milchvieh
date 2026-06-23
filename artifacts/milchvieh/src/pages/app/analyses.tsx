@@ -704,13 +704,29 @@ const ResultCard = memo(function ResultCard({
   const headerLabel = questionTitle ?? "Ergebnis";
   const { toast } = useToast();
 
-  function handleShare() {
+  async function handleShare() {
     const url = new URL(window.location.href);
     url.searchParams.set("analysisId", analysisId);
     url.searchParams.set("msgId", msg.id);
-    navigator.clipboard.writeText(url.toString()).then(() => {
+    const shareUrl = url.toString();
+    const shareData: ShareData = {
+      title: headerLabel,
+      text: `${headerLabel} – Milchvieh Analyse`,
+      url: shareUrl,
+    };
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        if (err instanceof Error && err.name !== "AbortError") {
+          await navigator.clipboard.writeText(shareUrl);
+          toast({ description: "Link kopiert" });
+        }
+      }
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
       toast({ description: "Link kopiert" });
-    });
+    }
   }
 
   return (
@@ -735,7 +751,7 @@ const ResultCard = memo(function ResultCard({
         <button
           type="button"
           onClick={handleShare}
-          title="Link kopieren"
+          title="Teilen"
           className="shrink-0 px-2 py-2.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <Share2 className="w-3.5 h-3.5" />
