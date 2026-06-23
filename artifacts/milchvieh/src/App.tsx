@@ -112,7 +112,7 @@ const deDULocalization: typeof deDE = {
 };
 import { useEffect, useRef, useState } from "react";
 import { useGetCurrentUser, setAuthTokenGetter, useListDatasets } from "@workspace/api-client-react";
-import { ArrowRight, MessageCircle, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { AppLayout } from "@/components/layout";
 import { DatasetList } from "@/pages/app/datasets";
@@ -133,6 +133,7 @@ import { GuestAnalysisPage } from "@/pages/app/guest-analysis";
 import { ImpressumPage } from "@/pages/Impressum";
 import { AGBPage } from "@/pages/AGB";
 import { DatenschutzPage } from "@/pages/Datenschutz";
+import { LandingPage } from "@/pages/LandingPage";
 import { CookieBanner } from "@/components/CookieBanner";
 import { UpgradePage } from "@/pages/app/upgrade";
 
@@ -217,105 +218,6 @@ function SignUpPage() {
   );
 }
 
-function LandingPage() {
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b bg-card">
-        <div className="flex items-center gap-3">
-          <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8" />
-          <span className="font-bold text-lg text-primary">Milchvieh Assistent</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <a href={`${basePath}/sign-in`} className="text-sm font-medium hover:underline text-foreground">Anmelden</a>
-          <a href={`${basePath}/sign-up`} className="text-sm font-medium bg-primary text-primary-foreground px-5 py-2 rounded-full shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">Registrieren</a>
-        </div>
-      </header>
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div className="text-left space-y-8">
-            <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
-              Der kluge Assistent für deine Betriebsdaten
-            </h1>
-            <p className="text-xl text-muted-foreground leading-relaxed">
-              Lade deine Betriebsdaten hoch — egal ob Milchvieh, Schweine, Ackerbau oder Mischbetrieb. Stelle Fragen in einfachem Deutsch. Erhalte klare, fundierte Antworten basierend auf deinen echten Zahlen.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <a href={`${basePath}/sign-up`} className="inline-flex items-center justify-center gap-2 text-lg font-medium bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                Jetzt kostenlos starten
-                <ArrowRight className="w-5 h-5" />
-              </a>
-              <a href={`${basePath}/sign-in`} className="inline-flex items-center justify-center text-lg font-medium bg-secondary text-secondary-foreground px-8 py-4 rounded-lg hover:bg-secondary/80 transition-all">
-                Anmelden
-              </a>
-            </div>
-            <div className="grid grid-cols-2 gap-6 pt-8 border-t border-border/50">
-              <div>
-                <div className="bg-primary/10 rounded-lg p-2 w-fit mb-3">
-                  <MessageCircle className="w-5 h-5 text-primary" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">Einfach Fragen</h3>
-                <p className="text-sm text-muted-foreground">„Warum ist die Zellzahl in Laktation 2 gestiegen?“ – der Assistent antwortet auf Deutsch.</p>
-              </div>
-              <div>
-                <div className="bg-primary/10 rounded-lg p-2 w-fit mb-3">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">Geprüfte Daten</h3>
-                <p className="text-sm text-muted-foreground">Jede Zahl ist belegt. Keine erfundenen Werte, sondern direkte Verweise auf deine Rohdaten.</p>
-              </div>
-            </div>
-          </div>
-          <div className="relative">
-            {/* Abstract representation of the app interface */}
-            <div className="aspect-[4/3] bg-card rounded-2xl shadow-2xl ring-1 ring-border/50 overflow-hidden flex flex-col">
-              <div className="h-12 border-b flex items-center px-4 gap-2 bg-muted/30">
-                <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-                <div className="w-3 h-3 rounded-full bg-green-400"></div>
-              </div>
-              <div className="flex-1 p-6 space-y-4 bg-[url('/noise.png')] relative">
-                <div className="w-3/4 h-8 bg-muted rounded-md mb-8"></div>
-                <div className="flex gap-4">
-                  <div className="w-1/3 h-24 bg-primary/10 border border-primary/20 rounded-lg flex flex-col justify-center p-4">
-                    <div className="w-1/2 h-4 bg-primary/30 rounded mb-2"></div>
-                    <div className="w-3/4 h-6 bg-primary/40 rounded"></div>
-                  </div>
-                  <div className="w-1/3 h-24 bg-muted/50 rounded-lg flex flex-col justify-center p-4">
-                    <div className="w-1/2 h-4 bg-muted/80 rounded mb-2"></div>
-                    <div className="w-3/4 h-6 bg-muted rounded"></div>
-                  </div>
-                  <div className="w-1/3 h-24 bg-muted/50 rounded-lg flex flex-col justify-center p-4">
-                    <div className="w-1/2 h-4 bg-muted/80 rounded mb-2"></div>
-                    <div className="w-3/4 h-6 bg-muted rounded"></div>
-                  </div>
-                </div>
-                <div className="w-full h-40 bg-muted/30 rounded-lg mt-4 border border-dashed border-muted-foreground/20 flex items-end px-4 gap-2 pb-4">
-                  <div className="w-full h-[40%] bg-primary/40 rounded-t-sm"></div>
-                  <div className="w-full h-[60%] bg-primary/50 rounded-t-sm"></div>
-                  <div className="w-full h-[80%] bg-primary/60 rounded-t-sm"></div>
-                  <div className="w-full h-[50%] bg-primary/50 rounded-t-sm"></div>
-                  <div className="w-full h-[30%] bg-primary/40 rounded-t-sm"></div>
-                  <div className="w-full h-[70%] bg-primary/60 rounded-t-sm"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-      <footer className="border-t bg-card/80 mt-auto">
-        <div className="max-w-5xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
-          <span>© {new Date().getFullYear()} Milchvieh Assistent</span>
-          <div className="flex flex-wrap gap-4">
-            <a href={`${basePath}/impressum`} className="hover:text-foreground transition-colors">Impressum</a>
-            <a href={`${basePath}/agb`} className="hover:text-foreground transition-colors">AGB</a>
-            <a href={`${basePath}/datenschutz`} className="hover:text-foreground transition-colors">Datenschutz</a>
-          </div>
-        </div>
-      </footer>
-      <CookieBanner />
-    </div>
-  );
-}
 
 function AppPortal() {
   const { data: dbUser, isLoading } = useGetCurrentUser();
@@ -428,7 +330,8 @@ function HomeRedirect() {
         <Redirect to="/app/analyses" />
       </Show>
       <Show when="signed-out">
-        <LandingPage />
+        <LandingPage basePath={basePath} />
+        <CookieBanner />
       </Show>
     </>
   );
