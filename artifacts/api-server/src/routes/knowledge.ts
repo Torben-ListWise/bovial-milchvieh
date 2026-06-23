@@ -405,7 +405,8 @@ router.delete(
       .from(knowledgeDocumentsTable)
       .where(eq(knowledgeDocumentsTable.id, id));
     if (!doc) {
-      res.status(404).json({ error: "Dokument nicht gefunden" });
+      // Idempotent: already deleted — return success so double-clicks don't show an error
+      res.status(204).end();
       return;
     }
 
