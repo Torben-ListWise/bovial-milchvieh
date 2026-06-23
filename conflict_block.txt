@@ -1,0 +1,74 @@
+        <Card className="border-dashed bg-secondary/10">
+<<<<<<< HEAD
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <UploadCloud className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Datei auswählen oder hierher ziehen</h3>
+            <p className="text-muted-foreground mb-5">Lade deinen ersten Herdenmanagement-Export hoch, um mit der Analyse zu starten.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6 text-left w-full max-w-xl">
+              <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">MLP-Excel</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">MLP_Export_2024.xlsx</span></p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Monatliche Milchleistungsdaten</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
+                <FileSpreadsheet className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">CSV-Export</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">herde_export.csv</span></p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Herdenmanagement-System</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
+                <FileText className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">PDF-Bericht</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">monatsbericht.pdf</span></p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Monatliche Berichte vom LKV</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative mb-4">
+              <Button disabled={isUploading} className="relative z-10 pointer-events-none">
+                {isUploading ? 'Wird hochgeladen...' : 'Durchsuchen'}
+=======
+          <CardContent className="flex flex-col items-center justify-center py-10 md:py-12">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <UploadCloud className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-lg md:text-xl font-semibold mb-2 text-center">Datei auswählen</h3>
+            <p className="text-muted-foreground mb-6 text-sm text-center">Unterstützte Formate: Excel, CSV, PDF</p>
+            <label className="relative cursor-pointer">
+              <Button disabled={isUploading} asChild>
+                <span className="min-h-[44px] min-w-[160px] flex items-center justify-center">
+                  <UploadCloud className="w-4 h-4 mr-2" />
+                  {isUploading ? 'Wird hochgeladen...' : 'Datei auswählen'}
+                </span>
+>>>>>>> 42410ca (Mobile-First: Touch-optimierte Hauptansichten für Smartphone-Nutzung (task-143))
+              </Button>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,.ods,.pdf"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={handleFileSelect}
+                disabled={isUploading}
+              />
+<<<<<<< HEAD
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              <span>Nach dem Upload erstellt der Assistent automatisch einen Betriebsspiegel.</span>
+            </div>
+=======
+            </label>
+>>>>>>> 42410ca (Mobile-First: Touch-optimierte Hauptansichten für Smartphone-Nutzung (task-143))
+          </CardContent>
+        </Card>
+      )}

@@ -240,8 +240,8 @@ export function UploadPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Dateien & Upload</h1>
-        <p className="text-muted-foreground mt-1">Lade deine Herdenmanagement-Exporte (Excel, CSV, PDF) hier hoch.</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dateien & Upload</h1>
+        <p className="text-muted-foreground mt-1 text-sm md:text-base">Lade deine Herdenmanagement-Exporte (Excel, CSV, PDF) hier hoch.</p>
       </div>
 
       {!hasFiles && (
@@ -280,17 +280,21 @@ export function UploadPage() {
               </div>
             </div>
 
-            <div className="relative mb-4">
-              <Button disabled={isUploading} className="relative z-10 pointer-events-none">
-                {isUploading ? 'Wird hochgeladen...' : 'Durchsuchen'}
+            <label className="relative cursor-pointer mb-4">
+              <Button disabled={isUploading} asChild>
+                <span className="min-h-[44px] min-w-[160px] flex items-center justify-center">
+                  <UploadCloud className="w-4 h-4 mr-2" />
+                  {isUploading ? 'Wird hochgeladen...' : 'Datei auswählen'}
+                </span>
               </Button>
               <input
                 type="file"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                accept=".xlsx,.xls,.csv,.ods,.pdf"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={handleFileSelect}
                 disabled={isUploading}
               />
-            </div>
+            </label>
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
               <Info className="w-3.5 h-3.5 shrink-0" />
@@ -302,20 +306,24 @@ export function UploadPage() {
 
       <div className="mt-2">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold">Deine Dateien</h3>
+          <h3 className="text-lg md:text-xl font-bold">Deine Dateien</h3>
           {hasFiles && (
-            <div className="relative">
-              <Button disabled={isUploading} className="gap-2 relative z-10 pointer-events-none">
-                <Plus className="w-4 h-4" />
-                {isUploading ? 'Wird hochgeladen...' : 'Weitere Datei hinzufügen'}
+            <label className="relative cursor-pointer">
+              <Button disabled={isUploading} asChild>
+                <span className="gap-2 min-h-[44px] flex items-center px-4">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">{isUploading ? 'Wird hochgeladen...' : 'Weitere Datei'}</span>
+                  <span className="sm:hidden">{isUploading ? '…' : 'Hinzufügen'}</span>
+                </span>
               </Button>
               <input
                 type="file"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                accept=".xlsx,.xls,.csv,.ods,.pdf"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={handleFileSelect}
                 disabled={isUploading}
               />
-            </div>
+            </label>
           )}
         </div>
 
@@ -370,36 +378,37 @@ export function UploadPage() {
             )}
             {files.map(f => (
               <Card key={f.id} className="hover:border-primary/50 transition-colors group">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {fileKindIcon(f.contentType, f.name)}
-                    <div>
-                      <p className="font-medium text-foreground">{f.name}</p>
-                      <div className="flex gap-4 text-xs text-muted-foreground mt-1">
-                        <span>{format(new Date(f.createdAt), "dd.MM.yyyy HH:mm", { locale: de })}</span>
-                        {f.size ? <span>{(f.size / 1024 / 1024).toFixed(2)} MB</span> : null}
-                        {f.rowCount ? <span>{f.rowCount.toLocaleString("de-DE")} Zeilen</span> : null}
-                      </div>
+                <CardContent className="p-3 md:p-4 flex items-center gap-3 md:gap-4">
+                  <div className="shrink-0">{fileKindIcon(f.contentType, f.name)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate text-sm md:text-base">{f.name}</p>
+                    <div className="flex flex-wrap gap-2 md:gap-4 text-xs text-muted-foreground mt-0.5">
+                      <span>{format(new Date(f.createdAt), "dd.MM.yyyy HH:mm", { locale: de })}</span>
+                      {f.size ? <span>{(f.size / 1024 / 1024).toFixed(2)} MB</span> : null}
+                      {f.rowCount ? <span>{f.rowCount.toLocaleString("de-DE")} Zeilen</span> : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 md:gap-3 shrink-0">
                     {f.status === 'ready' && (
                       <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> Bereit
+                        <CheckCircle className="w-3 h-3" />
+                        <span className="hidden sm:inline">Bereit</span>
                       </span>
                     )}
                     {f.status === 'error' && (
                       <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Fehler
+                        <AlertCircle className="w-3 h-3" />
+                        <span className="hidden sm:inline">Fehler</span>
                       </span>
                     )}
                     {isInProgress(f.status) && (
                       <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center gap-1">
-                        <Clock className="w-3 h-3 animate-pulse" /> Verarbeitung…
+                        <Clock className="w-3 h-3 animate-pulse" />
+                        <span className="hidden sm:inline">Verarbeitung…</span>
                       </span>
                     )}
                     <button
-                      className="p-2 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="flex items-center justify-center w-11 h-11 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                       onClick={() => setDeleteFileId(f.id)}
                     >
                       <Trash2 className="w-4 h-4" />

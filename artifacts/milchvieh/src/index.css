@@ -214,6 +214,23 @@
     color: hsl(var(--muted-foreground));
     pointer-events: none;
   }
+
+  /* Safe-area padding for notched phones */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Ensure minimum 44px touch targets for icon-only buttons */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 @layer components {

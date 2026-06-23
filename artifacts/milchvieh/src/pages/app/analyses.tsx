@@ -1174,7 +1174,7 @@ function StarterQuestions({
       <p className="text-sm text-muted-foreground mb-6">
         Stelle eine Frage oder wähle eine Vorlage:
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
+      <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-2 md:overflow-visible md:snap-none md:pb-0 md:w-full md:max-w-2xl -mx-1 px-1">
         {templatesLoading
           ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="p-4 rounded-xl border border-border bg-card animate-pulse">
@@ -1199,7 +1199,7 @@ function StarterQuestions({
                     runTemplate.mutate({ datasetId, templateId: t.id })
                   }
                   disabled={runTemplate.isPending}
-                  className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-150 disabled:opacity-60"
+                  className="group text-left p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-150 disabled:opacity-60 snap-start min-w-[280px] md:min-w-0 shrink-0 md:shrink"
                 >
                   <div className="flex items-start gap-3">
                     <span className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center text-xl leading-none shrink-0">{t.emoji}</span>
@@ -1291,7 +1291,7 @@ const ResultCard = memo(function ResultCard({
           type="button"
           onClick={handleShare}
           title="Teilen"
-          className="shrink-0 px-2 py-2.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="shrink-0 flex items-center justify-center w-11 h-11 md:w-auto md:h-auto md:px-2 md:py-2.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <Share2 className="w-3.5 h-3.5" />
         </button>
@@ -1545,7 +1545,13 @@ export function AnalysesPage() {
     return new URLSearchParams(searchStr).get("analysisId") ?? null;
   });
   const [question, setQuestion] = useState("");
-  const [mobileTab, setMobileTab] = useState<"chat" | "chart">("chat");
+  const [mobileTab, setMobileTab] = useState<"chat" | "chart">(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash === "#ergebnisse") return "chart";
+    }
+    return "chat";
+  });
   const [isDragOver, setIsDragOver] = useState(false);
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
   const [pinnedChips, setPinnedChips] = useState<string[]>([]);
@@ -1778,6 +1784,57 @@ export function AnalysesPage() {
       }
     };
   }, [isAgentWorking, activeAnalysisId]);
+
+  // Sync mobile tab to URL hash (only on mobile viewports to avoid polluting desktop URLs)
+  useEffect(() => {
+    if (window.innerWidth >= 768) return;
+    const hash = mobileTab === "chart" ? "#ergebnisse" : "#chat";
+    if (window.location.hash !== hash) {
+      window.history.replaceState(null, "", hash);
+    }
+  }, [mobileTab]);
+
+  // Auto-switch to results tab on mobile when agent finishes
+  const wasWorkingForTabRef = useRef(false);
+  useEffect(() => {
+    if (!isAgentWorking && wasWorkingForTabRef.current) {
+      const isMobile = window.innerWidth < 768;
+      if (isMobile) setMobileTab("chart");
+    }
+    wasWorkingForTabRef.current = isAgentWorking;
+  }, [isAgentWorking]);
+
+  // Mobile swipe between tabs
+  const mobileSwipeStartXRef = useRef<number | null>(null);
+
+  function handleMobileContentTouchStart(e: React.TouchEvent) {
+    mobileSwipeStartXRef.current = e.touches[0].clientX;
+  }
+
+  function handleMobileContentTouchEnd(e: React.TouchEvent) {
+    if (mobileSwipeStartXRef.current === null) return;
+    const dx = e.changedTouches[0].clientX - mobileSwipeStartXRef.current;
+    mobileSwipeStartXRef.current = null;
+    if (Math.abs(dx) < 60) return;
+    if (dx < 0) setMobileTab("chart");
+    else setMobileTab("chat");
+  }
+
+  // Visual viewport keyboard handling: track keyboard offset for chat input only
+  // We never resize the container itself — only push padding on the input form.
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function onResize() {
+      // Keyboard height = difference between layout viewport and visual viewport
+      const offset = Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop);
+      setKeyboardOffset(offset);
+    }
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
 
   // Step 2 — Compute follow-up chips for the chat panel
   const lastResultMsg = [...(analysis?.messages ?? [])]
@@ -2428,6 +2485,7 @@ export function AnalysesPage() {
         handleSubmit();
       }}
       className="p-3 bg-card/80 backdrop-blur-sm border-t border-border shrink-0"
+      style={keyboardOffset > 0 ? { paddingBottom: `${keyboardOffset + 12}px` } : undefined}
     >
       <div className="flex gap-2 items-center">
         <Input
@@ -2439,12 +2497,13 @@ export function AnalysesPage() {
               ? "Folgefrage stellen…"
               : "Stelle eine Frage zu deinen Daten…"
           }
-          className="flex-1 rounded-xl border-border/60 bg-card shadow-inner focus-within:ring-2 focus-within:ring-primary/30"
+          className="flex-1 rounded-xl border-border/60 bg-card shadow-inner focus-within:ring-2 focus-within:ring-primary/30 h-11"
           disabled={isPending}
         />
         <Button
           type="submit"
           size="icon"
+          className="w-11 h-11 shrink-0"
           disabled={isPending || !question.trim()}
         >
           {isPending ? (
@@ -2455,7 +2514,7 @@ export function AnalysesPage() {
         </Button>
       </div>
       {!activeAnalysisId && (
-        <p className="text-xs text-muted-foreground mt-1.5 px-1">
+        <p className="hidden md:block text-xs text-muted-foreground mt-1.5 px-1">
           Tipp: Dateien direkt auf diese Seite ziehen zum Hochladen
         </p>
       )}
@@ -2596,9 +2655,13 @@ export function AnalysesPage() {
       </div>
 
       {/* ── Mobile layout ──────────────────────────────────────────────────── */}
-      <div className="flex md:hidden flex-col w-full h-full">
+      <div className="flex md:hidden flex-col w-full h-full overflow-hidden">
         {/* Mobile tab content */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div
+          className="flex-1 flex flex-col min-h-0 overflow-hidden"
+          onTouchStart={handleMobileContentTouchStart}
+          onTouchEnd={handleMobileContentTouchEnd}
+        >
           {mobileTab === "chat" ? (
             <>
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -2614,11 +2677,11 @@ export function AnalysesPage() {
         </div>
 
         {/* Mobile bottom tab bar */}
-        <div className="shrink-0 flex border-t border-border bg-background">
+        <div className="shrink-0 flex border-t border-border bg-background pb-safe">
           <button
             onClick={() => setMobileTab("chat")}
             className={cn(
-              "flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-xs transition-colors",
+              "flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-xs transition-colors min-h-[56px]",
               mobileTab === "chat"
                 ? "text-primary border-t-2 border-primary"
                 : "text-muted-foreground",
@@ -2630,7 +2693,7 @@ export function AnalysesPage() {
           <button
             onClick={() => setMobileTab("chart")}
             className={cn(
-              "flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-xs transition-colors relative",
+              "flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-xs transition-colors relative min-h-[56px]",
               mobileTab === "chart"
                 ? "text-primary border-t-2 border-primary"
                 : "text-muted-foreground",
