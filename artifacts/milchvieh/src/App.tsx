@@ -6,6 +6,110 @@ import NotFound from "@/pages/not-found";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser, useAuth } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { deDE } from "@clerk/localizations";
+
+// Deutsches "du"-Form — basiert auf deDE, überschreibt alle "Sie/Ihr/Ihnen"-Anreden
+const deDULocalization: typeof deDE = {
+  ...(deDE as typeof deDE),
+  locale: "de-DE",
+
+  footerActionLink__useAnotherMethod: "Andere Methode verwenden",
+
+  signIn: {
+    ...(deDE as any).signIn,
+    start: {
+      ...(deDE as any).signIn?.start,
+      subtitleCombined: "Willkommen zurück! Melde dich an, um fortzufahren.",
+    },
+    alternativeMethods: {
+      ...(deDE as any).signIn?.alternativeMethods,
+      title: "Andere Anmeldemethode",
+      actionText: "Hast du keine davon?",
+      subtitle:
+        "Hast du Probleme? Du kannst eine der folgenden Methoden zur Anmeldung verwenden.",
+      blockButton__backupCode: "Wiederherstellungscode verwenden",
+      blockButton__passkey: "Mit Passkey anmelden",
+      blockButton__password: "Mit Passwort anmelden",
+      blockButton__totp: "Authentifizierungs-App verwenden",
+      getHelp: {
+        content:
+          "Wenn du Schwierigkeiten hast, dich anzumelden, sende uns eine E-Mail — wir helfen dir so schnell wie möglich.",
+      },
+    },
+    emailCode: {
+      ...(deDE as any).signIn?.emailCode,
+      title: "Überprüfe deinen Posteingang",
+      subtitle: "Der Code ist 10 Minuten gültig.",
+      formSubtitle: "Der Code ist 10 Minuten gültig.",
+    },
+    emailCodeMfa: {
+      ...(deDE as any).signIn?.emailCodeMfa,
+      title: "Überprüfe deinen Posteingang",
+      formTitle: "Überprüfe deinen Posteingang",
+    },
+    emailLink: {
+      ...(deDE as any).signIn?.emailLink,
+      title: "Überprüfe deinen Posteingang",
+      unusedTab: { title: "Du kannst diesen Tab schließen." },
+      loading: { subtitle: "Du wirst gleich weitergeleitet …" },
+      verified: { subtitle: "Du wirst gleich weitergeleitet …" },
+      verifiedSwitchTab: {
+        subtitle: "Geh zurück zum ursprünglichen Tab, um fortzufahren.",
+        subtitleNewTab: "Geh zurück zum neu geöffneten Tab, um fortzufahren.",
+      },
+    },
+    password: {
+      ...(deDE as any).signIn?.password,
+      title: "Gib dein Passwort ein",
+      actionLink: "Andere Methode verwenden",
+    },
+    forgotPassword: {
+      ...(deDE as any).signIn?.forgotPassword,
+      resendButton: "Keinen Code erhalten? Erneut senden",
+      subtitle_email: "Gib zunächst den an deine E-Mail gesendeten Code ein.",
+      subtitle_phone: "Gib zunächst den auf dein Mobiltelefon geschickten Code ein.",
+    },
+    passkey: {
+      ...(deDE as any).signIn?.passkey,
+      title: "Mit Passkey anmelden",
+      subtitle:
+        "Die Verwendung deines Passkeys bestätigt, dass du es bist. Dein Gerät kann nach deinem Fingerabdruck, Gesicht oder der Bildschirmsperre fragen.",
+    },
+    newDeviceVerificationNotice:
+      "Du meldest dich von einem neuen Gerät an. Wir bitten um eine Überprüfung, um dein Konto sicher zu halten.",
+  } as any,
+
+  signInEnterPasswordTitle: "Gib dein Passwort ein",
+
+  signUp: {
+    ...(deDE as any).signUp,
+    start: {
+      ...(deDE as any).signUp?.start,
+      title: "Erstelle dein Konto",
+      actionText: "Hast du ein Konto?",
+    },
+    continue: {
+      ...(deDE as any).signUp?.continue,
+      title: "Fehlende Felder ausfüllen",
+      actionText: "Hast du ein Konto?",
+    },
+    emailCode: {
+      ...(deDE as any).signUp?.emailCode,
+      title: "Bestätige deine E-Mail",
+      formSubtitle:
+        "Gib den Bestätigungscode ein, der an deine E-Mail-Adresse gesendet wurde.",
+    },
+    emailLink: {
+      ...(deDE as any).signUp?.emailLink,
+      title: "Bestätige deine E-Mail",
+      formSubtitle:
+        "Verwende den an deine E-Mail-Adresse gesendeten Bestätigungslink.",
+      verifiedSwitchTab: {
+        subtitle: "Geh zurück zum neu geöffneten Tab, um fortzufahren.",
+        subtitleNewTab: "Geh zurück zum vorherigen Tab, um fortzufahren.",
+      },
+    },
+  } as any,
+};
 import { useEffect, useRef, useState } from "react";
 import { useGetCurrentUser, setAuthTokenGetter } from "@workspace/api-client-react";
 import { ArrowRight, MessageCircle, ShieldCheck } from "lucide-react";
@@ -51,7 +155,7 @@ const clerkAppearance = {
   variables: {
     colorPrimary: "hsl(155 30% 25%)",
     colorForeground: "hsl(160 20% 15%)",
-    colorMutedForeground: "hsl(160 10% 45%)",
+    colorMutedForeground: "hsl(160 10% 40%)",
     colorDanger: "hsl(10 60% 45%)",
     colorBackground: "hsl(0 0% 100%)",
     colorInput: "hsl(0 0% 100%)",
@@ -59,30 +163,33 @@ const clerkAppearance = {
     colorNeutral: "hsl(40 20% 88%)",
     fontFamily: "Plus Jakarta Sans, sans-serif",
     borderRadius: "0.625rem",
+    fontSize: "16px",
   },
   elements: {
     rootBox: "w-full flex justify-center",
-    cardBox: "bg-white rounded-2xl w-[440px] max-w-full overflow-hidden shadow-lg border border-[#e5e1d8]",
+    cardBox: "bg-white rounded-2xl w-[460px] max-w-full overflow-hidden shadow-lg border border-[#e5e1d8]",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "text-xl font-bold text-[#202e29]",
-    headerSubtitle: "text-sm text-[#66736e]",
-    formFieldLabel: "text-sm font-medium text-[#202e29]",
-    formButtonPrimary: "bg-[#2b5242] text-white hover:bg-[#204033] shadow-sm font-medium h-10",
-    formFieldInput: "border border-[#e5e1d8] rounded-md h-10 px-3 py-2 focus:ring-2 focus:ring-[#2b5242]",
-    footerActionLink: "text-[#2b5242] hover:underline font-medium",
-    footerActionText: "text-[#66736e]",
-    dividerText: "text-[#66736e]",
+    headerTitle: "text-2xl font-bold text-[#202e29]",
+    headerSubtitle: "text-base text-[#4a5c54] mt-1",
+    formFieldLabel: "text-sm font-semibold text-[#202e29]",
+    formButtonPrimary: "bg-[#2b5242] text-white hover:bg-[#204033] shadow-sm font-semibold h-11 text-base",
+    formFieldInput: "border border-[#c8c3b8] rounded-lg h-11 px-3 py-2 focus:ring-2 focus:ring-[#2b5242] text-base text-[#202e29]",
+    footerActionLink: "text-[#2b5242] hover:underline font-semibold",
+    footerActionText: "text-[#4a5c54] text-sm",
+    dividerText: "text-[#4a5c54] text-sm",
     dividerLine: "bg-[#e5e1d8]",
-    socialButtonsBlockButton: "border border-[#e5e1d8] hover:bg-[#f7f5f0] text-[#202e29]",
-    socialButtonsBlockButtonText: "font-medium",
+    socialButtonsBlockButton: "border border-[#c8c3b8] hover:bg-[#f7f5f0] text-[#202e29] h-11",
+    socialButtonsBlockButtonText: "font-semibold text-base",
     logoBox: "h-12 flex justify-center items-center mb-4",
     logoImage: "h-10",
-    alertText: "text-sm",
+    alertText: "text-sm font-medium",
     alert: "bg-[#fcf5f3] border-[#d95c47] text-[#bd432e]",
-    otpCodeFieldInput: "border border-[#e5e1d8]",
+    otpCodeFieldInput: "border-2 border-[#c8c3b8] rounded-lg h-14 w-14 text-xl font-bold text-[#202e29] focus:border-[#2b5242]",
     formFieldRow: "mb-4",
-    main: "p-6",
+    main: "p-7",
+    identityPreviewEditButton: "text-[#2b5242] font-semibold",
+    formFieldSuccessText: "text-sm text-[#2b5242]",
   },
 };
 
@@ -324,7 +431,7 @@ function ClerkProviderWithRoutes() {
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
-      localization={deDE}
+      localization={deDULocalization}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
     >
