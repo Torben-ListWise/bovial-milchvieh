@@ -1,10 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import {
   db,
   datasetsTable,
   sourceFilesTable,
   dataRowsTable,
+  usersTable,
   type SourceFile,
 } from "@workspace/db";
 import {
@@ -95,6 +96,13 @@ router.post(
       return;
     }
 
+    // Check if this is the first file for this user (before inserting)
+    const [{ value: existingFileCount }] = await db
+      .select({ value: count() })
+      .from(sourceFilesTable)
+      .where(eq(sourceFilesTable.userId, req.userId!));
+    const isFirstFile = existingFileCount === 0;
+
     const [created] = await db
       .insert(sourceFilesTable)
       .values({
@@ -113,10 +121,18 @@ router.post(
       .set({ status: "processing", updatedAt: new Date() })
       .where(eq(datasetsTable.id, datasetId));
 
+    // Mark onboarding as complete on first file upload
+    if (isFirstFile) {
+      await db
+        .update(usersTable)
+        .set({ onboardingCompletedAt: new Date() } as any)
+        .where(eq(usersTable.id, req.userId!));
+    }
+
     // Fire-and-forget background ingestion.
     void ingestFile(created.id);
 
-    res.status(201).json(serializeFile(created));
+    res.status(201).json({ ...serializeFile(created), isFirstFile });
   },
 );
 

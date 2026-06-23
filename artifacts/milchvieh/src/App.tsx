@@ -128,6 +128,8 @@ import { MasterDataPage } from "@/pages/operator/master-data";
 import { KnowledgePage } from "@/pages/operator/knowledge";
 import { OperatorTemplatesPage } from "@/pages/operator/templates";
 import { FocusAreasOnboardingDialog } from "@/components/FocusAreasOnboardingDialog";
+import { WelcomeBanner } from "@/components/WelcomeBanner";
+import { useSearch, useLocation } from "wouter";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -302,6 +304,9 @@ function LandingPage() {
 function AppPortal() {
   const { data: dbUser, isLoading } = useGetCurrentUser();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const search = useSearch();
+  const [location] = useLocation();
+  const datasetId = new URLSearchParams(search).get("datasetId");
 
   const role = (dbUser?.role || 'customer') as 'operator' | 'customer';
 
@@ -348,6 +353,16 @@ function AppPortal() {
 
   if (isLoading) return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
 
+  // Don't show the banner on the analyses page — it uses a full-height layout
+  // that would be broken by extra content above the chat/results split.
+  const isFullHeightPage = location.startsWith('/app/analyses');
+  const showWelcomeBanner =
+    effectiveView === 'customer' &&
+    !isLoading &&
+    !isFullHeightPage &&
+    dbUser !== undefined &&
+    (dbUser as any).onboardingCompletedAt == null;
+
   return (
     <>
       <FocusAreasOnboardingDialog
@@ -362,6 +377,7 @@ function AppPortal() {
       onSwitchView={role === 'operator' ? (v) => setViewMode(v) : undefined}
       basePath={basePath}
     >
+      {showWelcomeBanner && <WelcomeBanner datasetId={datasetId} />}
       <Switch>
         <Route path="/app/monitoring" component={OperatorDashboard} />
         <Route path="/app/master-data" component={MasterDataPage} />
@@ -378,7 +394,9 @@ function AppPortal() {
         <Route path="/app">
           {effectiveView === 'operator'
             ? <Redirect to="/app/monitoring" />
-            : <Redirect to="/app/analyses" />}
+            : (dbUser as any)?.onboardingCompletedAt == null
+              ? <Redirect to="/app/upload" />
+              : <Redirect to="/app/analyses" />}
         </Route>
       </Switch>
     </AppLayout>

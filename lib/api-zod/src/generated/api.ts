@@ -25,7 +25,8 @@ export const GetCurrentUserResponse = zod.object({
   "email": zod.string().nullish(),
   "name": zod.string().nullish(),
   "role": zod.enum(['customer', 'operator']),
-  "focusAreas": zod.array(zod.string()).nullish()
+  "focusAreas": zod.array(zod.string()).nullish(),
+  "onboardingCompletedAt": zod.string().nullish()
 })
 
 /**

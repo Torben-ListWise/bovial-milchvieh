@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   UploadCloud, AlertCircle, CheckCircle, Clock, Trash2,
-  FileText, FileSpreadsheet, Sheet, Plus, RefreshCw, X,
+  FileText, FileSpreadsheet, Sheet, Plus, RefreshCw, X, Info,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -27,10 +27,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
+import { getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 
 const IN_PROGRESS_STATUSES = ["uploaded", "parsing", "mapping", "processing"] as const;
 type InProgressStatus = typeof IN_PROGRESS_STATUSES[number];
@@ -59,6 +61,7 @@ export function UploadPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isFirstUploadDone, setIsFirstUploadDone] = useState(false);
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
   const deleteFile = useDeleteFile();
@@ -151,6 +154,8 @@ export function UploadPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const wasFirstFile = !files || files.length === 0;
+
     setIsUploading(true);
     offerShownRef.current = false;
     setShowBetriebsspiegelOffer(false);
@@ -171,7 +176,7 @@ export function UploadPage() {
 
       if (!uploadRes.ok) throw new Error("Upload fehlgeschlagen");
 
-      await registerFile.mutateAsync({
+      const registered = await registerFile.mutateAsync({
         datasetId,
         data: {
           objectPath,
@@ -181,7 +186,33 @@ export function UploadPage() {
         }
       });
 
-      toast({ title: "Datei hochgeladen", description: "Die Datei wird nun verarbeitet…" });
+      const isFirstFile = wasFirstFile || (registered as any).isFirstFile;
+
+      if (isFirstFile) {
+        setIsFirstUploadDone(true);
+        const analysesHref = datasetId
+          ? `/app/analyses?datasetId=${datasetId}`
+          : "/app/analyses";
+        toast({
+          title: "🎉 Deine erste Datei ist da!",
+          description: "Die Analyse läuft bereits im Hintergrund.",
+          duration: 8000,
+          action: (
+            <ToastAction
+              altText="Zur Analyse"
+              onClick={() => navigate(analysesHref)}
+            >
+              Zur Analyse →
+            </ToastAction>
+          ),
+        });
+        queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+        // Also auto-navigate after a brief pause so the farmer sees the analysis running
+        setTimeout(() => navigate(analysesHref), 2000);
+      } else {
+        toast({ title: "Datei hochgeladen", description: "Die Datei wird nun verarbeitet…" });
+      }
+
       queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(datasetId) });
     } catch (error) {
       console.error(error);
@@ -215,13 +246,41 @@ export function UploadPage() {
 
       {!hasFiles && (
         <Card className="border-dashed bg-secondary/10">
-          <CardContent className="flex flex-col items-center justify-center py-12">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
               <UploadCloud className="w-8 h-8 text-primary" />
             </div>
             <h3 className="text-xl font-semibold mb-2">Datei auswählen oder hierher ziehen</h3>
-            <p className="text-muted-foreground mb-6">Unterstützte Formate: Excel, CSV, PDF</p>
-            <div className="relative">
+            <p className="text-muted-foreground mb-5">Lade deinen ersten Herdenmanagement-Export hoch, um mit der Analyse zu starten.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6 text-left w-full max-w-xl">
+              <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">MLP-Excel</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">MLP_Export_2024.xlsx</span></p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Monatliche Milchleistungsdaten</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
+                <FileSpreadsheet className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">CSV-Export</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">herde_export.csv</span></p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Herdenmanagement-System</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
+                <FileText className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">PDF-Bericht</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">monatsbericht.pdf</span></p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Monatliche Berichte vom LKV</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative mb-4">
               <Button disabled={isUploading} className="relative z-10 pointer-events-none">
                 {isUploading ? 'Wird hochgeladen...' : 'Durchsuchen'}
               </Button>
@@ -231,6 +290,11 @@ export function UploadPage() {
                 onChange={handleFileSelect}
                 disabled={isUploading}
               />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              <span>Nach dem Upload erstellt der Assistent automatisch einen Betriebsspiegel.</span>
             </div>
           </CardContent>
         </Card>

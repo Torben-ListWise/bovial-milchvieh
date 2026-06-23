@@ -9,6 +9,7 @@ export const usersTable = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
 });
 
 export type User = typeof usersTable.$inferSelect;

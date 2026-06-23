@@ -30,6 +30,8 @@ export interface CurrentUser {
   role: CurrentUserRole;
   /** @nullable */
   focusAreas?: string[] | null;
+  /** @nullable */
+  onboardingCompletedAt?: string | null;
 }
 
 export interface UpdateMeBody {

@@ -41,6 +41,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_areas TEXT[]"
   );
+  // Migration: onboarding_completed_at — set after farmer's first file upload
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMPTZ"
+  );
   // Migration: detected_focus_area and confidence on datasets (farm type auto-detection)
   await pool.query(
     "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS detected_focus_area TEXT"

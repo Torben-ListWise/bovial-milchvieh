@@ -14,6 +14,9 @@ function serializeUser(u: typeof usersTable.$inferSelect) {
     name: u.name ?? null,
     role: u.role === "operator" ? "operator" : "customer",
     focusAreas: (u as any).focusAreas ?? null,
+    onboardingCompletedAt: (u as any).onboardingCompletedAt
+      ? new Date((u as any).onboardingCompletedAt).toISOString()
+      : null,
   });
 }
 
