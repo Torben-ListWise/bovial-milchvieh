@@ -50,7 +50,7 @@ import {
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
   Plus, X, RefreshCw,
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
-  Layers, Database, Search, Cog, ArrowDown,
+  Layers, Database, Search, Cog, ArrowDown, ChevronDown,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -698,38 +698,50 @@ const ResultCard = memo(function ResultCard({
   msg: AnalysisMessage;
   cardRef?: React.Ref<HTMLDivElement>;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const headerLabel = questionTitle ?? "Ergebnis";
+
   return (
     <div
       ref={cardRef}
       className="rounded-xl border border-border bg-card shadow-sm overflow-hidden"
     >
-      {questionTitle && (
-        <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
-            {questionTitle}
-          </p>
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30 hover:bg-muted/50 transition-colors text-left group"
+        aria-expanded={!collapsed}
+      >
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
+          {headerLabel}
+        </p>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-muted-foreground shrink-0 ml-2 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+        />
+      </button>
+      {!collapsed && (
+        <div className="px-4 py-3 space-y-3">
+          <MarkdownContent text={msg.content ?? ""} />
+          {msg.citations && msg.citations.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {msg.citations.map((c, i) => (
+                <span
+                  key={i}
+                  className="text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
+                >
+                  {c.label}: {c.value}
+                </span>
+              ))}
+            </div>
+          )}
+          {msg.charts && msg.charts.length > 0 && (
+            <div className="h-64">
+              <DynamicChart chart={msg.charts[0]} fillContainer />
+            </div>
+          )}
         </div>
       )}
-      <div className="px-4 py-3 space-y-3">
-        <MarkdownContent text={msg.content ?? ""} />
-        {msg.citations && msg.citations.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {msg.citations.map((c, i) => (
-              <span
-                key={i}
-                className="text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
-              >
-                {c.label}: {c.value}
-              </span>
-            ))}
-          </div>
-        )}
-        {msg.charts && msg.charts.length > 0 && (
-          <div className="h-64">
-            <DynamicChart chart={msg.charts[0]} fillContainer />
-          </div>
-        )}
-      </div>
     </div>
   );
 });
