@@ -165,8 +165,12 @@ export async function processQuestion(
       agentResultText = result.text;
 
     } catch (err) {
+      logger.error({ err, analysisId: analysis.id }, "runAgent failed");
       if (err instanceof MissingApiKeyError) {
         content = err.message;
+      } else if (err instanceof Anthropic.APIError && err.status >= 500) {
+        content =
+          "Der KI-Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in wenigen Minuten erneut.";
       } else {
         content =
           "Bei der Analyse ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.";
