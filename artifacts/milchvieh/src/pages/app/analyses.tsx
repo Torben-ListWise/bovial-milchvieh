@@ -224,13 +224,13 @@ function AnalysisHistoryPanel({
                     )}
                   >
                     {a.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary/70 fill-primary/60" />}
-                    <span className="flex-1 truncate min-w-0 pr-5">{a.title}</span>
+                    <span className="flex-1 truncate min-w-0 pr-8">{a.title}</span>
                     {isStale && <NewDataBadge />}
                     <AnalysisSourceBadge source={a.source} />
                   </button>
                 )}
                 {!isConfirmingDelete && (
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
                     <button
                       onMouseDown={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === a.id ? null : a.id); }}
                       className="p-0.5 rounded hover:bg-muted text-muted-foreground"
