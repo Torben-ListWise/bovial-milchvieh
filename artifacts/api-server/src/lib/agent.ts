@@ -958,9 +958,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
       ),
       tools: TOOLS,
-      // Force at least one tool call on the first turn so the agent always
-      // grounds its response in actual data (prevents hallucination on turn 0).
-      tool_choice: turn === 0 ? { type: "any" } : { type: "auto" },
+      // tool_choice "any" causes 500 errors on claude-sonnet-4-5; grounding is
+      // enforced via the system prompt instead.
+      tool_choice: { type: "auto" },
       messages,
     });
 
