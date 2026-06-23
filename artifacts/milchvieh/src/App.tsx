@@ -226,10 +226,10 @@ function LandingPage() {
         <div className="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="text-left space-y-8">
             <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
-              Der ruhige Experte für Ihre Herden-Daten
+              Der ruhige Experte für deine Herden-Daten
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed">
-              Laden Sie Ihre Herdenmanagement-Exporte und Milchkontrolldaten hoch. Stellen Sie Fragen in einfachem Deutsch. Erhalten Sie klare, fundierte Antworten basierend auf Ihren echten Daten.
+              Lade deine Herdenmanagement-Exporte und Milchkontrolldaten hoch. Stelle Fragen in einfachem Deutsch. Erhalte klare, fundierte Antworten basierend auf deinen echten Daten.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <a href={`${basePath}/sign-up`} className="inline-flex items-center justify-center gap-2 text-lg font-medium bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
@@ -253,7 +253,7 @@ function LandingPage() {
                   <ShieldCheck className="w-5 h-5 text-primary" />
                 </div>
                 <h3 className="font-semibold text-lg mb-2">Geprüfte Daten</h3>
-                <p className="text-sm text-muted-foreground">Jede Zahl ist belegt. Keine erfundenen Werte, sondern direkte Verweise auf Ihre Rohdaten.</p>
+                <p className="text-sm text-muted-foreground">Jede Zahl ist belegt. Keine erfundenen Werte, sondern direkte Verweise auf deine Rohdaten.</p>
               </div>
             </div>
           </div>

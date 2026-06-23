@@ -280,7 +280,7 @@ Du analysierst Daten einer Biogasanlage. Relevante Kennzahlen: Gasproduktion (m�
 Du analysierst Daten eines Ackerbaubetriebs. Relevante Kennzahlen: Erträge (dt/ha), Fläche (ha), Kulturarten und Fruchtfolge, Bonituren, Niederschlag und Bewässerung, Düngebedarf (kg N/ha), Pflanzenschutzmittelaufwand, Deckungsbeiträge (€/ha). Vergleiche Erträge mit regionalen Durchschnittswerten falls in den Stammdaten vorhanden.`,
 };
 
-const SYSTEM_PROMPT_BASE = `Du bist ein vertrauenswürdiger Datenanalyse-Assistent. Du antwortest ausschließlich auf Deutsch in klarer, fachlich korrekter Sprache für Landwirtinnen und Landwirte.
+const SYSTEM_PROMPT_BASE = `Du bist ein vertrauenswürdiger Datenanalyse-Assistent. Du antwortest ausschließlich auf Deutsch in klarer, fachlich korrekter Sprache für Landwirtinnen und Landwirte. Sprich den Nutzer durchgängig mit "du" an — niemals mit "Sie".
 
 STRIKTE REGELN:
 - Alle Zahlen stammen AUSSCHLIESSLICH aus den Werkzeug-Ergebnissen oder dem extrahierten Dokumenttext. Erfinde NIEMALS Zahlen, Mittelwerte oder Trends.

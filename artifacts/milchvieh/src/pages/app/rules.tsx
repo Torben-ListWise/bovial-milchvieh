@@ -319,7 +319,7 @@ export function RulesPage() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Regeln & Schwellenwerte</h1>
           <p className="text-muted-foreground mt-1">
-            Definieren Sie, ab wann das System eine Warnung ausgeben soll. Die Regeln fließen
+            Definiere, ab wann das System eine Warnung ausgeben soll. Die Regeln fließen
             automatisch in jede Analyse ein.
           </p>
         </div>
@@ -342,7 +342,7 @@ export function RulesPage() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Noch keine Regeln definiert</h3>
             <p className="text-muted-foreground mb-6 max-w-md">
-              Erstellen Sie eigene Regeln für Kennzahlen wie Milchleistung, Zellzahl oder
+              Erstelle eigene Regeln für Kennzahlen wie Milchleistung, Zellzahl oder
               Inhaltsstoffe, um automatisch gewarnt zu werden und den Assistenten zu steuern.
             </p>
             <Button onClick={openCreate}>Erste Regel erstellen</Button>

@@ -210,7 +210,7 @@ export function UploadPage() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dateien & Upload</h1>
-        <p className="text-muted-foreground mt-1">Laden Sie Ihre Herdenmanagement-Exporte (Excel, CSV, PDF) hier hoch.</p>
+        <p className="text-muted-foreground mt-1">Lade deine Herdenmanagement-Exporte (Excel, CSV, PDF) hier hoch.</p>
       </div>
 
       {!hasFiles && (
@@ -238,7 +238,7 @@ export function UploadPage() {
 
       <div className="mt-2">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold">Ihre Dateien</h3>
+          <h3 className="text-xl font-bold">Deine Dateien</h3>
           {hasFiles && (
             <div className="relative">
               <Button disabled={isUploading} className="gap-2 relative z-10 pointer-events-none">

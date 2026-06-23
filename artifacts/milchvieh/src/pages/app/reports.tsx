@@ -63,7 +63,7 @@ export function ReportsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Berichte</h1>
-          <p className="text-muted-foreground mt-1">Automatisch generierte Zusammenfassungen für Ihren Betrieb.</p>
+          <p className="text-muted-foreground mt-1">Automatisch generierte Zusammenfassungen für deinen Betrieb.</p>
         </div>
         <Button className="gap-2" onClick={handleGenerate} disabled={generateReport.isPending}>
           <Plus className="w-4 h-4" />
@@ -84,7 +84,7 @@ export function ReportsPage() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Noch keine Berichte</h3>
             <p className="text-muted-foreground mb-6 max-w-md">
-              Generieren Sie Ihren ersten wöchentlichen oder monatlichen Bericht, um eine Zusammenfassung der wichtigsten Kennzahlen zu erhalten.
+              Generiere deinen ersten wöchentlichen oder monatlichen Bericht, um eine Zusammenfassung der wichtigsten Kennzahlen zu erhalten.
             </p>
             <Button onClick={handleGenerate}>Ersten Bericht generieren</Button>
           </CardContent>

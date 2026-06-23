@@ -147,8 +147,8 @@ export function DatasetList() {
       <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Ihre Betriebe</h1>
-            <p className="text-muted-foreground mt-1">Wählen Sie einen Betrieb aus oder legen Sie einen neuen an.</p>
+            <h1 className="text-3xl font-bold text-foreground">Deine Betriebe</h1>
+            <p className="text-muted-foreground mt-1">Wähle einen Betrieb aus oder lege einen neuen an.</p>
           </div>
           <Button onClick={openCreate} className="gap-2">
             <Plus className="w-4 h-4" />
@@ -164,7 +164,7 @@ export function DatasetList() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Noch keine Betriebe</h3>
               <p className="text-muted-foreground mb-6 max-w-md">
-                Legen Sie Ihren ersten Betrieb an, um Daten hochzuladen und mit der Analyse zu beginnen.
+                Lege deinen ersten Betrieb an, um Daten hochzuladen und mit der Analyse zu beginnen.
               </p>
               <Button onClick={openCreate} className="gap-2">
                 <Plus className="w-4 h-4" />

@@ -43,7 +43,7 @@ export function WarningsPage() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Warnungen</h1>
-        <p className="text-muted-foreground mt-1">Automatische Hinweise auf Anomalien in Ihren Herden-Daten.</p>
+        <p className="text-muted-foreground mt-1">Automatische Hinweise auf Anomalien in deinen Herden-Daten.</p>
       </div>
 
       {!warnings || warnings.length === 0 ? (

@@ -596,7 +596,7 @@ function StarterQuestions({
         </div>
         <h3 className="text-xl font-semibold mb-2">Noch keine Daten hochgeladen</h3>
         <p className="text-muted-foreground mb-6 max-w-sm">
-          Laden Sie zuerst Ihre Herdenmanagement-Exporte hoch, bevor Sie Analysen starten.
+          Lade zuerst deine Herdenmanagement-Exporte hoch, bevor du Analysen startest.
         </p>
         <Button asChild>
           <Link href="/app/upload">
@@ -605,7 +605,7 @@ function StarterQuestions({
           </Link>
         </Button>
         <p className="text-xs text-muted-foreground mt-4">
-          Oder ziehen Sie Dateien direkt auf diese Seite
+          Oder ziehe Dateien direkt auf diese Seite
         </p>
       </div>
     );
@@ -618,7 +618,7 @@ function StarterQuestions({
       </div>
       <h3 className="text-lg font-semibold mb-1">Womit kann ich helfen?</h3>
       <p className="text-sm text-muted-foreground mb-6">
-        Stellen Sie eine Frage oder wählen Sie eine Vorlage:
+        Stelle eine Frage oder wähle eine Vorlage:
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
         {templatesLoading
@@ -716,7 +716,7 @@ function ChartPanel({
           Noch keine Grafik in diesem Gespräch
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          Fragen Sie z.B. nach einem Trend oder Vergleich
+          Frag z.B. nach einem Trend oder Vergleich
         </p>
       </div>
     );
@@ -1268,7 +1268,7 @@ export function AnalysesPage() {
           placeholder={
             activeAnalysisId
               ? "Folgefrage stellen…"
-              : "Stellen Sie eine Frage zu Ihren Daten…"
+              : "Stelle eine Frage zu deinen Daten…"
           }
           className="flex-1 rounded-xl border-border/60 bg-card shadow-inner focus-within:ring-2 focus-within:ring-primary/30"
           disabled={isPending}

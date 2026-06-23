@@ -36,7 +36,7 @@ function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; dat
         <Bot className="w-4 h-4 text-primary" />
       </div>
       <p className="flex-1 text-sm font-medium text-foreground">
-        🤖 Erstanalyse bereit — Ihr vollständiger Betriebsspiegel wurde automatisch erstellt.
+        🤖 Erstanalyse bereit — Dein vollständiger Betriebsspiegel wurde automatisch erstellt.
       </p>
       <Link href={`/app/analyses?datasetId=${datasetId}&analysisId=${analysisId}`}>
         <div className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline shrink-0 cursor-pointer">

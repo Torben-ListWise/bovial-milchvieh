@@ -39,7 +39,7 @@ export function SettingsPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast({ title: "Erfolg", description: "Ihre Daten wurden erfolgreich exportiert." });
+      toast({ title: "Erfolg", description: "Deine Daten wurden erfolgreich exportiert." });
     } catch {
       toast({ variant: "destructive", title: "Fehler", description: "Der Export ist fehlgeschlagen." });
     } finally {
@@ -50,7 +50,7 @@ export function SettingsPage() {
   const handleDelete = async () => {
     try {
       await deleteData.mutateAsync();
-      toast({ title: "Daten gelöscht", description: "Alle Ihre Daten wurden unwiderruflich gelöscht." });
+      toast({ title: "Daten gelöscht", description: "Alle deine Daten wurden unwiderruflich gelöscht." });
       signOut({ redirectUrl: "/" });
     } catch {
       toast({ variant: "destructive", title: "Fehler", description: "Beim Löschen ist ein Fehler aufgetreten." });
@@ -61,24 +61,24 @@ export function SettingsPage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Einstellungen & DSGVO</h1>
-        <p className="text-muted-foreground mt-1">Verwalten Sie Ihre Daten und Privatsphäre.</p>
+        <p className="text-muted-foreground mt-1">Verwalte deine Daten und Privatsphäre.</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-primary" />
-            Ihre Daten gehören Ihnen
+            Deine Daten gehören dir
           </CardTitle>
           <CardDescription>
-            Gemäß der europäischen Datenschutz-Grundverordnung (DSGVO) haben Sie das Recht, alle über Sie gespeicherten Daten jederzeit herunterzuladen oder dauerhaft zu löschen.
+            Gemäß der europäischen Datenschutz-Grundverordnung (DSGVO) hast du das Recht, alle über dich gespeicherten Daten jederzeit herunterzuladen oder dauerhaft zu löschen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
             <div>
               <h3 className="font-medium text-foreground">Datenexport</h3>
-              <p className="text-sm text-muted-foreground">Laden Sie alle Ihre Betriebe, Analysen und Regeln als JSON-Datei herunter.</p>
+              <p className="text-sm text-muted-foreground">Lade alle deine Betriebe, Analysen und Regeln als JSON-Datei herunter.</p>
             </div>
             <Button onClick={handleExport} disabled={isExporting} variant="outline" className="gap-2">
               <Download className="w-4 h-4" />
@@ -89,7 +89,7 @@ export function SettingsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-destructive/20 rounded-lg bg-destructive/5">
             <div>
               <h3 className="font-medium text-destructive">Konto löschen</h3>
-              <p className="text-sm text-muted-foreground">Löscht alle Ihre Daten unwiderruflich. Dies kann nicht rückgängig gemacht werden.</p>
+              <p className="text-sm text-muted-foreground">Löscht alle deine Daten unwiderruflich. Dies kann nicht rückgängig gemacht werden.</p>
             </div>
 
             <AlertDialog>
@@ -101,9 +101,9 @@ export function SettingsPage() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
+                  <AlertDialogTitle>Bist du sicher?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Diese Aktion kann nicht rückgängig gemacht werden. Dadurch werden Ihr Konto und Ihre Daten (Betriebe, Analysen, Dateien) dauerhaft von unseren Servern entfernt.
+                    Diese Aktion kann nicht rückgängig gemacht werden. Dadurch werden dein Konto und deine Daten (Betriebe, Analysen, Dateien) dauerhaft von unseren Servern entfernt.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
