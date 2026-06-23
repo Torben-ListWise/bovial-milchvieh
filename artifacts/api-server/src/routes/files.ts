@@ -174,4 +174,23 @@ router.patch(
   },
 );
 
+router.post(
+  "/files/:fileId/reingest",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const { fileId } = GetFileParams.parse(req.params);
+    const f = await ownFile(fileId, req.userId!);
+    if (!f) {
+      res.status(404).json({ error: "Datei nicht gefunden" });
+      return;
+    }
+    await db
+      .update(sourceFilesTable)
+      .set({ status: "processing" })
+      .where(eq(sourceFilesTable.id, fileId));
+    void ingestFile(fileId);
+    res.json({ ok: true });
+  },
+);
+
 export default router;
