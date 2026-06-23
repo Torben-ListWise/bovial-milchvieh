@@ -50,7 +50,7 @@ import {
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
   Plus, X, RefreshCw,
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
-  Layers, Database, Search, Cog, ArrowDown, ChevronDown,
+  Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -692,34 +692,55 @@ function StarterQuestions({
 const ResultCard = memo(function ResultCard({
   questionTitle,
   msg,
+  analysisId,
   cardRef,
 }: {
   questionTitle: string | null;
   msg: AnalysisMessage;
+  analysisId: string;
   cardRef?: React.Ref<HTMLDivElement>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-
   const headerLabel = questionTitle ?? "Ergebnis";
+  const { toast } = useToast();
+
+  function handleShare() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("analysisId", analysisId);
+    url.searchParams.set("msgId", msg.id);
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      toast({ description: "Link kopiert" });
+    });
+  }
 
   return (
     <div
       ref={cardRef}
       className="rounded-xl border border-border bg-card shadow-sm overflow-hidden"
     >
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30 hover:bg-muted/50 transition-colors text-left group"
-        aria-expanded={!collapsed}
-      >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
-          {headerLabel}
-        </p>
-        <ChevronDown
-          className={`w-3.5 h-3.5 text-muted-foreground shrink-0 ml-2 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
-        />
-      </button>
+      <div className="flex items-stretch border-b border-border bg-muted/30">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex-1 flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition-colors text-left"
+          aria-expanded={!collapsed}
+        >
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
+            {headerLabel}
+          </p>
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-muted-foreground shrink-0 ml-2 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          title="Link kopieren"
+          className="shrink-0 px-2 py-2.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
       {!collapsed && (
         <div className="px-4 py-3 space-y-3">
           <MarkdownContent text={msg.content ?? ""} />
@@ -839,6 +860,7 @@ function AnalysisResultsPanel({
           key={pair.msg.id}
           questionTitle={pair.questionTitle}
           msg={pair.msg}
+          analysisId={analysis.id}
           cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
         />
       ))}
