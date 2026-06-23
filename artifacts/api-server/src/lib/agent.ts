@@ -977,11 +977,11 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    // Use non-streaming messages.create — client.messages.stream() returns HTTP
-    // 200 then sends an error event in the SSE body for claude-sonnet-4-5,
-    // which the SDK surfaces as an _APIError with status=undefined.
-    const response = await callWithRetry(() =>
-      client.messages.create({
+    // Use streaming so text tokens reach the client in real-time via onTextDelta.
+    // callWithRetry wraps finalMessage(); 500/529 errors from Anthropic occur
+    // before the first token arrives, so retries never emit duplicate deltas.
+    const response = await callWithRetry(async () => {
+      const stream = client.messages.stream({
         model: MODEL,
         max_tokens: 8192,
         system: buildSystemString(
@@ -991,8 +991,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         tools: TOOLS,
         tool_choice: { type: "auto" },
         messages,
-      }),
-    );
+      });
+      if (opts.onTextDelta) {
+        stream.on("text", (delta) => opts.onTextDelta!(delta));
+      }
+      return stream.finalMessage();
+    });
     logger.debug({
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
@@ -1039,13 +1043,6 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     break;
   }
 
-  // Emit the full final text as a single delta once all turns are complete.
-  // (Switched from streaming to non-streaming to work around a streaming
-  // endpoint bug in claude-sonnet-4-5 that returns 200 then errors in-stream.)
-  if (finalText && opts.onTextDelta) {
-    opts.onTextDelta(finalText);
-  }
-
   // Grounding enforcement: if the model returned text without calling any
   // compute tool, replace the response with a safe fallback. This prevents
   // hallucinated numbers from reaching the user.
@@ -1058,54 +1055,6 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
       "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
     return { text: finalText, charts, citations, backQuestions };
-  }
-
-  // Self-verification: agent checks its own numbers against tool results.
-  // This runs inside runAgent where the full messages array (including all
-  // tool_use / tool_result blocks) is still in memory.
-  if (finalText) {
-    await opts.onProgress?.("Überprüfe Ergebnisse");
-    const verifyMessages = [
-      ...messages,
-      {
-        role: "user" as const,
-        content:
-          "Überprüfungsschritt: Stimmen alle genannten Zahlen exakt mit den " +
-          "Tool-Ergebnissen oder dem Dokumenttext überein? " +
-          "WICHTIG: Behalte alle Fußnoten-Marker [1], [2], [3] etc. vollständig und unverändert in der Antwort. " +
-          "Entferne KEINE Nummern-Marker — sie sind Teil der Antwort. " +
-          "WICHTIG: Behalte alle Vertrauens-Labels *[📚 Bibliothek]*, *[🌐 Web]* und *[💭 Allgemeinwissen]* vollständig und unverändert. " +
-          "Entferne KEINE dieser Labels — sie sind Teil der Antwort. " +
-          "Antworte NUR mit der fertigen Antwort — kein Kommentar zur Überprüfung, " +
-          "keine Erklärung des Prozesses, kein 'Problem:' oder 'Korrigierte Antwort:'. " +
-          "Gib ausschließlich den Text zurück, den der Landwirt lesen soll.",
-      },
-    ];
-    try {
-      // Do NOT pass tools — verification is a pure text review.
-      // Include docContext so the verifier can see PDF content and won't
-      // incorrectly flag document-sourced numbers as ungrounded.
-      const verifyResponse = await callWithRetry(() =>
-        client.messages.create({
-          model: MODEL,
-          max_tokens: 4096,
-          system: buildSystemString(docContext, ((opts.systemExtra ?? "") + knowledgeTitles) || undefined),
-          messages: verifyMessages,
-        }),
-      );
-      logger.debug({
-        input_tokens: verifyResponse.usage.input_tokens,
-        output_tokens: verifyResponse.usage.output_tokens,
-      }, "Anthropic usage (verify)");
-      const verifiedText = verifyResponse.content
-        .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
-      if (verifiedText) finalText = verifiedText;
-    } catch (err) {
-      logger.warn({ err }, "Verification-Schritt fehlgeschlagen — Originalantwort wird verwendet");
-    }
   }
 
   return { text: finalText, charts, citations, backQuestions };
