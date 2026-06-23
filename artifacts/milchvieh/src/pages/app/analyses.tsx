@@ -773,8 +773,19 @@ const ResultCard = memo(function ResultCard({
             </div>
           )}
           {msg.charts && msg.charts.length > 0 && (
-            <div className="h-64">
-              <DynamicChart chart={msg.charts[0]} fillContainer />
+            <div className="space-y-4">
+              {msg.charts.map((chart, i) => (
+                <div key={i}>
+                  {chart.title && chart.title !== headerLabel && (
+                    <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                      {chart.title}
+                    </p>
+                  )}
+                  <div className="h-64">
+                    <DynamicChart chart={chart} fillContainer />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
