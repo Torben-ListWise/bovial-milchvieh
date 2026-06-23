@@ -359,6 +359,52 @@ function HistoricalFiles({
   );
 }
 
+// ── Project files panel ──────────────────────────────────────────────────────
+
+function ProjectFilesPanel({
+  files,
+  contextFileIds,
+  onRemove,
+}: {
+  files: FileItem[];
+  contextFileIds: string[];
+  onRemove: (fileId: string) => void;
+}) {
+  const projectFiles = files.filter((f) => contextFileIds.includes(f.id));
+  if (projectFiles.length === 0) return null;
+
+  return (
+    <div className="px-3 pt-2 pb-1 border-b border-border/60 shrink-0">
+      <div className="flex items-center gap-1 mb-1.5">
+        <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+          Projektdateien
+        </span>
+        <span className="ml-1 text-[9px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-semibold shrink-0">
+          {projectFiles.length}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
+        {projectFiles.map((f) => (
+          <div
+            key={f.id}
+            className="flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 border bg-primary/5 border-primary/20 text-primary/80 group"
+          >
+            {fileKindIcon(f.kind)}
+            <span className="flex-1 truncate font-medium min-w-0">{f.name}</span>
+            <button
+              onClick={() => onRemove(f.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-primary/10 text-primary/50 hover:text-primary shrink-0"
+              title="Aus Projekt entfernen"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── File poller ──────────────────────────────────────────────────────────────
 // Renders nothing — polls a single file until ready/error/timeout (2 min)
 
@@ -1579,6 +1625,17 @@ export function AnalysesPage() {
         onDeleteAnalysis={handleDeleteAnalysis}
         onUpdateAnalysis={handleUpdateAnalysis}
       />
+      {activeAnalysisId && activeContextFileIds.length > 0 && (
+        <ProjectFilesPanel
+          files={historicalFiles}
+          contextFileIds={activeContextFileIds}
+          onRemove={(fileId) => {
+            handleUpdateAnalysis(activeAnalysisId, {
+              contextFileIds: activeContextFileIds.filter((id) => id !== fileId),
+            });
+          }}
+        />
+      )}
       <HistoricalFiles
         files={historicalFiles}
         onDeleteFile={handleDeleteFile}
