@@ -276,11 +276,11 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS team_invites (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      host_user_id TEXT NOT NULL,
+      host_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       guest_email TEXT NOT NULL,
-      guest_user_id TEXT,
+      guest_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
       token UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-      status TEXT NOT NULL DEFAULT 'pending',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days',
       accepted_at TIMESTAMPTZ,
@@ -297,4 +297,37 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS team_invites_token_idx ON team_invites (token)"
   );
+  // Add constraints to existing team_invites table (idempotent)
+  await pool.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'team_invites_status_check'
+      ) THEN
+        ALTER TABLE team_invites
+          ADD CONSTRAINT team_invites_status_check CHECK (status IN ('pending', 'accepted', 'revoked'));
+      END IF;
+    END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'team_invites_host_user_id_fkey'
+      ) THEN
+        ALTER TABLE team_invites
+          ADD CONSTRAINT team_invites_host_user_id_fkey
+          FOREIGN KEY (host_user_id) REFERENCES users(id) ON DELETE CASCADE;
+      END IF;
+    END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'team_invites_guest_user_id_fkey'
+      ) THEN
+        ALTER TABLE team_invites
+          ADD CONSTRAINT team_invites_guest_user_id_fkey
+          FOREIGN KEY (guest_user_id) REFERENCES users(id) ON DELETE SET NULL;
+      END IF;
+    END $$
+  `);
 }

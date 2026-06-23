@@ -1,8 +1,8 @@
 import { pool } from "@workspace/db";
 
 /**
- * Returns the owner userId if the guestUserId is currently an active guest
- * for the dataset owner, or null if no active guest access exists.
+ * Returns the owner userId if the guestUserId currently has active access
+ * (accepted + not revoked, OR revoked but still within the 30-day grace).
  */
 export async function resolveGuestAccess(
   datasetId: string,
@@ -14,10 +14,9 @@ export async function resolveGuestAccess(
      JOIN team_invites ti ON ti.host_user_id = d.user_id
      WHERE d.id = $1
        AND ti.guest_user_id = $2
-       AND ti.status = 'accepted'
        AND (
-         ti.revoked_at IS NULL
-         OR (ti.transition_ends_at IS NOT NULL AND ti.transition_ends_at > NOW())
+         (ti.status = 'accepted' AND ti.revoked_at IS NULL)
+         OR (ti.status = 'revoked' AND ti.transition_ends_at IS NOT NULL AND ti.transition_ends_at > NOW())
        )
      LIMIT 1`,
     [datasetId, guestUserId],
@@ -27,7 +26,7 @@ export async function resolveGuestAccess(
 }
 
 /**
- * Returns true if the user owns the dataset OR is an active guest for its owner.
+ * Returns true if the user owns the dataset OR has active guest access.
  */
 export async function canReadDataset(
   datasetId: string,
@@ -44,17 +43,17 @@ export async function canReadDataset(
 }
 
 /**
- * Returns all host userIds for which userId has an active accepted invite.
+ * Returns all host userIds for which userId has active access
+ * (accepted + not revoked, OR revoked but still within grace period).
  */
 export async function getActiveHostIds(userId: string): Promise<string[]> {
   const { rows } = await pool.query<{ host_user_id: string }>(
     `SELECT DISTINCT host_user_id
      FROM team_invites
      WHERE guest_user_id = $1
-       AND status = 'accepted'
        AND (
-         revoked_at IS NULL
-         OR (transition_ends_at IS NOT NULL AND transition_ends_at > NOW())
+         (status = 'accepted' AND revoked_at IS NULL)
+         OR (status = 'revoked' AND transition_ends_at IS NOT NULL AND transition_ends_at > NOW())
        )`,
     [userId],
   );
@@ -62,14 +61,22 @@ export async function getActiveHostIds(userId: string): Promise<string[]> {
 }
 
 /**
- * Counts how many active (pending or accepted, non-revoked) invites the host has.
+ * Counts truly active invite slots for a host:
+ * - pending and not yet expired
+ * - accepted and not revoked
+ * - revoked but still in grace period (still occupies a slot until fully expired)
+ * Excludes expired-pending and fully-expired revocations.
  */
 export async function countActiveInvites(hostUserId: string): Promise<number> {
   const { rows } = await pool.query<{ cnt: string }>(
     `SELECT COUNT(*)::text AS cnt
      FROM team_invites
      WHERE host_user_id = $1
-       AND status IN ('pending', 'accepted')`,
+       AND (
+         (status = 'pending' AND expires_at > NOW())
+         OR (status = 'accepted' AND revoked_at IS NULL)
+         OR (status = 'revoked' AND transition_ends_at IS NOT NULL AND transition_ends_at > NOW())
+       )`,
     [hostUserId],
   );
   return parseInt(rows[0]?.cnt ?? "0", 10);
