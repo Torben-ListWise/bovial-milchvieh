@@ -35,26 +35,51 @@ app.use(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-// CORS: allow only the Replit dev domain and any configured ALLOWED_ORIGINS.
+// CORS: allow only explicitly-listed origins and Replit-owned TLDs.
 // Never use origin:true (reflects arbitrary origins) with credentials:true.
+
+// Replit-owned TLDs — no third party can issue subdomains under these.
+const REPLIT_TRUSTED_SUFFIXES = [".replit.dev", ".repl.co", ".replit.app"];
+
 const allowedOrigins = (() => {
-  const base = process.env["REPLIT_DEV_DOMAIN"]
+  // Primary: REPLIT_DOMAINS lists every domain alias Replit assigns the repl.
+  const replitDomains = (process.env["REPLIT_DOMAINS"] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((d) => `https://${d}`);
+
+  // Fallback: REPLIT_DEV_DOMAIN for environments that don't supply REPLIT_DOMAINS.
+  const devDomain = process.env["REPLIT_DEV_DOMAIN"]
     ? [`https://${process.env["REPLIT_DEV_DOMAIN"]}`]
     : [];
+
+  // Custom origins from operator config (e.g. production custom domains).
   const extra = (process.env["ALLOWED_ORIGINS"] ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  return [...base, ...extra];
+
+  const base = replitDomains.length > 0 ? replitDomains : devDomain;
+  return [...new Set([...base, ...extra])];
 })();
 
-// In development, Replit serves the preview from dynamic *.repl.co /
-// *.janeway.repl.co subdomains that differ from REPLIT_DEV_DOMAIN.
-// Allow the whole .repl.co and .replit.dev families in non-production only.
-const isReplitPreviewOrigin = (origin: string) =>
-  origin.endsWith(".repl.co") ||
-  origin.endsWith(".replit.dev") ||
-  origin.endsWith(".replit.app");
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.includes(origin)) return true;
+  // Safety-net: accept any subdomain of a Replit-owned TLD without manual config.
+  try {
+    const hostname = new URL(origin).hostname;
+    return REPLIT_TRUSTED_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+  } catch {
+    return false;
+  }
+}
+
+// Log allowed origins at startup so mismatches are diagnosable immediately.
+logger.info(
+  { allowedOrigins, trustedSuffixes: REPLIT_TRUSTED_SUFFIXES },
+  "CORS: allowed origins",
+);
 
 app.use(
   cors({
@@ -65,30 +90,36 @@ app.use(
         callback(null, true);
         return;
       }
-      // Dev-only: allow all Replit preview subdomains so the workspace
-      // iframe can reach the API without having to enumerate every dynamic URL.
-      if (process.env["NODE_ENV"] !== "production" && isReplitPreviewOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
-      // In production with no allowlist configured, fail closed to prevent
-      // credentialed cross-origin access from arbitrary origins.
+      // In production with no allowlist configured, fail closed.
       if (allowedOrigins.length === 0) {
         if (process.env["NODE_ENV"] !== "production") {
+          // Dev-only: fail open so a local Vite preview works without env setup.
           callback(null, true);
         } else {
-          callback(new Error("CORS: no allowed origins configured in production"));
+          // Return false so cors calls next(); the 403 guard below fires.
+          callback(null, false);
         }
         return;
       }
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
+      // Return false on rejection — cors will call next() and the guard below
+      // responds with a proper 403 instead of letting Express emit a 500.
+      callback(null, isAllowedOrigin(origin));
     },
   }),
 );
+
+// Return HTTP 403 for CORS-rejected cross-origin requests.
+// When cors() receives callback(null, false) it calls next() without setting
+// Access-Control-Allow-Origin, so we detect the rejection here.
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  if (origin && !res.getHeader("Access-Control-Allow-Origin")) {
+    logger.warn({ origin }, "CORS: origin rejected");
+    res.status(403).json({ error: "CORS: origin not allowed" });
+    return;
+  }
+  next();
+});
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
