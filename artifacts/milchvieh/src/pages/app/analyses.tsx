@@ -755,6 +755,142 @@ function isBackQuestion(content: string | null | undefined): boolean {
   return lastChar === "?";
 }
 
+// ── Extract individual questions from agent messages ──────────────────────────
+
+function extractBackQuestions(content: string | null | undefined): string[] | null {
+  if (!content) return null;
+  const trimmed = content.trim();
+
+  // Case A: short back-question — treat entire content as one question
+  if (isBackQuestion(content)) {
+    return [trimmed];
+  }
+
+  // Case B: numbered questions embedded in longer text
+  // Match lines like "1. ...?" or "2) ...?" at end of content
+  const lines = trimmed.split("\n");
+  const questionLines: string[] = [];
+  for (const line of lines) {
+    const m = line.match(/^\s*(?:\d+[.)]\s+|-\s+)(.+\?)\s*$/);
+    if (m) {
+      questionLines.push(m[1].trim());
+    }
+  }
+
+  if (questionLines.length >= 2) {
+    return questionLines;
+  }
+
+  return null;
+}
+
+// ── Interactive back-question form ────────────────────────────────────────────
+
+function BackQuestionForm({
+  questions,
+  onSubmit,
+}: {
+  questions: string[];
+  onSubmit: (answer: string) => void;
+}) {
+  const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ""));
+  const [skipped, setSkipped] = useState<boolean[]>(() => questions.map(() => false));
+  const [submitted, setSubmitted] = useState(false);
+
+  if (submitted) return null;
+
+  const allSkipped = skipped.every(Boolean);
+
+  function handleSkip(i: number) {
+    setSkipped((prev) => prev.map((v, idx) => (idx === i ? true : v)));
+    setAnswers((prev) => prev.map((v, idx) => (idx === i ? "" : v)));
+  }
+
+  function handleUnskip(i: number) {
+    setSkipped((prev) => prev.map((v, idx) => (idx === i ? false : v)));
+  }
+
+  function handleSend() {
+    const parts = questions.map((q, i) => {
+      const ans = skipped[i] ? "keine Angabe" : (answers[i].trim() || "keine Angabe");
+      return `${i + 1}. ${q}: ${ans}`;
+    });
+    const text = `Zu deinen Fragen:\n${parts.join("\n")}`;
+    setSubmitted(true);
+    onSubmit(text);
+  }
+
+  return (
+    <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
+      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+        <Bot className="w-3.5 h-3.5 text-primary" />
+      </div>
+      <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-3 max-w-[90%]">
+        {questions.map((q, i) => (
+          <div key={i} className="space-y-1">
+            <div className="flex items-start justify-between gap-2">
+              <label
+                className={cn(
+                  "text-sm font-medium leading-snug flex-1",
+                  skipped[i] ? "line-through text-muted-foreground" : "text-foreground"
+                )}
+              >
+                {q}
+              </label>
+              {skipped[i] ? (
+                <button
+                  type="button"
+                  onClick={() => handleUnskip(i)}
+                  className="text-xs text-primary hover:underline shrink-0"
+                >
+                  Rückgängig
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSkip(i)}
+                  className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  Überspringen
+                </button>
+              )}
+            </div>
+            <textarea
+              rows={1}
+              disabled={skipped[i]}
+              value={answers[i]}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAnswers((prev) => prev.map((a, idx) => (idx === i ? v : a)));
+              }}
+              placeholder="Deine Antwort…"
+              className={cn(
+                "w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors",
+                skipped[i] && "opacity-40 cursor-not-allowed bg-muted"
+              )}
+              style={{ minHeight: "2.5rem" }}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+            />
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleSend}
+          disabled={allSkipped}
+          className="w-full mt-1"
+        >
+          Antworten senden
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Follow-up question chips ───────────────────────────────────────────────────
 
 function FollowUpChips({
@@ -1443,6 +1579,19 @@ export function AnalysesPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [followUpQuestionsKey]);
 
+  // Scroll to bottom when a BackQuestionForm appears (agent finished with a question)
+  const lastAssistantMsgIdForForm = (() => {
+    if (isAgentWorking) return null;
+    const msgs = analysis?.messages ?? [];
+    const last = [...msgs].reverse().find((m) => m.role === "assistant" && !m.error);
+    if (!last) return null;
+    return extractBackQuestions(last.content) ? last.id : null;
+  })();
+  useEffect(() => {
+    if (!lastAssistantMsgIdForForm) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lastAssistantMsgIdForForm]);
+
   // ── Panel resize drag handlers ────────────────────────────────────────────
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
@@ -1861,6 +2010,23 @@ export function AnalysesPage() {
     const msgs = analysis?.messages ?? [];
     const chatFollowUpQuestions = msgs.filter(m => m.role === "assistant").pop()?.followUpQuestions ?? [];
 
+    // Determine if the last assistant message triggers a BackQuestionForm
+    const lastAssistantMsg = [...msgs].reverse().find((m) => m.role === "assistant" && !m.error);
+    const lastBackQuestionMsgId = (() => {
+      if (isAgentWorking) return null;
+      if (!lastAssistantMsg) return null;
+      const qs = extractBackQuestions(lastAssistantMsg.content);
+      return qs ? lastAssistantMsg.id : null;
+    })();
+
+    // For Fall B: embedded questions in a long result message (not a back-question bubble)
+    const embeddedFormQuestions = (() => {
+      if (isAgentWorking) return null;
+      if (!lastAssistantMsg) return null;
+      if (isBackQuestion(lastAssistantMsg.content)) return null;
+      return extractBackQuestions(lastAssistantMsg.content);
+    })();
+
     return (
       <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
         {sidebarPanels}
@@ -1887,20 +2053,47 @@ export function AnalysesPage() {
                 </div>
               )}
               {msgs.map((msg, idx) => {
+                const isLast = idx === msgs.length - 1;
+                // Assistant results (not errors, not back-questions) go to the right panel — skip here
                 if (msg.role === "assistant" && !msg.error && !isBackQuestion(msg.content)) {
                   return null;
+                }
+                // Fall A: last back-question bubble → replace with interactive form
+                if (
+                  msg.role === "assistant" &&
+                  !msg.error &&
+                  isLast &&
+                  msg.id === lastBackQuestionMsgId
+                ) {
+                  const qs = extractBackQuestions(msg.content)!;
+                  return (
+                    <BackQuestionForm
+                      key={msg.id}
+                      questions={qs}
+                      onSubmit={(answer) => handleSubmit(answer)}
+                    />
+                  );
                 }
                 return (
                   <div key={msg.id}>
                     <MessageBubble
                       msg={msg}
                       isNew={isNewMessage(msg)}
-                      isLast={idx === msgs.length - 1}
+                      isLast={isLast}
                       isAgentWorking={isAgentWorking}
                     />
                   </div>
                 );
               })}
+
+              {/* Fall B: long result message with embedded numbered questions */}
+              {embeddedFormQuestions && (
+                <BackQuestionForm
+                  key={lastAssistantMsg!.id + "-embedded"}
+                  questions={embeddedFormQuestions}
+                  onSubmit={(answer) => handleSubmit(answer)}
+                />
+              )}
               </>
             )}
 
