@@ -77,6 +77,10 @@ export interface Dataset {
   periodStart?: string | null;
   /** @nullable */
   periodEnd?: string | null;
+  /** @nullable */
+  detectedFocusArea?: string | null;
+  /** @nullable */
+  detectedFocusAreaConfidence?: number | null;
 }
 
 export interface DatasetInput {

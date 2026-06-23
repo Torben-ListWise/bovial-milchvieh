@@ -42,6 +42,7 @@ import {
   parseCanonicalValue,
   CANONICAL_FIELD_MAP,
 } from "./canonical";
+import { detectFarmType } from "./farmTypeDetector";
 import { evaluateWarnings } from "./warnings";
 import { analysesTable, messagesTable } from "@workspace/db";
 import { processQuestion } from "./analysisService";
@@ -444,6 +445,41 @@ export async function ingestFile(fileId: string): Promise<void> {
           previewRows: result.previewRows,
         })
         .where(eq(sourceFilesTable.id, fileId));
+    }
+
+    // Detect farm type and persist on dataset (only updates if better signal than existing).
+    try {
+      const detection = detectFarmType({
+        canonicalKeys: Object.values(result.suggestedMapping),
+        rawHeaders: result.columns.map((c) => c.header),
+        documentText: result.kind === "document" && result.text
+          ? result.text.slice(0, 5000)
+          : undefined,
+      });
+      if (detection) {
+        // Fetch existing detection to avoid overwriting a high-confidence result.
+        const [existing] = await db
+          .select({ c: (datasetsTable as any).detectedFocusAreaConfidence })
+          .from(datasetsTable)
+          .where(eq(datasetsTable.id, file.datasetId));
+        const existingConf = (existing?.c as number | null) ?? 0;
+        if (detection.confidence >= existingConf) {
+          await db
+            .update(datasetsTable)
+            .set({
+              detectedFocusArea: detection.focusArea,
+              detectedFocusAreaConfidence: detection.confidence,
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(datasetsTable.id, file.datasetId));
+          logger.info(
+            { datasetId: file.datasetId, focusArea: detection.focusArea, confidence: detection.confidence },
+            "Betriebstyp erkannt",
+          );
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, fileId }, "Betriebstyp-Erkennung fehlgeschlagen");
     }
 
     await refreshDatasetStatus(file.datasetId);

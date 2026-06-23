@@ -69,6 +69,8 @@ export function serializeDataset(
     sector: normalizeSector((d as any).sector),
     periodStart: d.periodStart ?? null,
     periodEnd: d.periodEnd ?? null,
+    detectedFocusArea: (d as any).detectedFocusArea ?? null,
+    detectedFocusAreaConfidence: (d as any).detectedFocusAreaConfidence ?? null,
   };
 }
 

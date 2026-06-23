@@ -41,6 +41,13 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_areas TEXT[]"
   );
+  // Migration: detected_focus_area and confidence on datasets (farm type auto-detection)
+  await pool.query(
+    "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS detected_focus_area TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS detected_focus_area_confidence REAL"
+  );
   // Migration: source_url column on knowledge_documents (for URL-ingested entries)
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"

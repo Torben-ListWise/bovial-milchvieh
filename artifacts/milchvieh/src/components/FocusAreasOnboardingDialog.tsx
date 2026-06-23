@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useUpdateMe, useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 const FOCUS_OPTIONS: { value: string; label: string; emoji: string; description: string }[] = [
   { value: "milchvieh", label: "Milchvieh", emoji: "🐄", description: "Milchkühe, Herde, Eutergesundheit" },
@@ -20,13 +20,30 @@ const FOCUS_OPTIONS: { value: string; label: string; emoji: string; description:
   { value: "sonstiges", label: "Sonstiges", emoji: "🌱", description: "Anderer Schwerpunkt" },
 ];
 
+const FOCUS_LABELS: Record<string, string> = {
+  milchvieh: "Milchviehdaten",
+  schweine: "Schweinedaten",
+  geflügel: "Geflügeldaten",
+  ackerbau: "Ackerbaudaten",
+  biogas: "Biogasdaten",
+  mischbetrieb: "Mischbetriebsdaten",
+};
+
 interface Props {
   open: boolean;
   onClose: () => void;
+  detectedFocusArea?: string | null;
+  detectedFocusAreaConfidence?: number | null;
 }
 
-export function FocusAreasOnboardingDialog({ open, onClose }: Props) {
+export function FocusAreasOnboardingDialog({
+  open,
+  onClose,
+  detectedFocusArea,
+  detectedFocusAreaConfidence,
+}: Props) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const queryClient = useQueryClient();
   const updateMe = useUpdateMe({
     mutation: {
@@ -37,6 +54,22 @@ export function FocusAreasOnboardingDialog({ open, onClose }: Props) {
     },
   });
 
+  // Pre-select the detected focus area when suggestion is first available.
+  // Only pre-select values that actually exist in the option list to avoid
+  // submitting unsupported focus areas (e.g. "biogas" is a valid detection
+  // output but is not a user-facing focus area).
+  useEffect(() => {
+    const isSelectable = FOCUS_OPTIONS.some((o) => o.value === detectedFocusArea);
+    if (
+      detectedFocusArea &&
+      isSelectable &&
+      !suggestionDismissed &&
+      selected.length === 0
+    ) {
+      setSelected([detectedFocusArea]);
+    }
+  }, [detectedFocusArea]);
+
   function toggle(value: string) {
     setSelected((prev) =>
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
@@ -44,12 +77,29 @@ export function FocusAreasOnboardingDialog({ open, onClose }: Props) {
   }
 
   function handleSave() {
-    updateMe.mutate({ focusAreas: selected.length > 0 ? selected : ["sonstiges"] });
+    // Filter to only backend-allowed values before submitting.
+    const validSelected = selected.filter((v) =>
+      FOCUS_OPTIONS.some((o) => o.value === v),
+    );
+    updateMe.mutate({ focusAreas: validSelected.length > 0 ? validSelected : ["sonstiges"] });
   }
 
   function handleSkip() {
-    onClose();
+    updateMe.mutate({ focusAreas: [] });
   }
+
+  const showSuggestion =
+    !suggestionDismissed &&
+    !!detectedFocusArea &&
+    FOCUS_OPTIONS.some((o) => o.value === detectedFocusArea);
+
+  const detectedLabel = detectedFocusArea
+    ? (FOCUS_LABELS[detectedFocusArea] ?? detectedFocusArea)
+    : null;
+
+  const confidencePct = detectedFocusAreaConfidence != null
+    ? Math.round(detectedFocusAreaConfidence * 100)
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -63,9 +113,33 @@ export function FocusAreasOnboardingDialog({ open, onClose }: Props) {
           </DialogDescription>
         </DialogHeader>
 
+        {showSuggestion && (
+          <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+            <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-foreground">
+                Wir haben {detectedLabel} erkannt — möchtest du das bestätigen?
+              </p>
+              {confidencePct !== null && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Erkennungssicherheit: {confidencePct}&nbsp;%
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setSuggestionDismissed(true)}
+              className="text-muted-foreground hover:text-foreground text-xs shrink-0 mt-0.5"
+              aria-label="Vorschlag schließen"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3 py-2">
           {FOCUS_OPTIONS.map((opt) => {
             const isSelected = selected.includes(opt.value);
+            const isSuggested = showSuggestion && opt.value === detectedFocusArea;
             return (
               <button
                 key={opt.value}
@@ -77,8 +151,15 @@ export function FocusAreasOnboardingDialog({ open, onClose }: Props) {
                 }`}
               >
                 <span className="text-2xl leading-none mt-0.5">{opt.emoji}</span>
-                <div className="min-w-0">
-                  <p className="font-medium text-sm text-foreground">{opt.label}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-medium text-sm text-foreground">{opt.label}</p>
+                    {isSuggested && (
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary leading-none">
+                        Erkannt
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                 </div>
                 <div

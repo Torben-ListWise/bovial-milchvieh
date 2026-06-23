@@ -101,7 +101,9 @@ export const ListDatasetsResponseItem = zod.object({
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
   "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
-  "periodEnd": zod.coerce.date().nullish()
+  "periodEnd": zod.coerce.date().nullish(),
+  "detectedFocusArea": zod.string().nullish(),
+  "detectedFocusAreaConfidence": zod.number().nullish()
 })
 export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem)
 
@@ -137,7 +139,9 @@ export const GetDatasetResponse = zod.object({
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
   "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
-  "periodEnd": zod.coerce.date().nullish()
+  "periodEnd": zod.coerce.date().nullish(),
+  "detectedFocusArea": zod.string().nullish(),
+  "detectedFocusAreaConfidence": zod.number().nullish()
 })
 
 
@@ -168,7 +172,9 @@ export const UpdateDatasetResponse = zod.object({
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
   "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
-  "periodEnd": zod.coerce.date().nullish()
+  "periodEnd": zod.coerce.date().nullish(),
+  "detectedFocusArea": zod.string().nullish(),
+  "detectedFocusAreaConfidence": zod.number().nullish()
 })
 
 

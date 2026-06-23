@@ -111,7 +111,7 @@ const deDULocalization: typeof deDE = {
   } as any,
 };
 import { useEffect, useRef, useState } from "react";
-import { useGetCurrentUser, setAuthTokenGetter } from "@workspace/api-client-react";
+import { useGetCurrentUser, setAuthTokenGetter, useListDatasets } from "@workspace/api-client-react";
 import { ArrowRight, MessageCircle, ShieldCheck } from "lucide-react";
 
 import { AppLayout } from "@/components/layout";
@@ -312,6 +312,22 @@ function AppPortal() {
     dbUser !== undefined &&
     dbUser.focusAreas == null;
 
+  // Fetch datasets to surface auto-detected farm type for the onboarding dialog.
+  const { data: datasets } = useListDatasets({
+    query: { enabled: showOnboarding },
+  });
+
+  // Pick the dataset with the highest detection confidence.
+  const bestDetection = datasets
+    ?.filter((d) => (d as any).detectedFocusArea != null)
+    .reduce<{ area: string; confidence: number } | null>((best, d) => {
+      const conf = (d as any).detectedFocusAreaConfidence as number ?? 0;
+      if (!best || conf > best.confidence) {
+        return { area: (d as any).detectedFocusArea as string, confidence: conf };
+      }
+      return best;
+    }, null);
+
   // Persist view mode across page reloads via sessionStorage.
   // Operators default to operator view; customers are always customer.
   const [viewMode, setViewModeState] = useState<'operator' | 'customer'>(() => {
@@ -337,6 +353,8 @@ function AppPortal() {
       <FocusAreasOnboardingDialog
         open={showOnboarding}
         onClose={() => setOnboardingDismissed(true)}
+        detectedFocusArea={bestDetection?.area}
+        detectedFocusAreaConfidence={bestDetection?.confidence}
       />
     <AppLayout
       role={role as 'operator' | 'customer'}

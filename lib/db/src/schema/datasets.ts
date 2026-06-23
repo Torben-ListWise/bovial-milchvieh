@@ -4,6 +4,7 @@ import {
   timestamp,
   uuid,
   date,
+  real,
 } from "drizzle-orm/pg-core";
 
 export const datasetsTable = pgTable("datasets", {
@@ -15,6 +16,8 @@ export const datasetsTable = pgTable("datasets", {
   sector: text("sector").notNull().default("dairy"),
   periodStart: date("period_start"),
   periodEnd: date("period_end"),
+  detectedFocusArea: text("detected_focus_area"),
+  detectedFocusAreaConfidence: real("detected_focus_area_confidence"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
