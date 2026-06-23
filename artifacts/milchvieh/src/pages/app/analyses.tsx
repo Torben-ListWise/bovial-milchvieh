@@ -724,9 +724,9 @@ function preprocessFootnotes(text: string, ns: string): string {
 // Pattern emitted by the agent: *[📚 Bibliothek]*, *[🌐 Web]*, *[💭 Allgemeinwissen]*
 function preprocessTrustLabels(text: string): string {
   return text
-    .replace(/\*\[📚 Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library">📚 Bibliothek</span>')
-    .replace(/\*\[🌐 Web\]\*/g, '<span class="trust-badge trust-badge-web">🌐 Web</span>')
-    .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general">💭 Allgemeinwissen</span>');
+    .replace(/\*\[📚 Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library" tabindex="0">📚 Bibliothek<span class="trust-tooltip">Aus eurer Wissensdatenbank — eigene Dokumente und Handbücher</span></span>')
+    .replace(/\*\[🌐 Web\]\*/g, '<span class="trust-badge trust-badge-web" tabindex="0">🌐 Web<span class="trust-tooltip">Aus dem Internet recherchiert — externe Quellen und aktuelle Informationen</span></span>')
+    .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general" tabindex="0">💭 Allgemeinwissen<span class="trust-tooltip">Allgemeines KI-Wissen — keine spezifische Quelle zugeordnet</span></span>');
 }
 
 // Extract de-duplicated trust sources present in a message text.
@@ -756,7 +756,7 @@ const FOOTNOTE_SANITIZE_SCHEMA = {
   attributes: {
     ...defaultSchema.attributes,
     sup: ["id", "class"],
-    span: ["class"],
+    span: ["class", "tabindex"],
     a: [...((defaultSchema.attributes as Record<string, string[]>)?.a ?? []), "class"],
   },
 };
@@ -770,7 +770,7 @@ const TRUST_BADGE_SANITIZE_SCHEMA = {
   ],
   attributes: {
     ...defaultSchema.attributes,
-    span: ["class"],
+    span: ["class", "tabindex"],
   },
 };
 
