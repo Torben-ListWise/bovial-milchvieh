@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser, useAuth } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser, useAuth, useSignIn } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { deDE } from "@clerk/localizations";
 
@@ -412,6 +412,46 @@ function ProtectedApp() {
   );
 }
 
+/**
+ * Dev-only auto-login. Set two env vars in the Replit Secrets panel:
+ *   VITE_DEV_AUTO_LOGIN_EMAIL    → your dev account email
+ *   VITE_DEV_AUTO_LOGIN_PASSWORD → your dev account password
+ * Only active when import.meta.env.DEV is true (local dev server).
+ * Remove these secrets before publishing to production.
+ */
+function DevAutoLogin() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { signIn, setActive } = useSignIn();
+  const attemptedRef = useRef(false);
+
+  const devEmail = import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL as string | undefined;
+  const devPassword = import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD as string | undefined;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!devEmail || !devPassword) return;
+    if (!isLoaded || isSignedIn) return;
+    if (attemptedRef.current) return;
+    if (!signIn || !setActive) return;
+
+    attemptedRef.current = true;
+
+    signIn
+      .create({ strategy: "password", identifier: devEmail, password: devPassword })
+      .then((result) => {
+        if (result.status === "complete") {
+          return setActive({ session: result.createdSessionId });
+        }
+      })
+      .catch(() => {
+        // Credentials wrong or login failed — fail silently, show normal login screen
+        attemptedRef.current = false;
+      });
+  }, [isLoaded, isSignedIn, signIn, setActive, devEmail, devPassword]);
+
+  return null;
+}
+
 // Wires Clerk's getToken into the API client so every request carries a Bearer token.
 // Also invalidates all cached queries once the token is ready so they refetch
 // instead of staying stuck in error state from the pre-auth 401 responses.
@@ -471,6 +511,7 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkAuthTokenSetup />
         <ClerkQueryClientCacheInvalidator />
+        <DevAutoLogin />
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRedirect} />
