@@ -16,10 +16,22 @@ import {
   useRequestUploadUrl,
   useRegisterFile,
   useGetFile,
+  useGetCurrentUser,
   type AnalysisDetail,
   type Analysis,
   type AnalysisTemplate,
 } from "@workspace/api-client-react";
+
+function filterTemplatesByFocusAreas(
+  templates: AnalysisTemplate[],
+  focusAreas: string[] | null | undefined
+): AnalysisTemplate[] {
+  if (!focusAreas || focusAreas.length === 0) return templates;
+  if (focusAreas.includes("mischbetrieb") || focusAreas.includes("sonstiges")) return templates;
+  return templates.filter(
+    (t) => t.categoryTag == null || focusAreas.includes(t.categoryTag)
+  );
+}
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { type AnalysisMessage } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -571,6 +583,8 @@ function StarterQuestions({
     },
   });
 
+  const { data: currentUser } = useGetCurrentUser();
+
   const runTemplate = useRunTemplate({
     mutation: {
       onSuccess: (data, vars) => {
@@ -633,7 +647,7 @@ function StarterQuestions({
                 </div>
               </div>
             ))
-          : (templates ?? []).map((t) => {
+          : filterTemplatesByFocusAreas(templates ?? [], currentUser?.focusAreas).map((t) => {
               const lastDay = relativeDay(t.lastRunAt);
               const snippet = t.lastResultSnippet
                 ? t.lastResultSnippet.slice(0, 80)

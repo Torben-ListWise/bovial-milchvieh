@@ -1,9 +1,9 @@
-import { useExportMyData, useDeleteMyData } from "@workspace/api-client-react";
+import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Trash2, ShieldCheck } from "lucide-react";
+import { Download, Trash2, ShieldCheck, Tractor, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +16,92 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useClerk } from "@clerk/react";
+import { useQueryClient } from "@tanstack/react-query";
+
+const FOCUS_OPTIONS: { value: string; label: string; emoji: string }[] = [
+  { value: "milchvieh", label: "Milchvieh", emoji: "🐄" },
+  { value: "schweine", label: "Schweinehaltung", emoji: "🐷" },
+  { value: "geflügel", label: "Geflügel", emoji: "🐔" },
+  { value: "ackerbau", label: "Ackerbau", emoji: "🌾" },
+  { value: "mischbetrieb", label: "Mischbetrieb", emoji: "🏡" },
+  { value: "sonstiges", label: "Sonstiges", emoji: "🌱" },
+];
+
+function FocusAreasSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: dbUser } = useGetCurrentUser();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!initialized && dbUser !== undefined) {
+      setSelected(dbUser.focusAreas ?? []);
+      setInitialized(true);
+    }
+  }, [dbUser, initialized]);
+
+  const updateMe = useUpdateMe({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), data);
+        toast({ title: "Gespeichert", description: "Betriebsschwerpunkte wurden aktualisiert." });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Speichern fehlgeschlagen." });
+      },
+    },
+  });
+
+  function toggle(value: string) {
+    setSelected((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Tractor className="w-5 h-5 text-primary" />
+          Betriebsschwerpunkte
+        </CardTitle>
+        <CardDescription>
+          Wähle die Schwerpunkte deines Betriebs. Die Analysen-Vorlagen werden danach gefiltert.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {FOCUS_OPTIONS.map((opt) => {
+            const isSelected = selected.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                onClick={() => toggle(opt.value)}
+                className={`flex items-center gap-2 rounded-lg border p-3 text-left transition-all text-sm ${
+                  isSelected
+                    ? "border-primary bg-primary/5 ring-1 ring-primary font-medium"
+                    : "border-border hover:border-primary/40 hover:bg-muted/50"
+                }`}
+              >
+                <span className="text-lg">{opt.emoji}</span>
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <Button
+          onClick={() => updateMe.mutate({ focusAreas: selected })}
+          disabled={updateMe.isPending}
+          className="gap-2"
+        >
+          {updateMe.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+          Speichern
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function SettingsPage() {
   const { toast } = useToast();
@@ -63,6 +149,8 @@ export function SettingsPage() {
         <h1 className="text-3xl font-bold text-foreground">Einstellungen & DSGVO</h1>
         <p className="text-muted-foreground mt-1">Verwalte deine Daten und Privatsphäre.</p>
       </div>
+
+      <FocusAreasSection />
 
       <Card>
         <CardHeader>

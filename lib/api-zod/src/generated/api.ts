@@ -24,8 +24,18 @@ export const GetCurrentUserResponse = zod.object({
   "id": zod.string(),
   "email": zod.string().nullish(),
   "name": zod.string().nullish(),
-  "role": zod.enum(['customer', 'operator'])
+  "role": zod.enum(['customer', 'operator']),
+  "focusAreas": zod.array(zod.string()).nullish()
 })
+
+/**
+ * @summary Update current user's profile
+ */
+export const UpdateMeBody = zod.object({
+  "focusAreas": zod.array(zod.string()).nullish()
+})
+
+export const UpdateMeResponse = GetCurrentUserResponse
 
 
 /**

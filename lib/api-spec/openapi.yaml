@@ -63,6 +63,25 @@ paths:
                 $ref: "#/components/schemas/CurrentUser"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [Account]
+      operationId: updateMe
+      summary: Update current user's profile (focus_areas only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeBody"
+      responses:
+        "200":
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /storage/uploads/request-url:
     post:
@@ -1013,6 +1032,20 @@ components:
         role:
           type: string
           enum: [customer, operator]
+        focusAreas:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    UpdateMeBody:
+      type: object
+      properties:
+        focusAreas:
+          type: array
+          items:
+            type: string
+          nullable: true
 
     UploadUrlRequest:
       type: object

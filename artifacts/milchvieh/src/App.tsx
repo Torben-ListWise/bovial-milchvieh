@@ -127,6 +127,7 @@ import { OperatorDashboard } from "@/pages/operator/monitoring";
 import { MasterDataPage } from "@/pages/operator/master-data";
 import { KnowledgePage } from "@/pages/operator/knowledge";
 import { OperatorTemplatesPage } from "@/pages/operator/templates";
+import { FocusAreasOnboardingDialog } from "@/components/FocusAreasOnboardingDialog";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -226,10 +227,10 @@ function LandingPage() {
         <div className="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="text-left space-y-8">
             <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
-              Der ruhige Experte für deine Herden-Daten
+              Der kluge Assistent für deine Betriebsdaten
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed">
-              Lade deine Herdenmanagement-Exporte und Milchkontrolldaten hoch. Stelle Fragen in einfachem Deutsch. Erhalte klare, fundierte Antworten basierend auf deinen echten Daten.
+              Lade deine Betriebsdaten hoch — egal ob Milchvieh, Schweine, Ackerbau oder Mischbetrieb. Stelle Fragen in einfachem Deutsch. Erhalte klare, fundierte Antworten basierend auf deinen echten Zahlen.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <a href={`${basePath}/sign-up`} className="inline-flex items-center justify-center gap-2 text-lg font-medium bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
@@ -300,8 +301,16 @@ function LandingPage() {
 
 function AppPortal() {
   const { data: dbUser, isLoading } = useGetCurrentUser();
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   const role = (dbUser?.role || 'customer') as 'operator' | 'customer';
+
+  // Show onboarding dialog if focusAreas has never been set (null = not yet configured)
+  const showOnboarding =
+    !onboardingDismissed &&
+    !isLoading &&
+    dbUser !== undefined &&
+    dbUser.focusAreas == null;
 
   // Persist view mode across page reloads via sessionStorage.
   // Operators default to operator view; customers are always customer.
@@ -324,6 +333,11 @@ function AppPortal() {
   if (isLoading) return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
 
   return (
+    <>
+      <FocusAreasOnboardingDialog
+        open={showOnboarding}
+        onClose={() => setOnboardingDismissed(true)}
+      />
     <AppLayout
       role={role as 'operator' | 'customer'}
       viewMode={effectiveView}
@@ -350,6 +364,7 @@ function AppPortal() {
         </Route>
       </Switch>
     </AppLayout>
+    </>
   );
 }
 

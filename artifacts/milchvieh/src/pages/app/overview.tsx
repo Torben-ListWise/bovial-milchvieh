@@ -8,7 +8,20 @@ import {
   useListTemplates,
   getListTemplatesQueryKey,
   useRunTemplate,
+  useGetCurrentUser,
+  type AnalysisTemplate,
 } from "@workspace/api-client-react";
+
+function filterTemplatesByFocusAreas(
+  templates: AnalysisTemplate[],
+  focusAreas: string[] | null | undefined
+): AnalysisTemplate[] {
+  if (!focusAreas || focusAreas.length === 0) return templates;
+  if (focusAreas.includes("mischbetrieb") || focusAreas.includes("sonstiges")) return templates;
+  return templates.filter(
+    (t) => t.categoryTag == null || focusAreas.includes(t.categoryTag)
+  );
+}
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -67,6 +80,8 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
     },
   });
 
+  const { data: currentUser } = useGetCurrentUser();
+
   const runTemplate = useRunTemplate({
     mutation: {
       onSuccess: (data) => {
@@ -84,7 +99,8 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
     },
   });
 
-  const top4 = (templates ?? []).slice(0, 4);
+  const filtered = filterTemplatesByFocusAreas(templates ?? [], currentUser?.focusAreas);
+  const top4 = filtered.slice(0, 4);
 
   if (isLoading || top4.length === 0) return null;
 

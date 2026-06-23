@@ -5,6 +5,7 @@ export const usersTable = pgTable("users", {
   email: text("email"),
   name: text("name"),
   role: text("role").notNull().default("customer"),
+  focusAreas: text("focus_areas").array(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

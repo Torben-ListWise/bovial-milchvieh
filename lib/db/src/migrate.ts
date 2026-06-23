@@ -37,6 +37,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE master_data ADD COLUMN IF NOT EXISTS sector TEXT"
   );
+  // Migration: focus_areas column on users (array of farm focus area tags)
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_areas TEXT[]"
+  );
   // Migration: source_url column on knowledge_documents (for URL-ingested entries)
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"
@@ -68,6 +72,11 @@ export async function ensureExtensions(): Promise<void> {
       ('Top-3 Handlungsempfehlungen', '💡', 'Die dringendsten Maßnahmen mit Begründung', 'Analysiere alle verfügbaren Kennzahlen und formuliere die drei dringendsten konkreten Handlungsempfehlungen mit Begründung und erwarteter Wirkung.', 'milchvieh', 90),
       ('Betriebsvergleich Richtwerte', '📊', 'Ist-Wert vs. Zielwert vs. Abweichung', 'Vergleiche alle Kern-KPIs mit den Stammdaten-Richtwerten. Erstelle eine Übersichtstabelle: Ist-Wert vs. Zielwert vs. Abweichung. Färbe kritische Werte hervor.', 'milchvieh', 100),
       ('Investitionsprüfung', '💰', 'Wirtschaftlichkeitsprüfung einer geplanten Investition', 'Ich möchte eine Investition wirtschaftlich prüfen. Lies zunächst meine aktuellen Betriebsdaten (Herdengröße, Milchleistung, relevante KPIs). Stelle mir dann die notwendigen Fragen (Investitionssumme, Laufzeit, Zinssatz, erwarteter Nutzen), um Amortisation und Rentabilität zu berechnen.', NULL, 110),
+      ('Tageszunahmen-Trend', '📈', 'Tägliche Zunahmen je Mastgruppe und Zeitraum', 'Analysiere die täglichen Gewichtszunahmen (g/Tag) je Mastgruppe über den hochgeladenen Zeitraum. Identifiziere Gruppen unter dem Richtwert, zeige den Trend als Diagramm und benenne mögliche Ursachen für Abweichungen.', 'schweine', 400),
+      ('Futterverwertung & Futterkosten', '🌽', 'Futterverwertungsquotient und Kosten je kg Zuwachs', 'Berechne den Futterverwertungsquotienten (kg Futter / kg Zuwachs) je Mastdurchgang. Vergleiche mit den Stammdaten-Richtwerten. Leite daraus die Futterkosten je kg Lebendgewichtszuwachs ab und zeige Optimierungspotenzial.', 'schweine', 410),
+      ('Umrauschrate & Fruchtbarkeit', '🐷', 'Umrauschrate, Abferkelrate und Wurfgröße', 'Analysiere die Fruchtbarkeitskennzahlen meiner Sauenherde: Umrauschrate, Abferkelrate und durchschnittliche Wurfgröße (lebend geborene Ferkel). Vergleiche mit Richtwerten und zeige Trends über die letzten Durchgänge.', 'schweine', 420),
+      ('Abgänge & Verluste (Schweine)', '⚠️', 'Verluste nach Altersgruppe, Ursache und Zeitraum', 'Analysiere die Tierverluste der letzten 6 Monate: Aufschlüsselung nach Altersgruppe (Ferkel, Läufer, Mastschweine, Sauen), Verlustursachen als Kreisdiagramm und Trend. Gibt es kritische Häufungen oder saisonale Muster?', 'schweine', 430),
+      ('Schlachtleistungs-Vergleich', '🏆', 'Schlachtgewicht, MFA und Auszahlungspreis je Partie', 'Vergleiche die Schlachtleistung meiner Mastpartien: Schlachtgewicht, Muskelfleischanteil (MFA), Handelsklassenverteilung und erzielter Auszahlungspreis. Welche Partien liegen über bzw. unter dem Durchschnitt? Zeige den Trend.', 'schweine', 440),
       ('Gasproduktions-Trend', '⚡', 'Gasproduktion der letzten 12 Monate', 'Zeige den Gasproduktions-Trend der letzten 12 Monate (m³/h). Identifiziere Einbrüche und prüfe Korrelation mit Substrat-Input.', 'biogas', 200),
       ('Methangehalt-Analyse', '🧪', 'Methangehalt-Verlauf und kritische Abweichungen', 'Analysiere den Methangehalt-Verlauf. Liegt er konstant über 52%? Gibt es kritische Abweichungen?', 'biogas', 210),
       ('Substrat-Effizienz', '🌽', 'Gasausbeute je Substratart und Zeitraum', 'Berechne die spezifische Gasausbeute je Substratart und Zeitraum. Welches Substrat liefert den höchsten Ertrag pro Tonne oTS?', 'biogas', 220),
@@ -105,6 +114,19 @@ export async function ensureExtensions(): Promise<void> {
         ('Niederschlag vs. Ertrag', '💧', 'Zusammenhang Niederschlag und Erträge', 'Analysiere den Zusammenhang zwischen Niederschlag/Bewässerung und Erträgen. Gibt es kritische Trockenphasen?', 'ackerbau', 320),
         ('Deckungsbeiträge', '💰', 'Deckungsbeiträge je Kulturart', 'Berechne und vergleiche die Deckungsbeiträge (€/ha) je Kulturart. Welche Kultur ist wirtschaftlich am stärksten?', 'ackerbau', 330),
         ('Gesamt-Betriebsspiegel (Ackerbau)', '📊', 'Vollständiger Betriebsspiegel Ackerbau', 'Erstelle einen vollständigen Betriebsspiegel: alle Kern-KPIs, Vergleich Richtwerte, Top-3 Empfehlungen.', 'ackerbau', 340)
+      `);
+    }
+    const { rows: schweineRows } = await pool.query(
+      "SELECT COUNT(*)::int as c FROM analysis_templates WHERE category_tag = 'schweine'"
+    );
+    if ((schweineRows[0]?.c ?? 0) === 0) {
+      await pool.query(`
+        INSERT INTO analysis_templates (title, emoji, short_description, prompt_text, category_tag, sort_order) VALUES
+        ('Tageszunahmen-Trend', '📈', 'Tägliche Zunahmen je Mastgruppe und Zeitraum', 'Analysiere die täglichen Gewichtszunahmen (g/Tag) je Mastgruppe über den hochgeladenen Zeitraum. Identifiziere Gruppen unter dem Richtwert, zeige den Trend als Diagramm und benenne mögliche Ursachen für Abweichungen.', 'schweine', 400),
+        ('Futterverwertung & Futterkosten', '🌽', 'Futterverwertungsquotient und Kosten je kg Zuwachs', 'Berechne den Futterverwertungsquotienten (kg Futter / kg Zuwachs) je Mastdurchgang. Vergleiche mit den Stammdaten-Richtwerten. Leite daraus die Futterkosten je kg Lebendgewichtszuwachs ab und zeige Optimierungspotenzial.', 'schweine', 410),
+        ('Umrauschrate & Fruchtbarkeit', '🐷', 'Umrauschrate, Abferkelrate und Wurfgröße', 'Analysiere die Fruchtbarkeitskennzahlen meiner Sauenherde: Umrauschrate, Abferkelrate und durchschnittliche Wurfgröße (lebend geborene Ferkel). Vergleiche mit Richtwerten und zeige Trends über die letzten Durchgänge.', 'schweine', 420),
+        ('Abgänge & Verluste', '⚠️', 'Verluste nach Altersgruppe, Ursache und Zeitraum', 'Analysiere die Tierverluste der letzten 6 Monate: Aufschlüsselung nach Altersgruppe (Ferkel, Läufer, Mastschweine, Sauen), Verlustursachen als Kreisdiagramm und Trend. Gibt es kritische Häufungen oder saisonale Muster?', 'schweine', 430),
+        ('Schlachtleistungs-Vergleich', '🏆', 'Schlachtgewicht, MFA und Auszahlungspreis je Partie', 'Vergleiche die Schlachtleistung meiner Mastpartien: Schlachtgewicht, Muskelfleischanteil (MFA), Handelsklassenverteilung und erzielter Auszahlungspreis. Welche Partien liegen über bzw. unter dem Durchschnitt? Zeige den Trend.', 'schweine', 440)
       `);
     }
   }

@@ -34,22 +34,12 @@ router.get(
       return;
     }
 
-    // Filter templates: show templates that match the dataset sector OR have no categoryTag (universal)
-    // Map sector to categoryTag values used in templates
-    const sectorTag = sector === "dairy" ? "milchvieh" : sector === "biogas" ? "biogas" : "ackerbau";
-
+    // Return all active templates — focus-area filtering is done client-side based on user.focusAreas.
+    // The run endpoint still validates sector compatibility to prevent mismatched analyses.
     const templates = await db
       .select()
       .from(analysisTemplatesTable)
-      .where(
-        and(
-          eq(analysisTemplatesTable.active, true),
-          or(
-            isNull(analysisTemplatesTable.categoryTag),
-            eq(analysisTemplatesTable.categoryTag, sectorTag),
-          ),
-        ),
-      )
+      .where(eq(analysisTemplatesTable.active, true))
       .orderBy(analysisTemplatesTable.sortOrder);
 
     const result = await Promise.all(
@@ -136,12 +126,8 @@ router.post(
       return;
     }
 
-    // Validate sector compatibility: template categoryTag must match dataset sector (or be null/universal)
-    const sectorTag = sector === "dairy" ? "milchvieh" : sector === "biogas" ? "biogas" : "ackerbau";
-    if (template.categoryTag && template.categoryTag !== sectorTag) {
-      res.status(400).json({ error: "Vorlage ist nicht für diesen Betriebstyp geeignet" });
-      return;
-    }
+    // No sector gate: templates are now filtered client-side by user focus_areas.
+    // Any active template can be run against any dataset regardless of sector.
 
     const [analysis] = await db
       .insert(analysesTable)

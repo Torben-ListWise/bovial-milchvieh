@@ -32,6 +32,7 @@ import type {
   BadRequestResponse,
   ColumnMappingUpdate,
   CurrentUser,
+  UpdateMeBody,
   DataExport,
   Dataset,
   DatasetInput,
@@ -232,6 +233,44 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 
 
 
+
+export const getUpdateMeUrl = () => {
+  return `/api/me`
+}
+
+/**
+ * @summary Update current user's profile (focus_areas only)
+ */
+export const updateMe = async (updateMeBody: UpdateMeBody, options?: RequestInit): Promise<CurrentUser> => {
+  return customFetch<CurrentUser>(getUpdateMeUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateMeBody),
+  });
+}
+
+export type UpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof updateMe>>>
+export type UpdateMeMutationBody = UpdateMeBody
+export type UpdateMeMutationError = ErrorType<UnauthorizedResponse>
+
+/**
+ * @summary Update current user's profile (focus_areas only)
+ */
+export const useUpdateMe = <TError = ErrorType<UnauthorizedResponse>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError, UpdateMeBody, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof updateMe>>, TError, UpdateMeBody, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMe>>, UpdateMeBody> = (props) => {
+    return updateMe(props, requestOptions);
+  };
+
+  return useMutation<Awaited<ReturnType<typeof updateMe>>, TError, UpdateMeBody, TContext>({
+    mutationFn,
+    ...mutationOptions,
+  });
+};
 
 export const getRequestUploadUrlUrl = () => {
 

@@ -28,6 +28,13 @@ export interface CurrentUser {
   /** @nullable */
   name?: string | null;
   role: CurrentUserRole;
+  /** @nullable */
+  focusAreas?: string[] | null;
+}
+
+export interface UpdateMeBody {
+  /** @nullable */
+  focusAreas?: string[] | null;
 }
 
 export interface UploadUrlRequest {
