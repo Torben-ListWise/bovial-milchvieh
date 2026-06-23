@@ -1382,10 +1382,6 @@ export function AnalysesPage() {
   chatWidthRef.current = chatWidth;
   // Track component mount time so we can detect "new" messages for animation
   const mountedAtRef = useRef(Date.now());
-  // Track previous isAgentWorking value to fire polling after agent ends
-  const wasAgentWorkingRef = useRef(false);
-  const followUpPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const followUpPollingStartRef = useRef<number>(0);
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
@@ -1479,47 +1475,7 @@ export function AnalysesPage() {
   const currentStep = analysis?.agentProgress ?? null;
   const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
 
-  // Step 1 — Smart polling: after agent ends, poll every 1s (up to 12s) until
-  // followUpQuestions arrive, then stop. This is independent of LLM latency.
-  useEffect(() => {
-    if (activeAnalysisId && wasAgentWorkingRef.current && !isAgentWorking) {
-      // Stop any previous interval
-      if (followUpPollingRef.current) {
-        clearInterval(followUpPollingRef.current);
-        followUpPollingRef.current = null;
-      }
-      followUpPollingStartRef.current = Date.now();
-      followUpPollingRef.current = setInterval(() => {
-        const elapsed = Date.now() - followUpPollingStartRef.current;
-        // Check if follow-up questions already landed in the cache
-        const cached = queryClient.getQueryData(
-          getGetAnalysisQueryKey(activeAnalysisId),
-        ) as AnalysisDetail | undefined;
-        const lastResult = [...(cached?.messages ?? [])]
-          .reverse()
-          .find((m) => m.role === "assistant" && !m.error && !isBackQuestion(m.content));
-        const hasQuestions =
-          ((lastResult?.followUpQuestions as string[] | null)?.length ?? 0) > 0;
-        if (hasQuestions || elapsed > 12_000) {
-          clearInterval(followUpPollingRef.current!);
-          followUpPollingRef.current = null;
-          return;
-        }
-        queryClient.invalidateQueries({
-          queryKey: getGetAnalysisQueryKey(activeAnalysisId),
-        });
-      }, 1000);
-    }
-    wasAgentWorkingRef.current = isAgentWorking;
-    return () => {
-      if (followUpPollingRef.current) {
-        clearInterval(followUpPollingRef.current);
-        followUpPollingRef.current = null;
-      }
-    };
-  }, [isAgentWorking, activeAnalysisId]);
-
-  // Step 2 — Compute follow-up chips for the chat panel
+  // Compute follow-up chips for the chat panel
   const lastResultMsg = [...(analysis?.messages ?? [])]
     .reverse()
     .find((m) => m.role === "assistant" && !m.error && !isBackQuestion(m.content));

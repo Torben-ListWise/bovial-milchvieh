@@ -169,8 +169,11 @@ export async function processQuestion(
         .catch(() => {});
     }
 
-    // Save the message immediately so the frontend can show it without waiting
-    // for follow-up question generation (which runs as a background update).
+    // Await follow-up questions so they are bundled directly into the message.
+    const followUpQuestions = agentResultText
+      ? await generateFollowUps(question, agentResultText).catch(() => [])
+      : [];
+
     const [assistant] = await db
       .insert(messagesTable)
       .values({
@@ -180,23 +183,9 @@ export async function processQuestion(
         charts,
         citations,
         error,
-        followUpQuestions: null,
+        followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : null,
       } as any)
       .returning();
-
-    // Generate follow-up questions in the background and patch the message
-    if (agentResultText) {
-      generateFollowUps(question, agentResultText)
-        .then((qs) => {
-          if (qs.length > 0) {
-            db.update(messagesTable)
-              .set({ followUpQuestions: qs } as any)
-              .where(eq(messagesTable.id, assistant.id))
-              .catch(() => {});
-          }
-        })
-        .catch(() => {});
-    }
 
     const category = analysis.category ?? categorizeQuestion(question);
     await db
