@@ -180,8 +180,16 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
   }
 
   const search = useSearch();
-  const datasetId = new URLSearchParams(search).get("datasetId");
-  const datasetQuery = datasetId ? `?datasetId=${datasetId}` : "";
+  const searchParams = new URLSearchParams(search);
+  const datasetId = searchParams.get("datasetId");
+  const hostId = searchParams.get("hostId");
+  const datasetQuery = datasetId
+    ? hostId
+      ? `?datasetId=${datasetId}&hostId=${hostId}`
+      : `?datasetId=${datasetId}`
+    : hostId
+      ? `?hostId=${hostId}`
+      : "";
 
   const currentPath = location.startsWith(basePath) 
     ? location.slice(basePath.length) || "/" 
@@ -189,16 +197,21 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
 
   const isFullHeightPage = currentPath.startsWith('/app/analyses');
 
-  const customerNav = [
-    { name: "Betriebe", href: "/app/datasets", icon: Home, preserveDataset: false },
-    { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true },
-    { name: "Übersicht", href: "/app/overview", icon: BarChart2, preserveDataset: true },
-    { name: "Dateien & Upload", href: "/app/upload", icon: Upload, preserveDataset: true },
-    { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle, preserveDataset: true },
-    { name: "Berichte", href: "/app/reports", icon: FileText, preserveDataset: true },
-    { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true },
-    { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false },
+  const isGuestMode = !!hostId;
+
+  const allCustomerNav = [
+    { name: "Betriebe", href: "/app/datasets", icon: Home, preserveDataset: false, guestHidden: false },
+    { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true, guestHidden: false },
+    { name: "Übersicht", href: "/app/overview", icon: BarChart2, preserveDataset: true, guestHidden: false },
+    { name: "Dateien & Upload", href: "/app/upload", icon: Upload, preserveDataset: true, guestHidden: true },
+    { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle, preserveDataset: true, guestHidden: false },
+    { name: "Berichte", href: "/app/reports", icon: FileText, preserveDataset: true, guestHidden: false },
+    { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true, guestHidden: true },
+    { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false, guestHidden: false },
   ];
+  const customerNav = isGuestMode
+    ? allCustomerNav.filter((item) => !item.guestHidden)
+    : allCustomerNav;
 
   const operatorNav = [
     { name: "Monitoring", href: "/app/monitoring", icon: Activity, preserveDataset: false },
@@ -221,9 +234,17 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
       <>
         <ul className="space-y-0.5 px-2">
           {navItems.map((item) => {
-            const isActive = currentPath.startsWith(item.href);
+            const isActive = currentPath.startsWith(item.href) && !(item.href === '/app/datasets' && isGuestMode);
             const Icon = item.icon;
-            const href = item.preserveDataset ? `${item.href}${datasetQuery}` : item.href;
+            // In guest mode: "Betriebe" goes back to host datasets list; other items preserve hostId
+            let href: string;
+            if (item.href === '/app/datasets' && isGuestMode) {
+              href = `/app/datasets?hostId=${hostId}`;
+            } else if (item.preserveDataset) {
+              href = `${item.href}${datasetQuery}`;
+            } else {
+              href = item.href;
+            }
             return (
               <li key={item.name}>
                 <Link href={href}>
@@ -257,7 +278,8 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
             <ul className="space-y-0.5">
               {hosts.map((host) => {
                 const hostHref = `/app/datasets?hostId=${host.hostUserId}`;
-                const isActive = currentPath.startsWith('/app/datasets') && location.includes(`hostId=${host.hostUserId}`);
+                // Active if we're anywhere in the guest context for this host
+                const isActive = hostId === host.hostUserId;
                 return (
                   <li key={host.hostUserId}>
                     <Link href={hostHref}>
@@ -268,7 +290,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
                           "flex items-center rounded-md text-sm font-medium transition-colors cursor-pointer min-h-[44px] md:min-h-0",
                           navCollapsed ? "px-2 py-2 justify-center md:min-h-0" : "px-3 py-2",
                           isActive
-                            ? "border-l-2 border-primary bg-primary/8 text-primary"
+                            ? "border-l-2 border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                         )}
                       >
@@ -450,9 +472,16 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
         <nav className="flex-1 overflow-y-auto py-3">
           <ul className="space-y-1 px-3">
             {navItems.map((item) => {
-              const isActive = currentPath.startsWith(item.href);
+              const isActive = currentPath.startsWith(item.href) && !(item.href === '/app/datasets' && isGuestMode);
               const Icon = item.icon;
-              const href = item.preserveDataset ? `${item.href}${datasetQuery}` : item.href;
+              let href: string;
+              if (item.href === '/app/datasets' && isGuestMode) {
+                href = `/app/datasets?hostId=${hostId}`;
+              } else if (item.preserveDataset) {
+                href = `${item.href}${datasetQuery}`;
+              } else {
+                href = item.href;
+              }
               return (
                 <li key={item.name}>
                   <Link href={href}>
@@ -482,7 +511,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
               <ul className="space-y-1">
                 {hosts.map((host) => {
                   const hostHref = `/app/datasets?hostId=${host.hostUserId}`;
-                  const isActive = currentPath.startsWith('/app/datasets') && location.includes(`hostId=${host.hostUserId}`);
+                  const isActive = hostId === host.hostUserId;
                   return (
                     <li key={host.hostUserId}>
                       <Link href={hostHref}>
@@ -491,7 +520,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
                           className={cn(
                             "flex items-center gap-3 px-3 rounded-lg text-sm font-medium transition-colors cursor-pointer min-h-[48px]",
                             isActive
-                              ? "border-l-2 border-primary bg-primary/8 text-primary"
+                              ? "border-l-2 border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                               : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                           )}
                         >

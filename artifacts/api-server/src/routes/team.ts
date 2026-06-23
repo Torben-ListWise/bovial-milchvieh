@@ -286,10 +286,9 @@ router.get("/team/my-hosts", requireAuth, async (req: Request, res: Response) =>
     FROM team_invites ti
     JOIN users u ON u.id = ti.host_user_id
     WHERE ti.guest_user_id = $1
-      AND ti.status = 'accepted'
       AND (
-        ti.revoked_at IS NULL
-        OR (ti.transition_ends_at IS NOT NULL AND ti.transition_ends_at > NOW())
+        (ti.status = 'accepted' AND ti.revoked_at IS NULL)
+        OR (ti.status = 'revoked' AND ti.transition_ends_at IS NOT NULL AND ti.transition_ends_at > NOW())
       )
     ORDER BY ti.host_user_id, ti.accepted_at DESC`,
     [guestUserId],
