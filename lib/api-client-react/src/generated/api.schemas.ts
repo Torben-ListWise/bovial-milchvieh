@@ -388,6 +388,8 @@ export interface AnalysisMessage {
   citations?: Citation[];
   followUpQuestions?: string[];
   /** @nullable */
+  backQuestions?: string[] | null;
+  /** @nullable */
   error?: string | null;
   createdAt: string;
 }

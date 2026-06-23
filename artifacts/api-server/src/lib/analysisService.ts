@@ -90,6 +90,7 @@ export async function processQuestion(
     let content: string;
     let charts: Chart[] = [];
     let citations: Citation[] = [];
+    let backQuestions: string[] = [];
     let error: string | null = null;
     let agentResultText: string | undefined;
 
@@ -150,6 +151,7 @@ export async function processQuestion(
       content = result.text || "Es konnte keine Antwort erzeugt werden.";
       charts = result.charts;
       citations = result.citations;
+      backQuestions = result.backQuestions ?? [];
       agentResultText = result.text;
 
     } catch (err) {
@@ -184,6 +186,7 @@ export async function processQuestion(
         citations,
         error,
         followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : null,
+        backQuestions: backQuestions.length > 0 ? backQuestions : null,
       } as any)
       .returning();
 

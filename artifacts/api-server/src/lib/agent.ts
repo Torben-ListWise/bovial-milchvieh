@@ -56,6 +56,7 @@ export interface AgentResult {
   text: string;
   charts: Chart[];
   citations: Citation[];
+  backQuestions: string[];
 }
 
 export class MissingApiKeyError extends Error {}
@@ -231,6 +232,22 @@ const TOOLS: BetaTool[] = [
     },
   },
   {
+    name: "ask_farmer",
+    description:
+      "Stelle dem Landwirt eine oder mehrere strukturierte Rückfragen, wenn Parameter fehlen oder unklar sind. Verwende dieses Werkzeug IMMER wenn du Rückfragen stellen möchtest — niemals Fragen als Freitext in der Antwort formulieren. Nach dem Aufruf schreibe einen kurzen einleitenden Satz (ohne Fragezeichen), der erklärt warum du diese Informationen benötigst.",
+    input_schema: {
+      type: "object",
+      properties: {
+        questions: {
+          type: "array",
+          items: { type: "string" },
+          description: "Liste der konkreten Rückfragen an den Landwirt, z.B. ['Für welchen Zeitraum soll ich auswerten?', 'Welche Investitionssumme planst du?']",
+        },
+      },
+      required: ["questions"],
+    },
+  },
+  {
     name: "emit_chart",
     description:
       "Erstellt ein interaktives Diagramm. Bei strukturierten DB-Daten: source='timeseries'|'group'|'ranking' + metric. Bei PDF-Dokumenten: source='document' + data-Array direkt übergeben.",
@@ -322,12 +339,14 @@ WENN IN EINEM FOLGEGESPRÄCH EINE GRAFIK GEWÜNSCHT WIRD UND NUR PDF-DATEN VORHA
 - Stell NICHT in Frage, ob die Zahlen aus der vorherigen Antwort korrekt waren — sie sind korrekt belegt (aus dem Dokument).
 
 RÜCKFRAGEN-VERHALTEN:
+- Wenn du Rückfragen an den Landwirt stellen musst, verwende IMMER das Werkzeug ask_farmer({questions:[...]}).
+  Formuliere Rückfragen NIEMALS als Freitext in deiner Antwort — nur über das Werkzeug.
 - Bei Investitions-, Wirtschaftlichkeits- oder Planungsfragen: Rufe ZUERST get_schema und get_kpis auf.
-  Fasse die relevanten Betriebsdaten kurz zusammen. Stelle danach maximal 3 konkrete Rückfragen als
-  nummerierte Liste (Investitionssumme, Laufzeit, Zinssatz, erwarteter Jahresnutzen). Rechne erst
+  Fasse die relevanten Betriebsdaten kurz zusammen. Rufe dann ask_farmer mit maximal 3 konkreten
+  Fragen auf (Investitionssumme, Laufzeit, Zinssatz, erwarteter Jahresnutzen). Rechne erst
   wenn der Nutzer die Parameter bestätigt oder geliefert hat.
-- Bei unklaren Fragen (fehlender Zeitraum, fehlende Tier-Angabe, unklare Metrik): Stelle maximal
-  2 kurze Rückfragen bevor du analysierst. Beispiel: "Für welchen Zeitraum soll ich auswerten?"
+- Bei unklaren Fragen (fehlender Zeitraum, fehlende Tier-Angabe, unklare Metrik): Rufe ask_farmer mit
+  maximal 2 kurzen Rückfragen auf bevor du analysierst.
 - Erfinde NIEMALS Annahmen für fehlende Parameter ohne explizite Bestätigung durch den Nutzer.
 - Wenn alle Parameter klar sind: direkt rechnen, keine unnötigen Rückfragen.`;
 
@@ -635,6 +654,15 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           return { error: "Suche fehlgeschlagen" };
         }
       }
+      case "ask_farmer": {
+        const qs = (input.questions as string[] | undefined) ?? [];
+        for (const q of qs) {
+          if (typeof q === "string" && q.trim()) {
+            backQuestions.push(q.trim());
+          }
+        }
+        return { acknowledged: true, questionCount: qs.length };
+      }
       case "emit_chart": {
         const title = (input.title as string) ?? "Diagramm";
         const chartType = (input.chartType as Chart["type"]) ?? "bar";
@@ -733,12 +761,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "search_knowledge": return "Durchsuche Wissensdatenbank";
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
       case "emit_chart": return `Erstelle Diagramm`;
+      case "ask_farmer": return "Formuliere Rückfragen";
       default: return "Verarbeite Daten";
     }
   }
 
   let finalText = "";
   let toolWasCalled = false;
+  const backQuestions: string[] = [];
   const maxTurns = 20;
 
   // Grounding: tools that prove real data was accessed
@@ -749,6 +779,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "read_document",
     "search_knowledge",
     "calculate_investment",
+    "ask_farmer",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -823,7 +854,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     finalText =
       "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
       "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
-    return { text: finalText, charts, citations };
+    return { text: finalText, charts, citations, backQuestions };
   }
 
   // Self-verification: agent checks its own numbers against tool results.
@@ -871,5 +902,5 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     }
   }
 
-  return { text: finalText, charts, citations };
+  return { text: finalText, charts, citations, backQuestions };
 }

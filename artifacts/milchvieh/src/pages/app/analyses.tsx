@@ -784,6 +784,18 @@ function extractBackQuestions(content: string | null | undefined): string[] | nu
   return null;
 }
 
+// ── Message-level helpers: prefer structured backQuestions, fall back to heuristic ──
+
+function msgIsBackQuestion(msg: AnalysisMessage): boolean {
+  if (msg.backQuestions && msg.backQuestions.length > 0) return true;
+  return isBackQuestion(msg.content);
+}
+
+function getMsgBackQuestions(msg: AnalysisMessage): string[] | null {
+  if (msg.backQuestions && msg.backQuestions.length > 0) return msg.backQuestions;
+  return extractBackQuestions(msg.content);
+}
+
 // ── Interactive back-question form ────────────────────────────────────────────
 
 function BackQuestionForm({
@@ -1213,7 +1225,7 @@ function AnalysisResultsPanel({
   const resultPairs: { msg: AnalysisMessage; questionTitle: string | null }[] = [];
   for (let i = 0; i < msgs.length; i++) {
     const m = msgs[i];
-    if (m.role === "assistant" && !m.error && !isBackQuestion(m.content)) {
+    if (m.role === "assistant" && !m.error && !msgIsBackQuestion(m)) {
       const prevUser = [...msgs.slice(0, i)].reverse().find((x) => x.role === "user");
       resultPairs.push({ msg: m, questionTitle: prevUser?.content ?? null });
     }
@@ -1396,6 +1408,10 @@ export function AnalysesPage() {
   chatWidthRef.current = chatWidth;
   // Track component mount time so we can detect "new" messages for animation
   const mountedAtRef = useRef(Date.now());
+  // Track previous isAgentWorking value to fire polling after agent ends
+  const wasAgentWorkingRef = useRef(false);
+  const followUpPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const followUpPollingStartRef = useRef<number>(0);
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
@@ -1489,14 +1505,55 @@ export function AnalysesPage() {
   const currentStep = analysis?.agentProgress ?? null;
   const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
 
-  // Compute follow-up chips for the chat panel
+  // Step 1 — Smart polling: after agent ends, poll every 1s (up to 12s) until
+  // followUpQuestions arrive, then stop. This is independent of LLM latency.
+  useEffect(() => {
+    if (activeAnalysisId && wasAgentWorkingRef.current && !isAgentWorking) {
+      // Stop any previous interval
+      if (followUpPollingRef.current) {
+        clearInterval(followUpPollingRef.current);
+        followUpPollingRef.current = null;
+      }
+      followUpPollingStartRef.current = Date.now();
+      followUpPollingRef.current = setInterval(() => {
+        const elapsed = Date.now() - followUpPollingStartRef.current;
+        // Check if follow-up questions already landed in the cache
+        const cached = queryClient.getQueryData(
+          getGetAnalysisQueryKey(activeAnalysisId),
+        ) as AnalysisDetail | undefined;
+        const lastResult = [...(cached?.messages ?? [])]
+          .reverse()
+          .find((m) => m.role === "assistant" && !m.error && !msgIsBackQuestion(m));
+        const hasQuestions =
+          ((lastResult?.followUpQuestions as string[] | null)?.length ?? 0) > 0;
+        if (hasQuestions || elapsed > 12_000) {
+          clearInterval(followUpPollingRef.current!);
+          followUpPollingRef.current = null;
+          return;
+        }
+        queryClient.invalidateQueries({
+          queryKey: getGetAnalysisQueryKey(activeAnalysisId),
+        });
+      }, 1000);
+    }
+    wasAgentWorkingRef.current = isAgentWorking;
+    return () => {
+      if (followUpPollingRef.current) {
+        clearInterval(followUpPollingRef.current);
+        followUpPollingRef.current = null;
+      }
+    };
+  }, [isAgentWorking, activeAnalysisId]);
+
+  // Step 2 — Compute follow-up chips for the chat panel
   const lastResultMsg = [...(analysis?.messages ?? [])]
     .reverse()
-    .find((m) => m.role === "assistant" && !m.error && !isBackQuestion(m.content));
+    .find((m) => m.role === "assistant" && !m.error && !msgIsBackQuestion(m));
+  const lastMsg_ = (analysis?.messages ?? []).at(-1);
   const chatFollowUpQuestions: string[] =
     !isAgentWorking &&
     lastResultMsg &&
-    !isBackQuestion((analysis?.messages ?? []).at(-1)?.content ?? "")
+    !(lastMsg_ && msgIsBackQuestion(lastMsg_))
       ? ((lastResultMsg.followUpQuestions as string[] | null)?.slice(0, 3) ?? [])
       : [];
 
@@ -1537,7 +1594,7 @@ export function AnalysesPage() {
     if (isAgentWorking) return;
     const msgs = analysis?.messages ?? [];
     const lastMsg = msgs[msgs.length - 1];
-    if (lastMsg?.role === "assistant" && (isBackQuestion(lastMsg.content) || lastMsg.error != null)) {
+    if (lastMsg?.role === "assistant" && (msgIsBackQuestion(lastMsg) || lastMsg.error != null)) {
       inputRef.current?.focus();
     }
   }, [isAgentWorking]);
@@ -1555,7 +1612,7 @@ export function AnalysesPage() {
     const msgs = analysis?.messages ?? [];
     const last = [...msgs].reverse().find((m) => m.role === "assistant" && !m.error);
     if (!last) return null;
-    return extractBackQuestions(last.content) ? last.id : null;
+    return getMsgBackQuestions(last) ? last.id : null;
   })();
   useEffect(() => {
     if (!lastAssistantMsgIdForForm) return;
@@ -2022,7 +2079,7 @@ export function AnalysesPage() {
     const lastBackQuestionMsgId = (() => {
       if (isAgentWorking) return null;
       if (!lastAssistantMsg) return null;
-      const qs = extractBackQuestions(lastAssistantMsg.content);
+      const qs = getMsgBackQuestions(lastAssistantMsg);
       return qs ? lastAssistantMsg.id : null;
     })();
 
@@ -2030,8 +2087,8 @@ export function AnalysesPage() {
     const embeddedFormQuestions = (() => {
       if (isAgentWorking) return null;
       if (!lastAssistantMsg) return null;
-      if (isBackQuestion(lastAssistantMsg.content)) return null;
-      return extractBackQuestions(lastAssistantMsg.content);
+      if (msgIsBackQuestion(lastAssistantMsg)) return null;
+      return getMsgBackQuestions(lastAssistantMsg);
     })();
 
     return (
@@ -2062,7 +2119,7 @@ export function AnalysesPage() {
               {msgs.map((msg, idx) => {
                 const isLast = idx === msgs.length - 1;
                 // Assistant results (not errors, not back-questions) go to the right panel — skip here
-                if (msg.role === "assistant" && !msg.error && !isBackQuestion(msg.content)) {
+                if (msg.role === "assistant" && !msg.error && !msgIsBackQuestion(msg)) {
                   return null;
                 }
                 // Fall A: last back-question bubble → replace with interactive form
@@ -2072,7 +2129,7 @@ export function AnalysesPage() {
                   isLast &&
                   msg.id === lastBackQuestionMsgId
                 ) {
-                  const qs = extractBackQuestions(msg.content)!;
+                  const qs = getMsgBackQuestions(msg)!;
                   return (
                     <BackQuestionForm
                       key={msg.id}

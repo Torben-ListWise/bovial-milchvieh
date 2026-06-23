@@ -48,6 +48,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE datasets ADD COLUMN IF NOT EXISTS detected_focus_area_confidence REAL"
   );
+  // Migration: back_questions column on messages (structured agent back-questions)
+  await pool.query(
+    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS back_questions JSONB"
+  );
   // Migration: source_url column on knowledge_documents (for URL-ingested entries)
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"

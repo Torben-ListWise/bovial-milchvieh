@@ -78,6 +78,7 @@ function serializeMessage(m: Message) {
     role: m.role as "user" | "assistant",
     content: m.content ?? null,
     followUpQuestions: ((m as any).followUpQuestions as string[] | null) ?? [],
+    backQuestions: ((m as any).backQuestions as string[] | null) ?? null,
     charts: (m.charts as Chart[] | null) ?? [],
     citations: (m.citations as Citation[] | null) ?? [],
     error: m.error ?? null,
