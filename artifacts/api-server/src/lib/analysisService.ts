@@ -49,6 +49,8 @@ export async function generateFollowUps(question: string, answer: string): Promi
 export type SseCallbacks = {
   onTextDelta?: (delta: string) => void;
   onSourceSearched?: (sources: string[]) => void;
+  onProgress?: (step: string) => void;
+  onChart?: (chart: Chart) => void;
   onDone?: () => void;
 };
 
@@ -146,6 +148,7 @@ export async function processQuestion(
           userId: analysis.userId ?? undefined,
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
+          onChart: sse?.onChart,
           onProgress: async (step: string | null) => {
             // The previous step is now complete — move it to completedSteps
             if (lastProgressStep) completedSteps.push(lastProgressStep);
@@ -154,6 +157,8 @@ export async function processQuestion(
               .update(analysesTable)
               .set({ agentProgress: step, agentSteps: [...completedSteps] } as any)
               .where(eq(analysesTable.id, analysis.id));
+            // Also push progress to the SSE stream (non-null steps only)
+            if (step) sse?.onProgress?.(step);
           },
         }),
         agentTimeout,

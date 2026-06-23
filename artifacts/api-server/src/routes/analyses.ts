@@ -269,6 +269,7 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
     sendDelta: (text) => sendEvent("delta", { text }),
     sendSources: (sources) => sendEvent("sources", { sources }),
     sendProgress: (step) => sendEvent("progress", { step }),
+    sendChart: (chart) => sendEvent("chart", { chart }),
     sendDone: () => {
       sendEvent("done", {});
       res.end();
@@ -339,6 +340,8 @@ router.post(
       processQuestion(a, parsed.data.question, {
         onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
         onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
+        onProgress: (step) => sseWriters.get(id)?.sendProgress(step),
+        onChart: (chart) => sseWriters.get(id)?.sendChart(chart),
         onDone: () => sseWriters.get(id)?.sendDone(),
       }).catch((err) => {
         sseWriters.get(id)?.sendError("Verarbeitungsfehler");

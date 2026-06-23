@@ -425,6 +425,8 @@ interface RunOptions {
   onTextDelta?: (delta: string) => void;
   /** Called once per search_knowledge call with the unique document titles found. */
   onSourceSearched?: (sources: string[]) => void;
+  /** Called immediately when a chart is emitted by the agent (before done). */
+  onChart?: (chart: Chart) => void;
 }
 
 async function fetchDocumentContext(datasetId: string): Promise<string> {
@@ -862,6 +864,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           if (!ts) return { error: "Keine Daten für Diagramm" };
           const chart = chartFromTimeseries(ts, title, chartType);
           charts.push(chart);
+          opts.onChart?.(chart);
           return { ok: true, points: ts.points.length, basis: basisText(ts.basis) };
         }
         if (source === "group") {
@@ -874,6 +877,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           if (!g) return { error: "Keine Daten für Diagramm" };
           const chart = chartFromGroup(g, title, chartType);
           charts.push(chart);
+          opts.onChart?.(chart);
           return { ok: true, points: g.points.length, basis: basisText(g.basis) };
         }
         if (source === "ranking") {
@@ -885,7 +889,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           );
           if (!r) return { error: "Keine Daten für Diagramm" };
           const metricLabel = CANONICAL_FIELD_MAP[r.metric]?.label ?? r.metric;
-          charts.push({
+          const rankingChart: Chart = {
             id: `chart_${Math.random().toString(36).slice(2, 10)}`,
             type: chartType,
             title,
@@ -898,7 +902,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             })),
             unit: CANONICAL_FIELD_MAP[r.metric]?.unit ?? null,
             basis: basisText(r.basis),
-          });
+          };
+          charts.push(rankingChart);
+          opts.onChart?.(rankingChart);
           return { ok: true, points: r.entries.length, basis: basisText(r.basis) };
         }
         // source === "document": agent passes pre-built data from PDF text
@@ -912,7 +918,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           if (seriesInput.length === 0) {
             return { error: "Keine series-Definition angegeben" };
           }
-          charts.push({
+          const docChart: Chart = {
             id: `chart_${Math.random().toString(36).slice(2, 10)}`,
             type: chartType,
             title,
@@ -921,7 +927,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             data: rawData,
             unit: (input.unit as string) ?? null,
             basis: "Dokument",
-          });
+          };
+          charts.push(docChart);
+          opts.onChart?.(docChart);
           return { ok: true, points: rawData.length, basis: "Dokument" };
         }
         return { error: "Unbekannte Diagrammquelle" };

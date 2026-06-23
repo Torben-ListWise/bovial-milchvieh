@@ -7,6 +7,7 @@ export type SseWriter = {
   sendDelta: (text: string) => void;
   sendSources: (sources: string[]) => void;
   sendProgress: (step: string) => void;
+  sendChart: (chart: unknown) => void;
   sendDone: () => void;
   sendError: (msg: string) => void;
 };

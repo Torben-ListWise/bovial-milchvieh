@@ -27,6 +27,7 @@ import {
   type AnalysisDetail,
   type Analysis,
   type AnalysisTemplate,
+  type Chart,
 } from "@workspace/api-client-react";
 
 function filterTemplatesByFocusAreas(
@@ -50,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalysisStream, useStreamingState } from "@/hooks/use-analysis-stream";
 import {
   Bot, User, AlertCircle, Send,
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
@@ -671,14 +673,35 @@ function LiveSourcesActivity({ sources }: { sources: string[] }) {
 
 // ── Streaming Result Card ─────────────────────────────────────────────────────
 
-function StreamingResultCard({ text }: { text: string }) {
+function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] }) {
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
         <Bot className="w-3.5 h-3.5 text-primary" />
       </div>
-      <div className="flex-1 rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3">
-        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{text}<span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 align-text-bottom animate-pulse" /></p>
+      <div className="flex-1 rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 space-y-3">
+        {text ? (
+          <div className="text-sm leading-relaxed">
+            <MarkdownContent text={text} />
+            <span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+          </div>
+        ) : (
+          <span className="inline-block w-0.5 h-3.5 bg-primary align-text-bottom animate-pulse" />
+        )}
+        {charts && charts.length > 0 && (
+          <div className="space-y-4 pt-1">
+            {charts.map((chart, i) => (
+              <div key={chart.id ?? i} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+                {chart.title && (
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{chart.title}</p>
+                )}
+                <div className="h-64">
+                  <DynamicChart chart={chart} fillContainer />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1346,11 +1369,13 @@ function AnalysisResultsPanel({
   isWorking,
   pendingQuestion,
   streamingText,
+  streamingCharts,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
   pendingQuestion?: string;
   streamingText?: string;
+  streamingCharts?: Chart[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
@@ -1407,10 +1432,10 @@ function AnalysisResultsPanel({
   }
 
   if (resultPairs.length === 0 && isWorking) {
-    if (streamingText) {
+    if (streamingText || (streamingCharts && streamingCharts.length > 0)) {
       return (
         <div className="h-full overflow-y-auto px-4 py-4">
-          <StreamingResultCard text={streamingText} />
+          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
           <div className="h-2" />
         </div>
       );
@@ -1439,8 +1464,8 @@ function AnalysisResultsPanel({
       ))}
 
       {isWorking && (
-        streamingText ? (
-          <StreamingResultCard text={streamingText} />
+        (streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
+          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
         ) : (
         <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
@@ -1546,10 +1571,11 @@ export function AnalysesPage() {
   const [scopePickerChoice, setScopePickerChoice] = useState<"all" | "project">("all");
   const scopePickerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── SSE streaming state ────────────────────────────────────────────────────
-  const [streamingText, setStreamingText] = useState("");
-  const [streamingSources, setStreamingSources] = useState<string[]>([]);
-  const sseAbortRef = useRef<AbortController | null>(null);
+  // ── SSE streaming state via hook ──────────────────────────────────────────
+  const streaming = useStreamingState();
+  const [pollFallback, setPollFallback] = useState(false);
+  const streamingAnalysisIdRef = useRef<string | null>(null);
+  const sseStartedForRef = useRef(new Set<string>());
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -1588,6 +1614,32 @@ export function AnalysesPage() {
       refetchInterval: activeAnalysisId ? false : 5000,
     },
   });
+
+  const { startStream, stopStream } = useAnalysisStream({
+    onDelta: streaming.onDelta,
+    onProgress: streaming.onProgress,
+    onChart: streaming.onChart,
+    onSources: streaming.onSources,
+    onDone: () => {
+      const id = streamingAnalysisIdRef.current;
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
+      }
+    },
+    onFallback: () => {
+      setPollFallback(true);
+      toast({ description: "Live-Verbindung unterbrochen – Ergebnis wird nach Fertigstellung geladen." });
+    },
+  });
+
+  function openSseStream(analysisId: string) {
+    streamingAnalysisIdRef.current = analysisId;
+    sseStartedForRef.current.add(analysisId);
+    streaming.reset();
+    setPollFallback(false);
+    startStream(analysisId);
+  }
 
   const createAnalysis = useCreateAnalysis({
     mutation: {
@@ -1642,11 +1694,12 @@ export function AnalysesPage() {
       queryKey: getGetAnalysisQueryKey(activeAnalysisId ?? ""),
       staleTime: 0,
       refetchInterval: (query) => {
-        if (askIsPendingRef.current) return 500;
+        if (!activeAnalysisId) return false;
+        // Poll in fallback mode (SSE failed)
+        if (pollFallback) return 1000;
         const data = query.state.data as AnalysisDetail | undefined;
-        if (data?.agentProgress != null) return 500;
-        // Poll while messages haven't arrived yet (background processing started)
-        if ((data?.messages?.length ?? 0) === 0) return 500;
+        // Poll for template/auto analyses started on the server (no SSE opened yet)
+        if (data?.agentProgress != null && !sseStartedForRef.current.has(activeAnalysisId)) return 1000;
         return false;
       },
     },
@@ -1655,25 +1708,41 @@ export function AnalysesPage() {
   const isAgentWorking =
     (ask.isPending && !!activeAnalysisId) ||
     analysis?.agentProgress != null ||
+    // SSE stream is actively receiving data
+    (!!streaming.text || !!streaming.progressStep) ||
     // Background agent started but no messages in DB yet
     (!!activeAnalysisId && (analysis?.messages?.length ?? 0) === 0 && !!pendingQuestionRef.current);
 
-  const currentStep = analysis?.agentProgress ?? null;
-  const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
+  // Prefer live SSE progress over DB-polled value
+  const currentStep = streaming.progressStep ?? analysis?.agentProgress ?? null;
+  const completedSteps =
+    streaming.completedSteps.length > 0
+      ? streaming.completedSteps
+      : ((analysis?.agentSteps as string[] | undefined) ?? []);
+
+  // Auto-start SSE for template/auto analyses already in progress when navigating to them
+  useEffect(() => {
+    if (!activeAnalysisId || !analysis) return;
+    if (sseStartedForRef.current.has(activeAnalysisId)) return;
+    if (analysis.agentProgress != null) {
+      openSseStream(activeAnalysisId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAnalysisId, analysis?.agentProgress]);
+
+  // Clear streaming state when analysis changes
+  useEffect(() => {
+    streaming.reset();
+    stopStream();
+    sseStartedForRef.current.delete(activeAnalysisId ?? "");
+    setPollFallback(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAnalysisId]);
 
   // Step 1 — Smart polling: after agent ends, poll every 1s (up to 12s) until
   // followUpQuestions arrive, then stop. This is independent of LLM latency.
   useEffect(() => {
-    // When agent starts, clear streaming state from any previous run
-    if (isAgentWorking && !wasAgentWorkingRef.current) {
-      setStreamingText("");
-      setStreamingSources([]);
-    }
     if (activeAnalysisId && wasAgentWorkingRef.current && !isAgentWorking) {
-      // Abort any open SSE stream — done event should have already closed it,
-      // but guard in case of disconnect or timeout
-      sseAbortRef.current?.abort();
-      sseAbortRef.current = null;
       // Stop any previous interval
       if (followUpPollingRef.current) {
         clearInterval(followUpPollingRef.current);
@@ -1927,87 +1996,6 @@ export function AnalysesPage() {
     handleSubmit(q);
   }
 
-  // ── SSE stream opener ────────────────────────────────────────────────────────
-  function openSseStream(analysisId: string) {
-    // Abort any existing stream
-    sseAbortRef.current?.abort();
-    const controller = new AbortController();
-    sseAbortRef.current = controller;
-
-    setStreamingText("");
-    setStreamingSources([]);
-
-    (async () => {
-      try {
-        const token = await getToken();
-        console.log("[SSE] opening", analysisId, "token?", !!token);
-        const headers: Record<string, string> = { Accept: "text/event-stream" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-
-        const res = await fetch(`/api/analyses/${analysisId}/stream`, {
-          signal: controller.signal,
-          headers,
-          credentials: "include",
-        });
-        console.log("[SSE] response", res.status, res.ok);
-        if (!res.ok || !res.body) {
-          console.warn("[SSE] bad response, aborting");
-          return;
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-
-          // SSE events are separated by double newlines
-          const parts = buf.split("\n\n");
-          buf = parts.pop() ?? "";
-
-          for (const part of parts) {
-            if (!part.trim()) continue;
-            let eventType = "message";
-            let dataLine = "";
-            for (const line of part.split("\n")) {
-              if (line.startsWith("event:")) eventType = line.slice(6).trim();
-              else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
-            }
-            if (!dataLine) continue;
-
-            try {
-              const payload = JSON.parse(dataLine);
-              if (eventType === "delta") {
-                setStreamingText((prev) => prev + (payload.text ?? ""));
-              } else if (eventType === "sources") {
-                const titles: string[] = payload.sources ?? [];
-                setStreamingSources((prev) => {
-                  const seen = new Set(prev);
-                  const next = [...prev];
-                  for (const t of titles) if (!seen.has(t)) next.push(t);
-                  return next;
-                });
-              } else if (eventType === "done") {
-                reader.cancel();
-                sseAbortRef.current = null;
-                queryClient.invalidateQueries({
-                  queryKey: getGetAnalysisQueryKey(analysisId),
-                });
-                break;
-              }
-            } catch {
-              // ignore malformed events
-            }
-          }
-        }
-      } catch (err) {
-        console.error("[SSE] stream error:", err);
-      }
-    })();
-  }
 
   // ── Drag-and-drop upload ────────────────────────────────────────────────────
 
@@ -2409,8 +2397,8 @@ export function AnalysesPage() {
               </>
             )}
 
-            {isAgentWorking && streamingSources.length > 0 && (
-              <LiveSourcesActivity sources={streamingSources} />
+            {isAgentWorking && streaming.sources.length > 0 && (
+              <LiveSourcesActivity sources={streaming.sources} />
             )}
             {isAgentWorking && (
               <AgentWorkingBanner currentStep={currentStep} />
@@ -2602,7 +2590,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streamingText} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
           </div>
         </div>
       </div>
@@ -2620,7 +2608,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streamingText} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
             </div>
           )}
         </div>
