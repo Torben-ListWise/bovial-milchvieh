@@ -1126,14 +1126,23 @@ function StarterQuestions({
 
   const { data: currentUser } = useGetCurrentUser();
 
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+
   const runTemplate = useRunTemplate({
     mutation: {
       onSuccess: (data, vars) => {
         queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
         queryClient.invalidateQueries({ queryKey: getListTemplatesQueryKey(datasetId) });
+        setQuotaExceeded(false);
         onTemplateRun(data.analysisId);
       },
-      onError: () => {
+      onError: (err: any) => {
+        const status = err?.status ?? err?.response?.status;
+        const data = err?.data ?? err?.response?.data;
+        if (status === 402 && data?.error === "quota_exceeded") {
+          setQuotaExceeded(true);
+          return;
+        }
         toast({
           variant: "destructive",
           title: "Fehler",
@@ -1142,6 +1151,39 @@ function StarterQuestions({
       },
     },
   });
+
+  if (quotaExceeded) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
+          <AlertCircle className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className="text-xl font-semibold mb-2">Analyse-Kontingent erschöpft</h3>
+        <p className="text-muted-foreground mb-6 max-w-sm">
+          Du hast das Limit deines aktuellen Tarifs für diesen Monat erreicht.
+          Upgrade auf Starter oder Pro für weitere Analysen.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button asChild variant="outline">
+            <Link href="/app/settings">
+              Auf Starter upgraden (50 €/Monat)
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/app/settings">
+              Auf Pro upgraden (100 €/Monat)
+            </Link>
+          </Button>
+        </div>
+        <button
+          onClick={() => setQuotaExceeded(false)}
+          className="mt-4 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Zurück zu den Vorlagen
+        </button>
+      </div>
+    );
+  }
 
   if (!hasFiles) {
     return (

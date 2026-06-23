@@ -238,4 +238,37 @@ export async function ensureExtensions(): Promise<void> {
       ('Richtwerte', 'Gerste Ertrag Richtwert', '70', 'dt/ha', 'Regionaler Durchschnittsertrag Wintergerste', 'arable')
     `);
   }
+
+  // Migration: Stripe billing tables
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      user_id TEXT PRIMARY KEY,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      stripe_price_id TEXT,
+      plan TEXT NOT NULL DEFAULT 'free',
+      status TEXT NOT NULL DEFAULT 'active',
+      current_period_end TIMESTAMPTZ,
+      grace_period_ends_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS analysis_quota (
+      user_id TEXT NOT NULL,
+      year_month TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      CONSTRAINT analysis_quota_user_month_pk PRIMARY KEY (user_id, year_month)
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS analysis_quota_user_month_idx
+    ON analysis_quota (user_id, year_month)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stripe_events (
+      event_id TEXT PRIMARY KEY,
+      processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   db,
   datasetsTable,
@@ -12,6 +12,7 @@ import { logger } from "../lib/logger";
 import { processQuestion } from "../lib/analysisService";
 import { normalizeSector } from "../lib/serializers";
 import { sseWriters } from "../lib/sseRegistry";
+import { checkQuota, incrementQuota } from "../lib/quota";
 
 const router: IRouter = Router();
 
@@ -35,8 +36,6 @@ router.get(
       return;
     }
 
-    // Return all active templates — focus-area filtering is done client-side based on user.focusAreas.
-    // The run endpoint still validates sector compatibility to prevent mismatched analyses.
     const templates = await db
       .select()
       .from(analysisTemplatesTable)
@@ -111,6 +110,18 @@ router.post(
       return;
     }
 
+    // ── Quota check ───────────────────────────────────────────────────────────
+    const quotaCheck = await checkQuota(req.userId!);
+    if (!quotaCheck.allowed) {
+      res.status(402).json({
+        error: "quota_exceeded",
+        plan: quotaCheck.plan,
+        limit: quotaCheck.limit,
+        used: quotaCheck.used,
+      });
+      return;
+    }
+
     const [template] = await db
       .select()
       .from(analysisTemplatesTable)
@@ -127,9 +138,6 @@ router.post(
       return;
     }
 
-    // No sector gate: templates are now filtered client-side by user focus_areas.
-    // Any active template can be run against any dataset regardless of sector.
-
     const [analysis] = await db
       .insert(analysesTable)
       .values({
@@ -145,15 +153,25 @@ router.post(
     res.status(201).json({ analysisId: analysis.id });
 
     const id = analysis.id;
+    const userId = req.userId!;
     setImmediate(() => {
       processQuestion(analysis, template.promptText, {
         onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
         onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
         onDone: () => sseWriters.get(id)?.sendDone(),
-      }).catch((err) => {
-        sseWriters.get(id)?.sendError("Verarbeitungsfehler");
-        logger.error({ err }, "Background template processQuestion failed");
-      });
+      })
+        .then((msg) => {
+          // Increment quota only on success (no Anthropic 500/529 error)
+          if (!msg.error) {
+            incrementQuota(userId).catch((err) =>
+              logger.error({ err, userId }, "Quota-Increment fehlgeschlagen"),
+            );
+          }
+        })
+        .catch((err) => {
+          sseWriters.get(id)?.sendError("Verarbeitungsfehler");
+          logger.error({ err }, "Background template processQuestion failed");
+        });
     });
   },
 );

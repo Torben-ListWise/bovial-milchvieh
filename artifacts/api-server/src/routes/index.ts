@@ -15,6 +15,7 @@ import { knowledgeRouter } from "./knowledge";
 import templatesRouter from "./templates";
 import publicRouter from "./public";
 import checkoutRouter from "./checkout";
+import billingRouter from "./billing";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(knowledgeRouter);
 router.use(templatesRouter);
 router.use(publicRouter);
 router.use(checkoutRouter);
+router.use(billingRouter);
 
 export default router;

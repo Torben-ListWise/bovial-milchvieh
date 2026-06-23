@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
+import { startDunningScheduler } from "./lib/dunning";
 import { ensureExtensions, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
@@ -184,6 +185,7 @@ ensureExtensions()
       }
 
       startScheduler();
+      startDunningScheduler();
       void clearOrphanedAnalyses();
 
       // Migrate legacy docs and resume pending ingestions in the background

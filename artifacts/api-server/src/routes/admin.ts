@@ -317,4 +317,55 @@ router.post(
   },
 );
 
+// POST /api/admin/cron/run-dunning — trigger dunning check externally
+router.post(
+  "/admin/cron/run-dunning",
+  async (req: Request, res: Response) => {
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+      res.status(503).json({ error: "CRON_SECRET ist nicht konfiguriert." });
+      return;
+    }
+    const provided =
+      (req.headers["x-cron-secret"] as string | undefined) ??
+      (req.headers["authorization"] as string | undefined)?.replace("Bearer ", "");
+    if (provided !== cronSecret) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const { runDunningCheck } = await import("../lib/dunning");
+    const result = await runDunningCheck().catch(() => ({ downgraded: -1 }));
+    res.json({ ok: true, ...result });
+  },
+);
+
+// GET /api/admin/billing — operator view of all user plans
+router.get(
+  "/admin/billing",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    const { sql } = await import("drizzle-orm");
+    const rows = await db.execute(sql`
+      SELECT
+        u.id as user_id,
+        u.email,
+        u.name,
+        COALESCE(s.plan, 'free') as plan,
+        COALESCE(s.status, 'active') as status,
+        s.stripe_customer_id,
+        s.current_period_end,
+        s.grace_period_ends_at,
+        COALESCE(q.count, 0) as analyses_this_month
+      FROM users u
+      LEFT JOIN subscriptions s ON s.user_id = u.id
+      LEFT JOIN analysis_quota q ON q.user_id = u.id
+        AND q.year_month = TO_CHAR(NOW(), 'YYYY-MM')
+      WHERE u.role = 'customer'
+      ORDER BY u.email
+    `);
+    res.json((rows as any).rows ?? rows);
+  },
+);
+
 export default router;

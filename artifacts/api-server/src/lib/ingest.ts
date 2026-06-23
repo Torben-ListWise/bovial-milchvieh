@@ -557,10 +557,25 @@ Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete 
           } as any)
           .returning();
 
-        setImmediate(() => {
-          processQuestion(analysis, betriebsspiegelPrompt).catch((err) => {
-            logger.warn({ err, analysisId: analysis.id }, "Automatische Erstanalyse fehlgeschlagen");
-          });
+        const autoUserId = file.userId;
+        const autoAnalysisId = analysis.id;
+        setImmediate(async () => {
+          try {
+            const { checkQuota, incrementQuota } = await import("./quota");
+            const quota = await checkQuota(autoUserId);
+            if (!quota.allowed) {
+              logger.info({ userId: autoUserId }, "Automatische Erstanalyse übersprungen: Kontingent erschöpft");
+              return;
+            }
+            const msg = await processQuestion(analysis, betriebsspiegelPrompt);
+            if (!msg.error) {
+              await incrementQuota(autoUserId).catch((err) =>
+                logger.error({ err, userId: autoUserId }, "Quota-Increment für Auto-Analyse fehlgeschlagen"),
+              );
+            }
+          } catch (err) {
+            logger.warn({ err, analysisId: autoAnalysisId }, "Automatische Erstanalyse fehlgeschlagen");
+          }
         });
 
         logger.info({ analysisId: analysis.id, datasetId: file.datasetId }, "Automatische Erstanalyse gestartet");
