@@ -26,8 +26,10 @@ if (Number.isNaN(port) || port <= 0) {
  *   1. Drop HNSW index (prevents index corruption mid-migration)
  *   2. For each legacy doc: ingestKnowledgeDoc() handles delete→embed→insert→set_model
  *   3. Recreate HNSW index once at the end
- * A server restart mid-migration is safe — docs with the wrong/missing
- * embedding_model will simply be re-processed on the next startup.
+ *
+ * Restart-safe: includes docs left in 'processing' state by a previous interrupted
+ * migration run (embedding_model still wrong/null). ingestKnowledgeDoc() will
+ * re-process them fully — delete stale chunks, re-embed, insert, set embedding_model.
  */
 async function reembedLegacyDocs(): Promise<void> {
   try {
@@ -39,7 +41,11 @@ async function reembedLegacyDocs(): Promise<void> {
       .from(knowledgeDocumentsTable)
       .where(
         and(
-          eq(knowledgeDocumentsTable.status, "ready"),
+          // Include 'ready' (normal) AND 'processing' (interrupted mid-migration)
+          or(
+            eq(knowledgeDocumentsTable.status, "ready"),
+            eq(knowledgeDocumentsTable.status, "processing"),
+          ),
           or(
             isNull(knowledgeDocumentsTable.embeddingModel),
             ne(knowledgeDocumentsTable.embeddingModel, LOCAL_MODEL_NAME),
