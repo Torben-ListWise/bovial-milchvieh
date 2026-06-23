@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# HuggingFace model cache (auto-restored via postinstall)
+.hf-cache/
