@@ -10,17 +10,17 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ""
 const PLANS: (PlanDetails & { key: string })[] = [
   {
     key: "starter",
-    name: "Starter",
-    pricePerMonth: 19.0,
-    analysesPerMonth: 50,
-    description: "Ideal für kleine Betriebe mit gelegentlichem Analysebedarf.",
+    name: "Professional",
+    pricePerMonth: 29.0,
+    analysesPerMonth: 100,
+    description: "Für Herdenmanager und Mitarbeiter — 100 Analysen pro Monat, erweiterte Auswertungen.",
   },
   {
     key: "pro",
-    name: "Pro",
-    pricePerMonth: 49.0,
+    name: "Premium",
+    pricePerMonth: 79.0,
     analysesPerMonth: "unbegrenzt",
-    description: "Unbegrenzte Analysen für professionelle Landwirte und Berater.",
+    description: "Für Betriebsleiter — unbegrenzte Analysen, Daten-Upload, KI-Tiefenanalysen, 3 Team-Einladungen.",
   },
 ];
 
@@ -114,7 +114,7 @@ export function UpgradePage() {
                   ? `${plan.analysesPerMonth} Analysen / Monat`
                   : "Unbegrenzte Analysen / Monat"}
               </p>
-              <p className="text-[10px] text-muted-foreground/70 mt-1">inkl. 19 % MwSt.</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1">zzgl. 19 % MwSt.</p>
             </button>
           ))}
         </div>

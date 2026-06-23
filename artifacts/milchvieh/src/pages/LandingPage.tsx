@@ -382,51 +382,48 @@ export function LandingPage({ basePath }: LandingPageProps) {
 
   const pricingPlans = [
     {
-      name: "Free",
+      name: "Starter",
       price: "Kostenlos",
-      subtitle: "Perfekt zum Ausprobieren",
+      subtitle: "Für Auszubildende, Schüler und Neugierige",
       features: [
-        "3 Analysen pro Monat",
-        "1 Datensatz",
-        "CSV- und Excel-Import",
-        "KI-Chat auf deinen Daten",
+        "10 Analysen pro Monat",
+        "Wissensdatenbank & Referenzwerte",
+        "Standard-Auswertungen",
         "Community-Support",
       ],
-      cta: "Jetzt starten",
+      cta: "Kostenlos starten",
       ctaHref: `${basePath}/sign-up`,
     },
     {
-      name: "Starter",
-      price: "50 €",
-      subtitle: "Für aktiv wirtschaftende Betriebe",
+      name: "Professional",
+      price: "29 €",
+      priceNote: "zzgl. 19 % MwSt.",
+      subtitle: "Für Herdenmanager und Betriebsmitarbeiter",
       features: [
-        "50 Analysen pro Monat",
-        "5 Datensätze",
-        "CSV, Excel & PDF-Import",
-        "Betriebsspiegel-Report",
-        "Analyse-Verlauf & Berichte",
-        "E-Mail-Support",
+        "100 Analysen pro Monat",
+        "Erweiterte Auswertungen (Herde, Fruchtbarkeit)",
+        "Zugang zu Betriebsdaten (per Einladung)",
+        "E-Mail-Support (48 h)",
       ],
-      cta: "Starter wählen",
-      ctaHref: `${basePath}/sign-up`,
+      cta: "Professional wählen",
+      ctaHref: `${basePath}/app/upgrade`,
       highlighted: true,
       badge: "Empfohlen",
     },
     {
-      name: "Pro",
-      price: "100 €",
-      subtitle: "Für Berater und große Betriebe",
+      name: "Premium",
+      price: "79 €",
+      priceNote: "zzgl. 19 % MwSt.",
+      subtitle: "Für Betriebsleiter mit eigenem Datenzugang",
       features: [
         "Unbegrenzte Analysen",
-        "Unbegrenzte Datensätze",
-        "Alle Importformate",
-        "Investitionsprüfung",
-        "Mehrere Betriebe verwalten",
-        "Prioritäts-Support",
-        "Individuelle Regelwerke",
+        "Daten-Upload (Excel, CSV, PDF)",
+        "KI-Tiefenanalysen & Investitionsprüfung",
+        "3 Team-Einladungen für Mitarbeiter",
+        "Prioritäts-Support (24 h)",
       ],
-      cta: "Pro wählen",
-      ctaHref: `${basePath}/sign-up`,
+      cta: "Premium wählen",
+      ctaHref: `${basePath}/app/upgrade`,
     },
   ];
 
@@ -444,7 +441,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
     {
       question: "Welche Dateiformate kann ich hochladen?",
       answer:
-        "Aktuell unterstützt der Assistent CSV-Dateien und Excel-Tabellen (.xlsx). Im Starter- und Pro-Tarif kannst du außerdem PDFs hochladen (z. B. MLP-Berichte oder Buchungsausdrucke).",
+        "Im Premium-Tarif kannst du CSV-Dateien, Excel-Tabellen (.xlsx) und PDFs (z. B. MLP-Berichte, LKV-Auswertungen) hochladen. Der Assistent erkennt das Format automatisch.",
     },
     {
       question: "Wie kündige ich mein Abo?",
@@ -452,9 +449,9 @@ export function LandingPage({ basePath }: LandingPageProps) {
         "Du kannst jederzeit in den Einstellungen deines Kontos kündigen — ohne Fristen, ohne Anruf, ohne Formulare. Dein aktueller Tarif läuft bis zum Ende des bezahlten Monats weiter.",
     },
     {
-      question: "Kann ich mehrere Betriebe anlegen?",
+      question: "Kann ich Mitarbeiter einladen?",
       answer:
-        "Im Free- und Starter-Tarif kannst du einen Betrieb (Datensatz-Gruppe) verwalten. Mit dem Pro-Tarif lassen sich beliebig viele Betriebe anlegen — ideal für Landwirtschaftsberater mit Kundenstamm.",
+        "Ja — im Premium-Tarif kannst du bis zu 3 Mitarbeiter (z. B. deinen Herdenmanager) einladen. Sie sehen deine Betriebsdaten und können Analysen starten, können aber keine Dateien hochladen.",
     },
     {
       question: "Funktioniert der Assistent auch für Schweine- oder Ackerbaubetriebe?",

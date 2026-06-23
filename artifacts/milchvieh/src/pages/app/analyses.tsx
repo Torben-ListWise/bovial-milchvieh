@@ -1617,7 +1617,18 @@ export function AnalysesPage() {
     query: {
       enabled: !!datasetId,
       queryKey: getListAnalysesQueryKey(datasetId ?? ""),
-      refetchInterval: activeAnalysisId ? false : 5000,
+      refetchInterval: (query) => {
+        if (activeAnalysisId) return false;
+        const data = query.state.data as Analysis[] | undefined;
+        if (!data || data.length === 0) return 5000;
+        // Stop polling once all analyses are older than 90 s —
+        // no new auto-analysis is coming from a recent upload any more.
+        const now = Date.now();
+        const hasRecentAnalysis = data.some(
+          (a) => now - new Date(a.createdAt).getTime() < 90_000,
+        );
+        return hasRecentAnalysis ? 5000 : false;
+      },
     },
   });
 
@@ -2063,11 +2074,22 @@ export function AnalysesPage() {
     );
   }
 
+  const MAX_FILE_SIZE_MB = 50;
+
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
     if (!file || !datasetId) return;
+
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      toast({
+        variant: "destructive",
+        title: "Datei zu groß",
+        description: `Maximale Dateigröße: ${MAX_FILE_SIZE_MB} MB. Deine Datei hat ${(file.size / 1024 / 1024).toFixed(1)} MB.`,
+      });
+      return;
+    }
 
     const msgId = crypto.randomUUID();
     setSystemMessages((prev) => [

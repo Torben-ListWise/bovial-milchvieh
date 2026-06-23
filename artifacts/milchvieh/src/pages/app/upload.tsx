@@ -150,9 +150,21 @@ export function UploadPage() {
     );
   };
 
+  const MAX_FILE_SIZE_MB = 50;
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      toast({
+        variant: "destructive",
+        title: "Datei zu groß",
+        description: `Maximale Dateigröße: ${MAX_FILE_SIZE_MB} MB. Deine Datei hat ${(file.size / 1024 / 1024).toFixed(1)} MB.`,
+      });
+      if (e.target) e.target.value = "";
+      return;
+    }
 
     const wasFirstFile = !files || files.length === 0;
 
@@ -396,9 +408,20 @@ export function UploadPage() {
                       </span>
                     )}
                     {f.status === 'error' && (
-                      <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        <span className="hidden sm:inline">Fehler</span>
+                      <span
+                        className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded flex items-center gap-1 cursor-help"
+                        title={(f as any).errorMessage ?? "Verarbeitungsfehler — bitte eine andere Datei versuchen."}
+                      >
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span className="hidden sm:inline max-w-[180px] truncate">
+                          {(f as any).errorMessage ? (f as any).errorMessage : "Verarbeitungsfehler"}
+                        </span>
+                      </span>
+                    )}
+                    {f.status === 'needs_mapping' && (
+                      <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span className="hidden sm:inline">Spalten prüfen</span>
                       </span>
                     )}
                     {isInProgress(f.status) && (

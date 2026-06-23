@@ -28,9 +28,10 @@ export function CheckoutConfirmationBox({
   const [agbAccepted, setAgbAccepted] = useState(false);
   const [withdrawalAccepted, setWithdrawalAccepted] = useState(false);
 
-  const priceGross = plan.pricePerMonth;
-  const vat = Math.round(priceGross * (19 / 119) * 100) / 100;
-  const priceNet = Math.round((priceGross - vat) * 100) / 100;
+  // pricePerMonth is the net price (zzgl. 19 % MwSt.)
+  const priceNet = plan.pricePerMonth;
+  const vat = Math.round(priceNet * 0.19 * 100) / 100;
+  const priceGross = Math.round((priceNet + vat) * 100) / 100;
 
   const canProceed = agbAccepted && withdrawalAccepted;
 
@@ -89,6 +90,10 @@ export function CheckoutConfirmationBox({
                 <td className="px-4 py-2.5 text-foreground font-bold text-primary">
                   {priceGross.toFixed(2).replace(".", ",")} € / Monat
                 </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2.5 text-muted-foreground font-medium">Abrechnung</td>
+                <td className="px-4 py-2.5 text-foreground">Monatlich, automatische Verlängerung</td>
               </tr>
             </tbody>
           </table>
@@ -176,7 +181,7 @@ export function CheckoutConfirmationBox({
           disabled={!canProceed || isLoading}
           className="w-full h-11 font-semibold"
         >
-          {isLoading ? "Weiterleitung …" : `Kostenpflichtig abonnieren — ${priceGross.toFixed(2).replace(".", ",")} € / Monat`}
+          {isLoading ? "Weiterleitung …" : `Kostenpflichtig abonnieren — ${priceGross.toFixed(2).replace(".", ",")} € brutto / Monat`}
         </Button>
         <p className="text-xs text-muted-foreground text-center mt-2">
           * Pflichtfelder. Du wirst zur sicheren Bezahlseite (Stripe) weitergeleitet.

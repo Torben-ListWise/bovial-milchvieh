@@ -166,7 +166,7 @@ export function SettingsPage() {
             <div>
               <h3 className="font-medium text-foreground">Verfügbare Tarife</h3>
               <p className="text-sm text-muted-foreground">
-                Starter (19,00 € / Monat) oder Pro (49,00 € / Monat) — alle Preise inkl. 19 % MwSt.
+                Professional (29,00 € / Monat netto) oder Premium (79,00 € / Monat netto) — zzgl. 19 % MwSt.
               </p>
             </div>
             <Button asChild className="gap-2 shrink-0">
