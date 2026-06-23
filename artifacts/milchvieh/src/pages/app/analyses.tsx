@@ -789,12 +789,10 @@ function AnalysisResultsPanel({
   analysis,
   isWorking,
   pendingQuestion,
-  onAsk,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
   pendingQuestion?: string;
-  onAsk: (q: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
@@ -816,13 +814,6 @@ function AnalysisResultsPanel({
     if (resultPairs.length === 0) return;
     lastCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [resultPairs.length]);
-
-  // Last assistant result (for FollowUpChips)
-  const lastResult = resultPairs[resultPairs.length - 1]?.msg;
-  const showFollowUp =
-    !isWorking &&
-    lastResult &&
-    (lastResult.followUpQuestions?.length ?? 0) > 0;
 
   // Pending question to show in loading indicators:
   // prefer the ref value (set just before submission), fall back to the last
@@ -904,15 +895,6 @@ function AnalysisResultsPanel({
         </div>
       )}
 
-      {showFollowUp && (
-        <div className="pt-1">
-          <FollowUpChips
-            questions={lastResult.followUpQuestions!}
-            onAsk={onAsk}
-          />
-        </div>
-      )}
-
       <div className="h-2" />
     </div>
   );
@@ -989,6 +971,8 @@ export function AnalysesPage() {
   chatWidthRef.current = chatWidth;
   // Track component mount time so we can detect "new" messages for animation
   const mountedAtRef = useRef(Date.now());
+  // Track previous isAgentWorking value to fire a one-shot refetch after agent ends
+  const wasAgentWorkingRef = useRef(false);
 
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
@@ -1078,6 +1062,29 @@ export function AnalysesPage() {
   const currentStep = analysis?.agentProgress ?? null;
   const completedSteps = (analysis?.agentSteps as string[] | undefined) ?? [];
 
+  // Step 1 — Polling-Fix: one-shot refetch 3s after agent ends so followUpQuestions patch arrives
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    if (activeAnalysisId && wasAgentWorkingRef.current && !isAgentWorking) {
+      t = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(activeAnalysisId) });
+      }, 3000);
+    }
+    wasAgentWorkingRef.current = isAgentWorking;
+    return () => { if (t !== undefined) clearTimeout(t); };
+  }, [isAgentWorking, activeAnalysisId]);
+
+  // Step 2 — Compute follow-up chips for the chat panel
+  const lastResultMsg = [...(analysis?.messages ?? [])]
+    .reverse()
+    .find((m) => m.role === "assistant" && !m.error && !isBackQuestion(m.content));
+  const chatFollowUpQuestions: string[] =
+    !isAgentWorking &&
+    lastResultMsg &&
+    !isBackQuestion((analysis?.messages ?? []).at(-1)?.content ?? "")
+      ? ((lastResultMsg.followUpQuestions as string[] | null)?.slice(0, 3) ?? [])
+      : [];
+
   // Helper: is this message new (created after this component mounted)?
   function isNewMessage(msg: AnalysisMessage): boolean {
     return new Date(msg.createdAt).getTime() > mountedAtRef.current;
@@ -1119,6 +1126,13 @@ export function AnalysesPage() {
       inputRef.current?.focus();
     }
   }, [isAgentWorking]);
+
+  // Step 4 — Scroll to bottom when follow-up chips appear
+  const followUpQuestionsKey = (lastResultMsg?.id ?? "") + chatFollowUpQuestions.length;
+  useEffect(() => {
+    if (chatFollowUpQuestions.length === 0) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [followUpQuestionsKey]);
 
   // ── Panel resize drag handlers ────────────────────────────────────────────
   useEffect(() => {
@@ -1422,6 +1436,10 @@ export function AnalysesPage() {
             <AgentWorkingBanner currentStep={currentStep} />
           )}
 
+          {chatFollowUpQuestions.length > 0 && (
+            <FollowUpChips questions={chatFollowUpQuestions} onAsk={handleSubmit} />
+          )}
+
           <div ref={bottomRef} />
         </div>
       </div>
@@ -1543,7 +1561,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} onAsk={(q) => handleSubmit(q)} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} />
           </div>
         </div>
       </div>
@@ -1561,7 +1579,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} onAsk={(q) => handleSubmit(q)} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} />
             </div>
           )}
         </div>
