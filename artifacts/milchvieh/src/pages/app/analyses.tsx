@@ -702,18 +702,43 @@ function preprocessFootnotes(text: string, ns: string): string {
   );
 }
 
-// Strict sanitize schema: only allow <sup> and <a> elements introduced by
-// preprocessFootnotes. Everything else the LLM might emit as raw HTML is stripped.
+// Replace trust-label italic markdown with styled HTML badge spans.
+// Pattern emitted by the agent: *[📚 Bibliothek]*, *[🌐 Web]*, *[💭 Allgemeinwissen]*
+function preprocessTrustLabels(text: string): string {
+  return text
+    .replace(/\*\[📚 Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library">📚 Bibliothek</span>')
+    .replace(/\*\[🌐 Web\]\*/g, '<span class="trust-badge trust-badge-web">🌐 Web</span>')
+    .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general">💭 Allgemeinwissen</span>');
+}
+
+// Strict sanitize schema: only allow <sup>, <span>, and <a> elements introduced by
+// preprocessFootnotes / preprocessTrustLabels. Everything else the LLM might emit
+// as raw HTML is stripped.
 const FOOTNOTE_SANITIZE_SCHEMA = {
   ...defaultSchema,
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     "sup",
+    "span",
   ],
   attributes: {
     ...defaultSchema.attributes,
     sup: ["id", "class"],
+    span: ["class"],
     a: [...((defaultSchema.attributes as Record<string, string[]>)?.a ?? []), "class"],
+  },
+};
+
+// Lighter schema used by MarkdownContent (no footnotes, only trust-label spans).
+const TRUST_BADGE_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "span",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    span: ["class"],
   },
 };
 
@@ -747,9 +772,15 @@ const PROSE_CLASSES = "prose prose-sm max-w-none " +
   "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
+  const processed = preprocessTrustLabels(text);
   return (
     <div className={PROSE_CLASSES}>
-      <ReactMarkdown components={EXTERNAL_LINK_COMPONENTS}>{text}</ReactMarkdown>
+      <ReactMarkdown
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, TRUST_BADGE_SANITIZE_SCHEMA]]}
+        components={EXTERNAL_LINK_COMPONENTS}
+      >
+        {processed}
+      </ReactMarkdown>
     </div>
   );
 });
@@ -764,7 +795,7 @@ const ResultMarkdownContent = memo(function ResultMarkdownContent({
   text: string;
   msgId: string;
 }) {
-  const processed = preprocessFootnotes(text, msgId);
+  const processed = preprocessFootnotes(preprocessTrustLabels(text), msgId);
   return (
     <div className={
       PROSE_CLASSES +
