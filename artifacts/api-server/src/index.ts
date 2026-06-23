@@ -166,7 +166,11 @@ async function clearOrphanedAnalyses() {
 }
 
 ensureExtensions()
-  .then(() => {
+  .then(async () => {
+    // Warm up the embedding model BEFORE accepting traffic so the first
+    // farmer upload never pays the ONNX cold-start penalty (~2-5 s).
+    await warmupEmbeddingModel();
+
     app.listen(port, (err) => {
       if (err) {
         logger.error({ err }, "Error listening on port");
@@ -182,12 +186,11 @@ ensureExtensions()
       startScheduler();
       void clearOrphanedAnalyses();
 
-      // Load local embedding model in background, then migrate legacy docs and
-      // run any pending ingestions. Server is already accepting requests.
-      void warmupEmbeddingModel()
-        .then(() => reembedLegacyDocs())
+      // Migrate legacy docs and resume pending ingestions in the background
+      // now that the model is already hot.
+      void reembedLegacyDocs()
         .then(() => resumePendingIngestions())
-        .catch((err) => logger.error({ err }, "Embedding-Startup fehlgeschlagen"));
+        .catch((err) => logger.error({ err }, "Post-Startup-Ingestion fehlgeschlagen"));
     });
   })
   .catch((err) => {
