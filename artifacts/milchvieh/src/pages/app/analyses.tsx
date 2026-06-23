@@ -729,6 +729,20 @@ function preprocessTrustLabels(text: string): string {
     .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general">💭 Allgemeinwissen</span>');
 }
 
+// Extract de-duplicated trust sources present in a message text.
+// Returns an ordered array of the sources that appear (library → web → general).
+type TrustSource = { label: string; className: string };
+function extractTrustSources(text: string): TrustSource[] {
+  const sources: TrustSource[] = [];
+  if (/\*\[📚 Bibliothek\]\*/.test(text))
+    sources.push({ label: "📚 Bibliothek", className: "trust-badge trust-badge-library" });
+  if (/\*\[🌐 Web\]\*/.test(text))
+    sources.push({ label: "🌐 Web", className: "trust-badge trust-badge-web" });
+  if (/\*\[💭 Allgemeinwissen\]\*/.test(text))
+    sources.push({ label: "💭 Allgemeinwissen", className: "trust-badge trust-badge-general" });
+  return sources;
+}
+
 // Strict sanitize schema: only allow <sup>, <span>, and <a> elements introduced by
 // preprocessFootnotes / preprocessTrustLabels. Everything else the LLM might emit
 // as raw HTML is stripped.
@@ -1262,6 +1276,16 @@ const ResultCard = memo(function ResultCard({
       </div>
       {!collapsed && (
         <div className="px-4 py-3 space-y-3">
+          {(() => {
+            const sources = extractTrustSources(msg.content ?? "");
+            return sources.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                {sources.map((s) => (
+                  <span key={s.label} className={s.className}>{s.label}</span>
+                ))}
+              </div>
+            ) : null;
+          })()}
           <ResultMarkdownContent text={msg.content ?? ""} msgId={msg.id} />
           {msg.citations && msg.citations.length > 0 && (
             <div className="pt-2 border-t border-border/40 space-y-1.5">
