@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   datasetsTable,
@@ -29,6 +29,7 @@ import {
 import { requireAuth } from "../lib/auth";
 import { serializeDataset, mapDatasetStatus, normalizeSector } from "../lib/serializers";
 import { computeDashboard, getDatasetSchema } from "../lib/compute";
+import { canReadDataset, getActiveHostIds } from "../lib/teamAccess";
 
 const router: IRouter = Router();
 
@@ -56,10 +57,34 @@ async function ownDataset(
 }
 
 router.get("/datasets", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const hostId = req.query.hostId as string | undefined;
+
+  if (hostId) {
+    // Guest mode: return the host's datasets if the user has active guest access
+    const hostIds = await getActiveHostIds(userId);
+    if (!hostIds.includes(hostId)) {
+      res.status(403).json({ error: "Kein Zugriff auf diese Betriebe." });
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(datasetsTable)
+      .where(eq(datasetsTable.userId, hostId))
+      .orderBy(desc(datasetsTable.createdAt));
+    const out = [];
+    for (const d of rows) {
+      const c = await counts(d.id);
+      out.push({ ...serializeDataset(d, c.fileCount, c.rowCount), isShared: true });
+    }
+    res.json(out);
+    return;
+  }
+
   const rows = await db
     .select()
     .from(datasetsTable)
-    .where(eq(datasetsTable.userId, req.userId!))
+    .where(eq(datasetsTable.userId, userId))
     .orderBy(desc(datasetsTable.createdAt));
   const out = [];
   for (const d of rows) {
@@ -99,10 +124,17 @@ router.post("/datasets", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/datasets/:datasetId", requireAuth, async (req: Request, res: Response) => {
   const { datasetId } = GetDatasetParams.parse(req.params);
-  const d = await ownDataset(datasetId, req.userId!);
+  const userId = req.userId!;
+  let d = await ownDataset(datasetId, userId);
   if (!d) {
-    res.status(404).json({ error: "Datensatz nicht gefunden" });
-    return;
+    // Check guest access
+    if (!(await canReadDataset(datasetId, userId))) {
+      res.status(404).json({ error: "Datensatz nicht gefunden" });
+      return;
+    }
+    const [shared] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, datasetId));
+    d = shared ?? null;
+    if (!d) { res.status(404).json({ error: "Datensatz nicht gefunden" }); return; }
   }
   const c = await counts(d.id);
   res.json(GetDatasetResponse.parse(serializeDataset(d, c.fileCount, c.rowCount)));
@@ -178,10 +210,16 @@ router.get(
   requireAuth,
   async (req: Request, res: Response) => {
     const { datasetId } = GetDatasetOverviewParams.parse(req.params);
-    const d = await ownDataset(datasetId, req.userId!);
+    const userId = req.userId!;
+    let d = await ownDataset(datasetId, userId);
     if (!d) {
-      res.status(404).json({ error: "Datensatz nicht gefunden" });
-      return;
+      if (!(await canReadDataset(datasetId, userId))) {
+        res.status(404).json({ error: "Datensatz nicht gefunden" });
+        return;
+      }
+      const [shared] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, datasetId));
+      d = shared ?? null;
+      if (!d) { res.status(404).json({ error: "Datensatz nicht gefunden" }); return; }
     }
     const { kpis, charts } = await computeDashboard(datasetId);
     const [w] = await db
@@ -243,8 +281,9 @@ router.get(
   requireAuth,
   async (req: Request, res: Response) => {
     const { datasetId } = GetQuestionSuggestionsParams.parse(req.params);
-    const d = await ownDataset(datasetId, req.userId!);
-    if (!d) {
+    const userId = req.userId!;
+    const allowed = await ownDataset(datasetId, userId) !== null || await canReadDataset(datasetId, userId);
+    if (!allowed) {
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }

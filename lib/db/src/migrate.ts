@@ -271,4 +271,30 @@ export async function ensureExtensions(): Promise<void> {
       processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Migration: team invitations for Pro-plan users
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS team_invites (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      host_user_id TEXT NOT NULL,
+      guest_email TEXT NOT NULL,
+      guest_user_id TEXT,
+      token UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days',
+      accepted_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
+      transition_ends_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS team_invites_host_idx ON team_invites (host_user_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS team_invites_guest_user_idx ON team_invites (guest_user_id)"
+  );
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS team_invites_token_idx ON team_invites (token)"
+  );
 }

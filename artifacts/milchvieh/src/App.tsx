@@ -136,6 +136,7 @@ import { DatenschutzPage } from "@/pages/Datenschutz";
 import { LandingPage } from "@/pages/LandingPage";
 import { CookieBanner } from "@/components/CookieBanner";
 import { UpgradePage } from "@/pages/app/upgrade";
+import { TeamAcceptPage } from "@/pages/app/team-accept";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -201,6 +202,10 @@ const clerkAppearance = {
     formFieldSuccessText: "text-sm text-[#2b5242]",
   },
 };
+
+function TeamAcceptPageWrapper() {
+  return <TeamAcceptPage />;
+}
 
 function SignInPage() {
   return (
@@ -467,6 +472,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/datenschutz" component={DatenschutzPage} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route path="/team/accept/:token" component={TeamAcceptPageWrapper} />
             <Route path="/app" component={ProtectedApp} />
             <Route path="/app/*" component={ProtectedApp} />
             <Route component={NotFound} />

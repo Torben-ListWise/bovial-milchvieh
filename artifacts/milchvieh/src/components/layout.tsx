@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
-import { useUser, useClerk } from "@clerk/react";
+import { useUser, useClerk, useAuth } from "@clerk/react";
 import { useGetDataset } from "@workspace/api-client-react";
 import { 
   Home, 
@@ -26,7 +26,35 @@ import {
   Menu,
   X,
   Bot,
+  Users,
 } from "lucide-react";
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+
+type HostEntry = { hostUserId: string; hostName: string; hostEmail: string | null };
+
+function useMyHosts() {
+  const { getToken } = useAuth();
+  const [hosts, setHosts] = useState<HostEntry[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/api/team/my-hosts`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!cancelled && res.ok) {
+          setHosts(await res.json());
+        }
+      } catch { }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  return hosts;
+}
 
 const SECTOR_META: Record<string, { icon: React.ElementType; label: string }> = {
   dairy:  { icon: Milk,  label: "Milchvieh" },
@@ -104,6 +132,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
   const [location, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const hosts = useMyHosts();
 
   const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("navCollapsed") !== "false";
@@ -189,33 +218,73 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
 
   function NavItems({ onClick }: { onClick?: () => void }) {
     return (
-      <ul className="space-y-0.5 px-2">
-        {navItems.map((item) => {
-          const isActive = currentPath.startsWith(item.href);
-          const Icon = item.icon;
-          const href = item.preserveDataset ? `${item.href}${datasetQuery}` : item.href;
-          return (
-            <li key={item.name}>
-              <Link href={href}>
-                <div
-                  onClick={onClick}
-                  title={navCollapsed ? item.name : undefined}
-                  className={cn(
-                    "flex items-center rounded-md text-sm font-medium transition-colors cursor-pointer min-h-[44px] md:min-h-0",
-                    navCollapsed ? "px-2 py-2 justify-center md:min-h-0" : "px-3 py-2",
-                    isActive 
-                      ? "border-l-2 border-primary bg-primary/8 text-primary" 
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <Icon className={cn("w-5 h-5 md:w-4 md:h-4 shrink-0", !navCollapsed && "mr-3")} />
-                  {!navCollapsed && item.name}
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <>
+        <ul className="space-y-0.5 px-2">
+          {navItems.map((item) => {
+            const isActive = currentPath.startsWith(item.href);
+            const Icon = item.icon;
+            const href = item.preserveDataset ? `${item.href}${datasetQuery}` : item.href;
+            return (
+              <li key={item.name}>
+                <Link href={href}>
+                  <div
+                    onClick={onClick}
+                    title={navCollapsed ? item.name : undefined}
+                    className={cn(
+                      "flex items-center rounded-md text-sm font-medium transition-colors cursor-pointer min-h-[44px] md:min-h-0",
+                      navCollapsed ? "px-2 py-2 justify-center md:min-h-0" : "px-3 py-2",
+                      isActive 
+                        ? "border-l-2 border-primary bg-primary/8 text-primary" 
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    <Icon className={cn("w-5 h-5 md:w-4 md:h-4 shrink-0", !navCollapsed && "mr-3")} />
+                    {!navCollapsed && item.name}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        {/* Shared hosts section (only for customer view) */}
+        {viewMode === 'customer' && hosts.length > 0 && (
+          <div className="px-2 mt-3">
+            {!navCollapsed && (
+              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-1 mb-1">
+                Geteilte Betriebe
+              </p>
+            )}
+            <ul className="space-y-0.5">
+              {hosts.map((host) => {
+                const hostHref = `/app/datasets?hostId=${host.hostUserId}`;
+                const isActive = currentPath.startsWith('/app/datasets') && location.includes(`hostId=${host.hostUserId}`);
+                return (
+                  <li key={host.hostUserId}>
+                    <Link href={hostHref}>
+                      <div
+                        onClick={onClick}
+                        title={navCollapsed ? host.hostName : undefined}
+                        className={cn(
+                          "flex items-center rounded-md text-sm font-medium transition-colors cursor-pointer min-h-[44px] md:min-h-0",
+                          navCollapsed ? "px-2 py-2 justify-center md:min-h-0" : "px-3 py-2",
+                          isActive
+                            ? "border-l-2 border-primary bg-primary/8 text-primary"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        )}
+                      >
+                        <Users className={cn("w-5 h-5 md:w-4 md:h-4 shrink-0", !navCollapsed && "mr-3")} />
+                        {!navCollapsed && (
+                          <span className="truncate">{host.hostName}</span>
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -404,6 +473,38 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
               );
             })}
           </ul>
+          {/* Shared hosts (mobile) */}
+          {viewMode === 'customer' && hosts.length > 0 && (
+            <div className="px-3 mt-3">
+              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-3 mb-1">
+                Geteilte Betriebe
+              </p>
+              <ul className="space-y-1">
+                {hosts.map((host) => {
+                  const hostHref = `/app/datasets?hostId=${host.hostUserId}`;
+                  const isActive = currentPath.startsWith('/app/datasets') && location.includes(`hostId=${host.hostUserId}`);
+                  return (
+                    <li key={host.hostUserId}>
+                      <Link href={hostHref}>
+                        <div
+                          onClick={() => setMobileDrawerOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 rounded-lg text-sm font-medium transition-colors cursor-pointer min-h-[48px]",
+                            isActive
+                              ? "border-l-2 border-primary bg-primary/8 text-primary"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          )}
+                        >
+                          <Users className="w-5 h-5 shrink-0" />
+                          <span className="truncate">{host.hostName}</span>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </nav>
 
         <hr className="border-border/40 mx-3" />

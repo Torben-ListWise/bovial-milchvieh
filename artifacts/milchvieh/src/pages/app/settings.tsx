@@ -1,10 +1,11 @@
 import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -416,6 +417,264 @@ function BillingSection() {
   );
 }
 
+// ── Team types ────────────────────────────────────────────────────────────────
+
+type TeamInvite = {
+  id: string;
+  guestEmail: string;
+  guestUserId: string | null;
+  guestName: string | null;
+  token: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  transitionEndsAt: string | null;
+};
+
+function useTeamInvites() {
+  const { getToken } = useAuth();
+  const [invites, setInvites] = useState<TeamInvite[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/team/invites`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) setInvites(await res.json());
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { invites, loading, reload: load };
+}
+
+function TeamSection({ billingPlan }: { billingPlan: string | null }) {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
+  const { invites, loading, reload } = useTeamInvites();
+  const [email, setEmail] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  const MAX_SLOTS = 3;
+  const isPro = billingPlan === "pro";
+
+  const activeInvites = invites?.filter((i) => i.status !== "revoked") ?? [];
+  const slotsLeft = MAX_SLOTS - activeInvites.length;
+
+  const BASE_PATH = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+
+  function inviteLink(token: string) {
+    return `${window.location.origin}${BASE_PATH}/team/accept/${token}`;
+  }
+
+  async function handleCreate() {
+    if (!email.trim() || slotsLeft <= 0) return;
+    setCreating(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/team/invites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ guestEmail: email.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Fehler", description: data.error ?? "Einladung fehlgeschlagen." });
+        return;
+      }
+      toast({ title: "Einladung erstellt", description: `Einladungslink für ${email.trim()} wurde erstellt.` });
+      setEmail("");
+      reload();
+    } catch {
+      toast({ variant: "destructive", title: "Fehler", description: "Verbindung fehlgeschlagen." });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    setRevoking(id);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/team/invites/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Fehler", description: data.error ?? "Widerrufen fehlgeschlagen." });
+        return;
+      }
+      toast({ title: "Einladung widerrufen", description: "Der Zugriff wird nach einer Übergangsfrist von 30 Tagen entzogen." });
+      reload();
+    } catch {
+      toast({ variant: "destructive", title: "Fehler", description: "Verbindung fehlgeschlagen." });
+    } finally {
+      setRevoking(null);
+    }
+  }
+
+  function copyLink(token: string) {
+    navigator.clipboard.writeText(inviteLink(token)).then(() => {
+      toast({ title: "Link kopiert" });
+    });
+  }
+
+  function statusBadge(invite: TeamInvite) {
+    if (invite.status === "revoked") {
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Widerrufen</span>;
+    }
+    if (invite.status === "accepted") {
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">Aktiv</span>;
+    }
+    const expired = new Date(invite.expiresAt) < new Date();
+    if (expired) {
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Abgelaufen</span>;
+    }
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Ausstehend</span>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-primary" />
+          Team-Einladungen
+        </CardTitle>
+        <CardDescription>
+          Lade bis zu 3 Personen ein, deine Betriebsdaten als Gast (nur Lesen) einzusehen.
+          {!isPro && " Nur im Pro-Tarif verfügbar."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {!isPro ? (
+          <div className="flex items-start gap-3 p-4 rounded-lg border border-primary/20 bg-primary/3">
+            <Crown className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium">Pro-Tarif erforderlich</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Team-Einladungen sind nur im Pro-Tarif verfügbar. Upgrade jetzt für unbegrenzte Analysen und 3 Team-Slots.
+              </p>
+              <Button asChild size="sm" className="mt-3 text-xs h-7">
+                <Link href="/app/upgrade">Jetzt upgraden</Link>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* New invite form */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Neue Einladung ({slotsLeft} von {MAX_SLOTS} Slots frei)</p>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="E-Mail-Adresse des Gastes"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  disabled={slotsLeft <= 0 || creating}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleCreate}
+                  disabled={!email.trim() || slotsLeft <= 0 || creating}
+                  className="gap-2 shrink-0"
+                >
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  Einladen
+                </Button>
+              </div>
+              {slotsLeft <= 0 && (
+                <p className="text-xs text-muted-foreground">Maximale Team-Größe erreicht. Widerrufe eine Einladung, um einen Slot freizugeben.</p>
+              )}
+            </div>
+
+            {/* Invite list */}
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Einladungen werden geladen…
+              </div>
+            ) : invites && invites.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Gesendete Einladungen</p>
+                <div className="divide-y border rounded-lg overflow-hidden">
+                  {invites.map((invite) => (
+                    <div key={invite.id} className="flex items-center gap-3 px-3 py-2.5 bg-card">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium truncate">{invite.guestEmail}</span>
+                          {statusBadge(invite)}
+                        </div>
+                        {invite.guestName && (
+                          <p className="text-xs text-muted-foreground">{invite.guestName}</p>
+                        )}
+                        {invite.status === "revoked" && invite.transitionEndsAt && new Date(invite.transitionEndsAt) > new Date() && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3 shrink-0" />
+                            Übergangsfrist bis {new Date(invite.transitionEndsAt).toLocaleDateString("de-DE")}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {invite.status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs gap-1"
+                            onClick={() => copyLink(invite.token)}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Link</span>
+                          </Button>
+                        )}
+                        {(invite.status === "pending" || invite.status === "accepted") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs text-destructive hover:text-destructive gap-1"
+                            onClick={() => handleRevoke(invite.id)}
+                            disabled={revoking === invite.id}
+                          >
+                            {revoking === invite.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <X className="w-3.5 h-3.5" />
+                            }
+                            <span className="hidden sm:inline">Widerrufen</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-2">Noch keine Einladungen gesendet.</p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TeamSectionWrapper() {
+  const { status } = useBillingStatus();
+  return <TeamSection billingPlan={status?.plan ?? null} />;
+}
+
 export function SettingsPage() {
   const { toast } = useToast();
   const { signOut } = useClerk();
@@ -494,6 +753,8 @@ export function SettingsPage() {
       <FocusAreasSection />
 
       <BillingSection />
+
+      <TeamSectionWrapper />
 
       <Card>
         <CardHeader>

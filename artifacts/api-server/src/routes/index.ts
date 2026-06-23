@@ -16,6 +16,7 @@ import templatesRouter from "./templates";
 import publicRouter from "./public";
 import checkoutRouter from "./checkout";
 import billingRouter from "./billing";
+import teamRouter from "./team";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(templatesRouter);
 router.use(publicRouter);
 router.use(checkoutRouter);
 router.use(billingRouter);
+router.use(teamRouter);
 
 export default router;

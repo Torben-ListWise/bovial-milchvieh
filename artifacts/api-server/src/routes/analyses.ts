@@ -29,6 +29,7 @@ import { logger } from "../lib/logger";
 import { categorizeQuestion } from "../lib/categorize";
 import { processQuestion } from "../lib/analysisService";
 import { sseWriters, type SseWriter } from "../lib/sseRegistry";
+import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
 
@@ -92,7 +93,9 @@ router.get(
   requireAuth,
   async (req: Request, res: Response) => {
     const { datasetId } = ListAnalysesParams.parse(req.params);
-    if (!(await ownDatasetId(datasetId, req.userId!))) {
+    const userId = req.userId!;
+    const canRead = (await ownDatasetId(datasetId, userId)) || (await canReadDataset(datasetId, userId));
+    if (!canRead) {
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }
@@ -132,7 +135,9 @@ router.post(
       res.status(400).json({ error: "Ungültige Eingabe" });
       return;
     }
-    if (!(await ownDatasetId(datasetId, req.userId!))) {
+    const userId = req.userId!;
+    const canCreate = (await ownDatasetId(datasetId, userId)) || (await canReadDataset(datasetId, userId));
+    if (!canCreate) {
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }

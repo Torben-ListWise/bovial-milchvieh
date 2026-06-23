@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const subscriptionsTable = pgTable("subscriptions", {
   userId: text("user_id").primaryKey(),
@@ -31,3 +31,20 @@ export const stripeEventsTable = pgTable("stripe_events", {
   eventId: text("event_id").primaryKey(),
   processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const teamInvitesTable = pgTable("team_invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hostUserId: text("host_user_id").notNull(),
+  guestEmail: text("guest_email").notNull(),
+  guestUserId: text("guest_user_id"),
+  token: uuid("token").notNull().unique().defaultRandom(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  transitionEndsAt: timestamp("transition_ends_at", { withTimezone: true }),
+});
+
+export type TeamInvite = typeof teamInvitesTable.$inferSelect;
+export type InsertTeamInvite = typeof teamInvitesTable.$inferInsert;
