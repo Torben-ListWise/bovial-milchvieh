@@ -48,6 +48,14 @@ const allowedOrigins = (() => {
   return [...base, ...extra];
 })();
 
+// In development, Replit serves the preview from dynamic *.repl.co /
+// *.janeway.repl.co subdomains that differ from REPLIT_DEV_DOMAIN.
+// Allow the whole .repl.co and .replit.dev families in non-production only.
+const isReplitPreviewOrigin = (origin: string) =>
+  origin.endsWith(".repl.co") ||
+  origin.endsWith(".replit.dev") ||
+  origin.endsWith(".replit.app");
+
 app.use(
   cors({
     credentials: true,
@@ -57,11 +65,16 @@ app.use(
         callback(null, true);
         return;
       }
+      // Dev-only: allow all Replit preview subdomains so the workspace
+      // iframe can reach the API without having to enumerate every dynamic URL.
+      if (process.env["NODE_ENV"] !== "production" && isReplitPreviewOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
       // In production with no allowlist configured, fail closed to prevent
       // credentialed cross-origin access from arbitrary origins.
       if (allowedOrigins.length === 0) {
         if (process.env["NODE_ENV"] !== "production") {
-          // Dev-only: fail open so the local Vite preview works without env setup.
           callback(null, true);
         } else {
           callback(new Error("CORS: no allowed origins configured in production"));

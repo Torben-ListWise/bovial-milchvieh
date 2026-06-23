@@ -48,15 +48,13 @@ export function FocusAreasOnboardingDialog({ open, onClose }: Props) {
   }
 
   function handleSkip() {
-    updateMe.mutate({ focusAreas: [] });
+    onClose();
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) return; }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent
         className="sm:max-w-lg"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle className="text-xl">Willkommen! Was ist dein Betriebsschwerpunkt?</DialogTitle>
