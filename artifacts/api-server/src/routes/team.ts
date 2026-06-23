@@ -130,7 +130,9 @@ router.delete("/team/invites/:id", requireAuth, async (req: Request, res: Respon
   }
 
   const now = new Date();
-  const transitionEndsAt = addDays(now, GRACE_DAYS);
+  const wasAccepted = rows[0].status === "accepted";
+  // Grace period only applies to accepted invites — a revoked pending invite frees its slot immediately
+  const transitionEndsAt = wasAccepted ? addDays(now, GRACE_DAYS) : null;
 
   await pool.query(
     `UPDATE team_invites
@@ -138,10 +140,10 @@ router.delete("/team/invites/:id", requireAuth, async (req: Request, res: Respon
          revoked_at = $1,
          transition_ends_at = $2
      WHERE id = $3::uuid AND host_user_id = $4`,
-    [now.toISOString(), transitionEndsAt.toISOString(), id, hostUserId],
+    [now.toISOString(), transitionEndsAt ? transitionEndsAt.toISOString() : null, id, hostUserId],
   );
 
-  res.json({ ok: true, transitionEndsAt });
+  res.json({ ok: true, transitionEndsAt: transitionEndsAt ?? null });
 });
 
 // ── GET /api/team/accept/:token — public, get invite info ──────────────────

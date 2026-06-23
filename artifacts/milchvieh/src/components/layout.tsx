@@ -204,8 +204,8 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true, guestHidden: false },
     { name: "Übersicht", href: "/app/overview", icon: BarChart2, preserveDataset: true, guestHidden: false },
     { name: "Dateien & Upload", href: "/app/upload", icon: Upload, preserveDataset: true, guestHidden: true },
-    { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle, preserveDataset: true, guestHidden: false },
-    { name: "Berichte", href: "/app/reports", icon: FileText, preserveDataset: true, guestHidden: false },
+    { name: "Warnungen", href: "/app/warnings", icon: AlertTriangle, preserveDataset: true, guestHidden: true },
+    { name: "Berichte", href: "/app/reports", icon: FileText, preserveDataset: true, guestHidden: true },
     { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true, guestHidden: true },
     { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false, guestHidden: false },
   ];

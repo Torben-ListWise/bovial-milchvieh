@@ -467,7 +467,13 @@ function TeamSection({ billingPlan }: { billingPlan: string | null }) {
   const MAX_SLOTS = 3;
   const isPro = billingPlan === "pro";
 
-  const activeInvites = invites?.filter((i) => i.status !== "revoked") ?? [];
+  const now = new Date();
+  const activeInvites = invites?.filter((i) => {
+    if (i.status === "pending") return !i.expiresAt || new Date(i.expiresAt) > now;
+    if (i.status === "accepted") return !i.revokedAt;
+    if (i.status === "revoked") return !!(i.transitionEndsAt && new Date(i.transitionEndsAt) > now);
+    return false;
+  }) ?? [];
   const slotsLeft = MAX_SLOTS - activeInvites.length;
 
   const BASE_PATH = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
