@@ -897,16 +897,20 @@ function FollowUpChips({
   questions,
   onAsk,
   fading = false,
+  exiting = false,
 }: {
   questions: string[];
   onAsk: (q: string) => void;
   fading?: boolean;
+  exiting?: boolean;
 }) {
   return (
     <div
-      className={`flex flex-col gap-2 pl-10 animate-in fade-in slide-in-from-bottom-1 transition-opacity duration-500 ${
-        fading ? "opacity-30 pointer-events-none" : "opacity-100"
-      }`}
+      className={`flex flex-col gap-2 pl-10 transition-opacity duration-500 ${
+        exiting
+          ? "animate-out fade-out slide-out-to-bottom-1 fill-mode-forwards"
+          : "animate-in fade-in slide-in-from-bottom-1"
+      } ${fading && !exiting ? "opacity-30 pointer-events-none" : exiting ? "pointer-events-none" : "opacity-100"}`}
     >
       <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
         <ChevronRight className="w-3 h-3" />
@@ -1359,6 +1363,9 @@ export function AnalysesPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
   const [pinnedChips, setPinnedChips] = useState<string[]>([]);
+  const [chipsExiting, setChipsExiting] = useState(false);
+  const lastChipsRef = useRef<string[]>([]);
+  const chipsExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatWidth, setChatWidth] = useState<number>(() => {
     const saved = sessionStorage.getItem("chatPanelWidth");
     return saved ? Math.max(200, Math.min(700, parseInt(saved, 10))) : 320;
@@ -1558,22 +1565,37 @@ export function AnalysesPage() {
   // Step 5 — Pin chips: update pinned set whenever fresh chips arrive
   useEffect(() => {
     if (chatFollowUpQuestions.length > 0) {
+      if (chipsExitTimerRef.current) {
+        clearTimeout(chipsExitTimerRef.current);
+        chipsExitTimerRef.current = null;
+      }
+      setChipsExiting(false);
+      lastChipsRef.current = chatFollowUpQuestions;
       setPinnedChips(chatFollowUpQuestions);
     }
   }, [followUpQuestionsKey]);
 
-  // Clear pinned chips when the analysis switches
+  // Clear pinned chips when the analysis switches (no animation — full UI refresh)
   useEffect(() => {
+    if (chipsExitTimerRef.current) {
+      clearTimeout(chipsExitTimerRef.current);
+      chipsExitTimerRef.current = null;
+    }
+    setChipsExiting(false);
     setPinnedChips([]);
   }, [activeAnalysisId]);
 
-  // Clear pinned chips once a new assistant message starts arriving
-  // (i.e. the agent has started responding to the new question)
+  // Clear pinned chips once a new assistant message starts arriving — animate out first
   const lastMsgId = (analysis?.messages ?? []).at(-1)?.id;
   const lastMsgRole = (analysis?.messages ?? []).at(-1)?.role;
   useEffect(() => {
-    if (lastMsgRole === "assistant") {
-      setPinnedChips([]);
+    if (lastMsgRole === "assistant" && pinnedChips.length > 0) {
+      setChipsExiting(true);
+      chipsExitTimerRef.current = setTimeout(() => {
+        setPinnedChips([]);
+        setChipsExiting(false);
+        chipsExitTimerRef.current = null;
+      }, 350);
     }
   }, [lastMsgId]);
 
@@ -2086,11 +2108,12 @@ export function AnalysesPage() {
               <AgentWorkingBanner currentStep={currentStep} />
             )}
 
-          {pinnedChips.length > 0 && (
+          {(pinnedChips.length > 0 || chipsExiting) && (
             <FollowUpChips
-              questions={pinnedChips}
+              questions={pinnedChips.length > 0 ? pinnedChips : lastChipsRef.current}
               onAsk={handleSubmit}
               fading={isAgentWorking}
+              exiting={chipsExiting}
             />
           )}
 
