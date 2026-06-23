@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation, useSearch } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -129,7 +129,7 @@ import { KnowledgePage } from "@/pages/operator/knowledge";
 import { OperatorTemplatesPage } from "@/pages/operator/templates";
 import { FocusAreasOnboardingDialog } from "@/components/FocusAreasOnboardingDialog";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
-import { useSearch, useLocation } from "wouter";
+import { GuestAnalysisPage } from "@/pages/app/guest-analysis";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -418,16 +418,25 @@ function HomeRedirect() {
 }
 
 function ProtectedApp() {
-  return (
-    <>
-      <Show when="signed-in">
-        <AppPortal />
-      </Show>
-      <Show when="signed-out">
-        <Redirect to="/" />
-      </Show>
-    </>
-  );
+  const { isSignedIn, isLoaded } = useAuth();
+  const search = useSearch();
+  const [location] = useLocation();
+
+  if (!isLoaded) {
+    return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
+  }
+
+  if (isSignedIn) {
+    return <AppPortal />;
+  }
+
+  // Allow unauthenticated users to read a shared analysis
+  const analysisId = new URLSearchParams(search).get("analysisId");
+  if (analysisId && location.startsWith("/app/analyses")) {
+    return <GuestAnalysisPage analysisId={analysisId} />;
+  }
+
+  return <Redirect to="/" />;
 }
 
 /**

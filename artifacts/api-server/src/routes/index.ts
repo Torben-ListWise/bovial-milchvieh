@@ -13,6 +13,7 @@ import adminRouter from "./admin";
 import privacyRouter from "./privacy";
 import { knowledgeRouter } from "./knowledge";
 import templatesRouter from "./templates";
+import publicRouter from "./public";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(adminRouter);
 router.use(privacyRouter);
 router.use(knowledgeRouter);
 router.use(templatesRouter);
+router.use(publicRouter);
 
 export default router;

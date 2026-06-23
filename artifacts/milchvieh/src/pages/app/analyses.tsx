@@ -1222,10 +1222,9 @@ const ResultCard = memo(function ResultCard({
   const { toast } = useToast();
 
   async function handleShare() {
-    const url = new URL(window.location.href);
-    url.searchParams.set("analysisId", analysisId);
-    url.searchParams.set("msgId", msg.id);
-    const shareUrl = url.toString();
+    // Generate a share URL that goes through the API share route so social
+    // media bots receive proper OG meta tags; browsers are redirected to the SPA.
+    const shareUrl = `${window.location.origin}/api/share/analyses/${encodeURIComponent(analysisId)}`;
     const shareData: ShareData = {
       title: headerLabel,
       text: `${headerLabel} – Milchvieh Analyse`,
