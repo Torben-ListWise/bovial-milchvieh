@@ -1,10 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createHash } from "node:crypto";
 import type {
-  BetaMessageParam,
-  BetaTool,
-  BetaToolUseBlock,
-} from "@anthropic-ai/sdk/resources/beta/messages/messages";
+  MessageParam,
+  Tool,
+  ToolUseBlock,
+} from "@anthropic-ai/sdk/resources/messages";
+import { createHash } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
   db,
@@ -108,7 +108,7 @@ function chartFromGroup(g: GroupAggregateResult, title: string, type: Chart["typ
   };
 }
 
-const TOOLS: BetaTool[] = [
+const TOOLS: Tool[] = [
   {
     name: "get_schema",
     description:
@@ -303,7 +303,6 @@ const TOOLS: BetaTool[] = [
       },
       required: ["title", "chartType", "source"],
     },
-    cache_control: { type: "ephemeral" },
   },
 ];
 
@@ -462,7 +461,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const citations: Citation[] = [];
   const { datasetId } = opts;
 
-  const messages: BetaMessageParam[] = opts.conversation.map((m) => ({
+  const messages: MessageParam[] = opts.conversation.map((m) => ({
     role: m.role,
     content: m.content,
   }));
@@ -496,15 +495,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const sectorCtx = SECTOR_CONTEXT[opts.sector ?? "dairy"] ?? SECTOR_CONTEXT.dairy;
   const SYSTEM_PROMPT = `${sectorCtx}\n\n${SYSTEM_PROMPT_BASE}`;
 
-  function buildSystemBlocks(docCtx: string, extra?: string) {
-    return [
-      { type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } },
-      docCtx ? { type: "text" as const, text: docCtx, cache_control: { type: "ephemeral" as const } } : null,
-      extra ? { type: "text" as const, text: extra } : null,
-    ].filter((b): b is NonNullable<typeof b> => b !== null);
+  function buildSystemString(docCtx: string, extra?: string): string {
+    let sys = SYSTEM_PROMPT;
+    if (docCtx) sys += "\n\n" + docCtx;
+    if (extra) sys += "\n\n" + extra;
+    return sys;
   }
 
-  async function execTool(block: BetaToolUseBlock): Promise<unknown> {
+  async function execTool(block: ToolUseBlock): Promise<unknown> {
     const input = (block.input ?? {}) as Record<string, unknown>;
     const metric = input.metric as string | undefined;
     switch (block.name) {
@@ -950,30 +948,23 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const stream = client.beta.messages.stream({
+    // Use non-streaming messages.create — client.messages.stream() returns HTTP
+    // 200 then sends an error event in the SSE body for claude-sonnet-4-5,
+    // which the SDK surfaces as an _APIError with status=undefined.
+    const response = await client.messages.create({
       model: MODEL,
       max_tokens: 8192,
-      system: buildSystemBlocks(
+      system: buildSystemString(
         docContext,
         ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
       ),
       tools: TOOLS,
-      // tool_choice "any" causes 500 errors on claude-sonnet-4-5; grounding is
-      // enforced via the system prompt instead.
       tool_choice: { type: "auto" },
       messages,
     });
-
-    // Stream text tokens to the SSE listener as they arrive
-    if (opts.onTextDelta) {
-      stream.on("text", (delta) => opts.onTextDelta!(delta));
-    }
-
-    const response = await stream.finalMessage();
     logger.debug({
-      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
-      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
       input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
     }, "Anthropic usage");
 
     const textParts = response.content
@@ -983,7 +974,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
     if (response.stop_reason === "tool_use") {
       const toolUses = response.content.filter(
-        (b): b is BetaToolUseBlock => b.type === "tool_use",
+        (b): b is ToolUseBlock => b.type === "tool_use",
       );
       // emit_chart is valid when:
       // - follow-up turn (numbers already grounded in prior turn), OR
@@ -1015,6 +1006,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       continue;
     }
     break;
+  }
+
+  // Emit the full final text as a single delta once all turns are complete.
+  // (Switched from streaming to non-streaming to work around a streaming
+  // endpoint bug in claude-sonnet-4-5 that returns 200 then errors in-stream.)
+  if (finalText && opts.onTextDelta) {
+    opts.onTextDelta(finalText);
   }
 
   // Grounding enforcement: if the model returned text without calling any
@@ -1056,16 +1054,15 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       // Do NOT pass tools — verification is a pure text review.
       // Include docContext so the verifier can see PDF content and won't
       // incorrectly flag document-sourced numbers as ungrounded.
-      const verifyResponse = await client.beta.messages.create({
+      const verifyResponse = await client.messages.create({
         model: MODEL,
         max_tokens: 4096,
-        system: buildSystemBlocks(docContext, ((opts.systemExtra ?? "") + knowledgeTitles) || undefined),
+        system: buildSystemString(docContext, ((opts.systemExtra ?? "") + knowledgeTitles) || undefined),
         messages: verifyMessages,
       });
       logger.debug({
-        cache_creation_input_tokens: verifyResponse.usage.cache_creation_input_tokens ?? 0,
-        cache_read_input_tokens: verifyResponse.usage.cache_read_input_tokens ?? 0,
         input_tokens: verifyResponse.usage.input_tokens,
+        output_tokens: verifyResponse.usage.output_tokens,
       }, "Anthropic usage (verify)");
       const verifiedText = verifyResponse.content
         .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
