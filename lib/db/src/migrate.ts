@@ -86,7 +86,12 @@ export async function ensureExtensions(): Promise<void> {
       ('Flächenverteilung & Fruchtfolge', '🗺️', 'Flächenverteilung nach Kulturen und Fruchtfolgenbewertung', 'Zeige die aktuelle Flächenverteilung nach Kulturen als Kreisdiagramm. Bewerte die Fruchtfolge.', 'ackerbau', 310),
       ('Niederschlag vs. Ertrag', '💧', 'Zusammenhang Niederschlag und Erträge', 'Analysiere den Zusammenhang zwischen Niederschlag/Bewässerung und Erträgen. Gibt es kritische Trockenphasen?', 'ackerbau', 320),
       ('Deckungsbeiträge', '💰', 'Deckungsbeiträge je Kulturart', 'Berechne und vergleiche die Deckungsbeiträge (€/ha) je Kulturart. Welche Kultur ist wirtschaftlich am stärksten?', 'ackerbau', 330),
-      ('Gesamt-Betriebsspiegel (Ackerbau)', '📊', 'Vollständiger Betriebsspiegel Ackerbau', 'Erstelle einen vollständigen Betriebsspiegel: alle Kern-KPIs, Vergleich Richtwerte, Top-3 Empfehlungen.', 'ackerbau', 340)
+      ('Gesamt-Betriebsspiegel (Ackerbau)', '📊', 'Vollständiger Betriebsspiegel Ackerbau', 'Erstelle einen vollständigen Betriebsspiegel: alle Kern-KPIs, Vergleich Richtwerte, Top-3 Empfehlungen.', 'ackerbau', 340),
+      ('Legeleistungs-Trend', '🥚', 'Tägliche Legeleistung je Herde und Zeitraum', 'Analysiere die tägliche Legeleistung (Eier/Henne/Tag) je Herde über den hochgeladenen Zeitraum. Zeige den Trend, identifiziere Einbrüche und vergleiche mit dem Richtwert aus den Stammdaten.', 'geflügel', 500),
+      ('Futterverwertung Masthähnchen', '🌽', 'Futterverwertungsquotient und Kosten je kg Zuwachs (Broiler)', 'Berechne den Futterverwertungsquotienten (kg Futter / kg Zuwachs) je Mastdurchgang für Masthähnchen. Vergleiche mit Stammdaten-Richtwerten und zeige Optimierungspotenzial bei Futterkosten je kg Lebendgewicht.', 'geflügel', 510),
+      ('Tierverluste & Abgangsursachen', '⚠️', 'Verluste nach Altersgruppe, Ursache und Trend', 'Analysiere die Tierverluste der letzten 6 Monate: Aufschlüsselung nach Alter/Nutzungsrichtung (Küken, Junghennen, Legehennen, Mastgeflügel), Verlustursachen als Kreisdiagramm und zeitlicher Trend. Gibt es kritische Häufungen oder saisonale Muster?', 'geflügel', 520),
+      ('Stallklima & Erkrankungen', '🌡️', 'Klimaparameter und Zusammenhang mit Gesundheitsstörungen', 'Analysiere die Stallklimadaten (Temperatur, Luftfeuchtigkeit, NH₃-Werte) und setze sie in Beziehung zu Erkrankungs- und Verlustzahlen. Gibt es Schwellenwertüberschreitungen oder kritische Zeiträume?', 'geflügel', 530),
+      ('Schlachtleistungsvergleich Geflügel', '🏆', 'Schlachtgewicht, Ausbeute und Auszahlungspreis je Partie', 'Vergleiche die Schlachtleistung meiner Mastpartien: Schlachtgewicht, Ausbeute (%), Klasseneinteilung und erzielter Auszahlungspreis. Welche Partien liegen über bzw. unter dem Durchschnitt? Zeige den Trend über die letzten Durchgänge.', 'geflügel', 540)
     `);
   } else {
     // Seed Biogas and Ackerbau templates if not yet present
@@ -127,6 +132,19 @@ export async function ensureExtensions(): Promise<void> {
         ('Umrauschrate & Fruchtbarkeit', '🐷', 'Umrauschrate, Abferkelrate und Wurfgröße', 'Analysiere die Fruchtbarkeitskennzahlen meiner Sauenherde: Umrauschrate, Abferkelrate und durchschnittliche Wurfgröße (lebend geborene Ferkel). Vergleiche mit Richtwerten und zeige Trends über die letzten Durchgänge.', 'schweine', 420),
         ('Abgänge & Verluste', '⚠️', 'Verluste nach Altersgruppe, Ursache und Zeitraum', 'Analysiere die Tierverluste der letzten 6 Monate: Aufschlüsselung nach Altersgruppe (Ferkel, Läufer, Mastschweine, Sauen), Verlustursachen als Kreisdiagramm und Trend. Gibt es kritische Häufungen oder saisonale Muster?', 'schweine', 430),
         ('Schlachtleistungs-Vergleich', '🏆', 'Schlachtgewicht, MFA und Auszahlungspreis je Partie', 'Vergleiche die Schlachtleistung meiner Mastpartien: Schlachtgewicht, Muskelfleischanteil (MFA), Handelsklassenverteilung und erzielter Auszahlungspreis. Welche Partien liegen über bzw. unter dem Durchschnitt? Zeige den Trend.', 'schweine', 440)
+      `);
+    }
+    const { rows: geflügelRows } = await pool.query(
+      "SELECT COUNT(*)::int as c FROM analysis_templates WHERE category_tag = 'geflügel'"
+    );
+    if ((geflügelRows[0]?.c ?? 0) === 0) {
+      await pool.query(`
+        INSERT INTO analysis_templates (title, emoji, short_description, prompt_text, category_tag, sort_order) VALUES
+        ('Legeleistungs-Trend', '🥚', 'Tägliche Legeleistung je Herde und Zeitraum', 'Analysiere die tägliche Legeleistung (Eier/Henne/Tag) je Herde über den hochgeladenen Zeitraum. Zeige den Trend, identifiziere Einbrüche und vergleiche mit dem Richtwert aus den Stammdaten.', 'geflügel', 500),
+        ('Futterverwertung Masthähnchen', '🌽', 'Futterverwertungsquotient und Kosten je kg Zuwachs (Broiler)', 'Berechne den Futterverwertungsquotienten (kg Futter / kg Zuwachs) je Mastdurchgang für Masthähnchen. Vergleiche mit Stammdaten-Richtwerten und zeige Optimierungspotenzial bei Futterkosten je kg Lebendgewicht.', 'geflügel', 510),
+        ('Tierverluste & Abgangsursachen', '⚠️', 'Verluste nach Altersgruppe, Ursache und Trend', 'Analysiere die Tierverluste der letzten 6 Monate: Aufschlüsselung nach Alter/Nutzungsrichtung (Küken, Junghennen, Legehennen, Mastgeflügel), Verlustursachen als Kreisdiagramm und zeitlicher Trend. Gibt es kritische Häufungen oder saisonale Muster?', 'geflügel', 520),
+        ('Stallklima & Erkrankungen', '🌡️', 'Klimaparameter und Zusammenhang mit Gesundheitsstörungen', 'Analysiere die Stallklimadaten (Temperatur, Luftfeuchtigkeit, NH₃-Werte) und setze sie in Beziehung zu Erkrankungs- und Verlustzahlen. Gibt es Schwellenwertüberschreitungen oder kritische Zeiträume?', 'geflügel', 530),
+        ('Schlachtleistungsvergleich Geflügel', '🏆', 'Schlachtgewicht, Ausbeute und Auszahlungspreis je Partie', 'Vergleiche die Schlachtleistung meiner Mastpartien: Schlachtgewicht, Ausbeute (%), Klasseneinteilung und erzielter Auszahlungspreis. Welche Partien liegen über bzw. unter dem Durchschnitt? Zeige den Trend über die letzten Durchgänge.', 'geflügel', 540)
       `);
     }
   }
