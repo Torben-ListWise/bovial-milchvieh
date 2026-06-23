@@ -1391,7 +1391,7 @@ components:
           type: ["string", "null"]
         sourceType:
           type: string
-          enum: [betriebsdaten, pdf, wissen]
+          enum: [betriebsdaten, pdf, wissen, web]
           nullable: true
         shortLabel:
           type: ["string", "null"]

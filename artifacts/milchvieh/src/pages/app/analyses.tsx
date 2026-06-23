@@ -1221,7 +1221,8 @@ const ResultCard = memo(function ResultCard({
                   const icon =
                     c.sourceType === "betriebsdaten" ? "📊" :
                     c.sourceType === "pdf" ? "📄" :
-                    c.sourceType === "wissen" ? "📚" : "📌";
+                    c.sourceType === "wissen" ? "📚" :
+                    c.sourceType === "web" ? "🌐" : "📌";
                   return (
                     <span
                       key={i}

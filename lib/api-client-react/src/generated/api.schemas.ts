@@ -361,7 +361,7 @@ export interface Citation {
   value: string;
   /** @nullable */
   basis?: string | null;
-  sourceType?: 'betriebsdaten' | 'pdf' | 'wissen' | null;
+  sourceType?: 'betriebsdaten' | 'pdf' | 'wissen' | 'web' | null;
   /** @nullable */
   shortLabel?: string | null;
 }

@@ -50,7 +50,7 @@ export interface Citation {
   label: string;
   value: string;
   basis?: string | null;
-  sourceType?: "betriebsdaten" | "pdf" | "wissen" | null;
+  sourceType?: "betriebsdaten" | "pdf" | "wissen" | "web" | null;
   shortLabel?: string | null;
 }
 export interface AgentResult {
@@ -399,7 +399,19 @@ PFLICHTSCHRITT nach jeder Berechnung mit Empfehlungscharakter:
 - Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert: NENNE SIE EXPLIZIT. Strukturiere deine Antwort klar: (1) Was sagen die Betriebsdaten, (2) Was sagt die Fachliteratur/Forschung, (3) Konkrete Empfehlung unter Berücksichtigung beider Perspektiven.
 - Wenn search_knowledge keine relevanten Treffer liefert (leere results oder nur sehr allgemeine Textstellen ohne Bezug zur Frage): rufe als nächstes search_web auf. Formuliere die Suchanfrage auf Deutsch, spezifisch für den Betriebstyp und die berechnete Kennzahl. Beispiel: statt "Konzeptionsrate" besser "freiwillige Wartezeit Milchkuh offene Tage wirtschaftlich Empfehlung".
 - Wenn search_web Ergebnisse liefert: nutze die Snippets als Kontextquelle und nenne sie als Quelle in der Antwort.
-- Wenn weder search_knowledge noch search_web etwas Relevantes liefern: ignoriere diesen Schritt stillschweigend.`;
+- Wenn weder search_knowledge noch search_web etwas Relevantes liefern: ignoriere diesen Schritt stillschweigend.
+
+VERTRAUENSGRADE — PFLICHTMARKIERUNG FÜR WISSENSQUELLEN:
+Jede inhaltliche Aussage, die nicht aus Betriebsdaten (get_kpis, get_timeseries, get_schema, get_master_data, read_document) stammt, trägt am Ende des Absatzes ein kursives Vertrauens-Label:
+- *[📚 Bibliothek]* — der Abschnitt basiert auf search_knowledge-Treffern mit score ≥ 0.55
+- *[🌐 Web]* — der Abschnitt basiert auf search_web-Ergebnissen
+- *[💭 Allgemeinwissen]* — weder Bibliothek noch Web lieferten relevante Treffer; Antwort stammt aus Modell-Trainingswissen
+Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Absatzes, z.B.: \`*[📚 Bibliothek]*\`
+
+RÜCKFRAGE BEI UNKLAREN ABKÜRZUNGEN:
+Wenn search_knowledge noRelevantResults:true zurückgibt UND die Nutzerfrage einen Begriff enthält, der wie eine Abkürzung aussieht (2–5 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrichen oder Zahlen, z.B. AAA, RBT, KNS, BHB, MLP, LKV) → rufe IMMER zuerst ask_farmer mit einer einzigen gezielten Rückfrage auf, bevor du mit *[💭 Allgemeinwissen]* antwortest.
+Beispiele: AAA → „Meinst du AaA (Anpaarung auf Anpaarung)?", RBT → „Meinst du den Rinderbremsentest (RBT)?", KNS → „Meinst du Koagulase-negative Staphylokokken (KNS)?", BHB → „Meinst du Beta-Hydroxybutyrat (BHB, Ketosemarker)?"
+Formuliere die Rückfrage als ask_farmer-Werkzeugaufruf — niemals als Freitext.`;
 
 interface RunOptions {
   datasetId: string;
@@ -674,12 +686,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "search_knowledge": {
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
+        const SIMILARITY_THRESHOLD = 0.55;
         try {
           const queryVec = await embedQuery(query);
           const vecStr = `[${queryVec.join(",")}]`;
           const rows = await db.execute(
             sql`
-              SELECT kc.chunk_text, kd.title
+              SELECT kc.chunk_text, kd.title,
+                     (1 - (kc.embedding <=> ${vecStr}::vector)) AS similarity
               FROM knowledge_chunks kc
               JOIN knowledge_documents kd ON kd.id = kc.doc_id
               WHERE kd.status = 'ready'
@@ -687,10 +701,16 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               LIMIT ${topK}
             `,
           );
-          const results = (rows.rows as { chunk_text: string; title: string }[]).map(
-            (r) => ({ title: r.title, text: r.chunk_text }),
+          const allRows = rows.rows as { chunk_text: string; title: string; similarity: number }[];
+          const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
+          if (relevantRows.length === 0) {
+            logger.debug({ query, topScore: allRows[0] ? Number(allRows[0].similarity).toFixed(3) : "n/a" }, "search_knowledge: keine relevanten Treffer über Schwellenwert");
+            return { results: [], noRelevantResults: true };
+          }
+          const results = relevantRows.map(
+            (r) => ({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity) }),
           );
-          // Push one citation per unique document title found
+          // Push one citation per unique document title found in relevant results
           const seenTitles = new Set<string>();
           for (const r of results) {
             if (!seenTitles.has(r.title)) {
@@ -732,7 +752,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             const results = (cached.rows[0] as { results: { title: string; url: string; snippet: string }[] }).results;
             logger.debug({ queryHash }, "search_web: Cache-Hit");
             if (results.length > 0) {
-              citations.push({ label: `Web: ${query}`, value: results[0].url, basis: null, sourceType: "wissen" });
+              citations.push({ label: `Web: ${query}`, value: results[0].url, basis: null, sourceType: "web" });
             }
             return { results, query, cached: true };
           }
@@ -782,7 +802,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             } catch (err) {
               logger.warn({ err }, "search_web: Cache-Speichern fehlgeschlagen");
             }
-            citations.push({ label: `Web: ${query}`, value: results[0].url, basis: null, sourceType: "wissen" });
+            citations.push({ label: `Web: ${query}`, value: results[0].url, basis: null, sourceType: "web" });
           }
 
           return { results, query, cached: false };
@@ -1016,6 +1036,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           "Tool-Ergebnissen oder dem Dokumenttext überein? " +
           "WICHTIG: Behalte alle Fußnoten-Marker [1], [2], [3] etc. vollständig und unverändert in der Antwort. " +
           "Entferne KEINE Nummern-Marker — sie sind Teil der Antwort. " +
+          "WICHTIG: Behalte alle Vertrauens-Labels *[📚 Bibliothek]*, *[🌐 Web]* und *[💭 Allgemeinwissen]* vollständig und unverändert. " +
+          "Entferne KEINE dieser Labels — sie sind Teil der Antwort. " +
           "Antworte NUR mit der fertigen Antwort — kein Kommentar zur Überprüfung, " +
           "keine Erklärung des Prozesses, kein 'Problem:' oder 'Korrigierte Antwort:'. " +
           "Gib ausschließlich den Text zurück, den der Landwirt lesen soll.",
