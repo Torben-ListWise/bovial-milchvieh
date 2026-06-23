@@ -12,7 +12,7 @@ import { logger } from "../lib/logger";
 import { processQuestion } from "../lib/analysisService";
 import { normalizeSector } from "../lib/serializers";
 import { sseWriters } from "../lib/sseRegistry";
-import { checkQuota, incrementQuota } from "../lib/quota";
+import { checkQuota, incrementQuota, maybeSendQuotaWarning } from "../lib/quota";
 import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
@@ -166,9 +166,11 @@ router.post(
         .then((msg) => {
           // Increment quota only on success (no Anthropic 500/529 error)
           if (!msg.error) {
-            incrementQuota(userId).catch((err) =>
-              logger.error({ err, userId }, "Quota-Increment fehlgeschlagen"),
-            );
+            incrementQuota(userId)
+              .then(() => maybeSendQuotaWarning(userId))
+              .catch((err) =>
+                logger.error({ err, userId }, "Quota-Increment fehlgeschlagen"),
+              );
           }
         })
         .catch((err) => {

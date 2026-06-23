@@ -172,6 +172,10 @@ export async function ensureExtensions(): Promise<void> {
       `);
     }
   }
+  // Migration: digest_opt_out column on users (EU law: DSGVO opt-out for monthly digest e-mails)
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_opt_out BOOLEAN NOT NULL DEFAULT FALSE"
+  );
   // Migration: knowledge_missed_queries table for operator knowledge-gap analysis
   await pool.query(`
     CREATE TABLE IF NOT EXISTS knowledge_missed_queries (

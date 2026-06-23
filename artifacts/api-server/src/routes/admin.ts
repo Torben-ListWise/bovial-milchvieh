@@ -18,6 +18,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, requireOperator } from "../lib/auth";
 import { runScheduledReports } from "../lib/scheduler";
+import { runMonthlyDigest } from "../lib/digestScheduler";
 
 const router: IRouter = Router();
 
@@ -335,6 +336,27 @@ router.post(
     }
     const { runDunningCheck } = await import("../lib/dunning");
     const result = await runDunningCheck().catch(() => ({ downgraded: -1 }));
+    res.json({ ok: true, ...result });
+  },
+);
+
+// POST /api/admin/cron/run-digest — trigger monthly digest externally
+router.post(
+  "/admin/cron/run-digest",
+  async (req: Request, res: Response) => {
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+      res.status(503).json({ error: "CRON_SECRET ist nicht konfiguriert." });
+      return;
+    }
+    const provided =
+      (req.headers["x-cron-secret"] as string | undefined) ??
+      (req.headers["authorization"] as string | undefined)?.replace("Bearer ", "");
+    if (provided !== cronSecret) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const result = await runMonthlyDigest().catch(() => ({ sent: -1, skipped: -1 }));
     res.json({ ok: true, ...result });
   },
 );

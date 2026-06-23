@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { eq } from "drizzle-orm";
 import { db, usersTable, type User } from "@workspace/db";
+import { sendWelcome, fireEmail } from "./emailService";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -55,7 +56,12 @@ async function provisionUser(clerkUserId: string): Promise<User> {
     .onConflictDoNothing()
     .returning();
 
-  if (created) return created;
+  if (created) {
+    if (created.email) {
+      fireEmail(sendWelcome(created.email, created.name), `welcome:${created.id}`);
+    }
+    return created;
+  }
   const again = await db
     .select()
     .from(usersTable)

@@ -561,7 +561,7 @@ Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete 
         const autoAnalysisId = analysis.id;
         setImmediate(async () => {
           try {
-            const { checkQuota, incrementQuota } = await import("./quota");
+            const { checkQuota, incrementQuota, maybeSendQuotaWarning } = await import("./quota");
             const quota = await checkQuota(autoUserId);
             if (!quota.allowed) {
               logger.info({ userId: autoUserId }, "Automatische Erstanalyse übersprungen: Kontingent erschöpft");
@@ -569,9 +569,11 @@ Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete 
             }
             const msg = await processQuestion(analysis, betriebsspiegelPrompt);
             if (!msg.error) {
-              await incrementQuota(autoUserId).catch((err) =>
-                logger.error({ err, userId: autoUserId }, "Quota-Increment für Auto-Analyse fehlgeschlagen"),
-              );
+              await incrementQuota(autoUserId)
+                .then(() => maybeSendQuotaWarning(autoUserId))
+                .catch((err) =>
+                  logger.error({ err, userId: autoUserId }, "Quota-Increment für Auto-Analyse fehlgeschlagen"),
+                );
             }
           } catch (err) {
             logger.warn({ err, analysisId: autoAnalysisId }, "Automatische Erstanalyse fehlgeschlagen");

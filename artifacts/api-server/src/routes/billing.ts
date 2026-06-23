@@ -1,10 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { sql } from "drizzle-orm";
-import { db, subscriptionsTable, stripeEventsTable } from "@workspace/db";
+import { db, subscriptionsTable, stripeEventsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { getStripeClient, isStripeConfigured, planFromPriceId, STARTER_PRICE_ID, PRO_PRICE_ID, WEBHOOK_SECRET } from "../lib/stripe";
 import { getQuotaStatus, PLAN_LIMITS } from "../lib/quota";
+import { sendPlanActivated, sendPaymentFailed, fireEmail } from "../lib/emailService";
 import type Stripe from "stripe";
 
 const router: IRouter = Router();
@@ -211,6 +212,19 @@ async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         gracePeriodEndsAt: null,
       });
       logger.info({ userId, plan }, "Checkout abgeschlossen — Plan aktiviert");
+
+      const [userRow] = await db
+        .select({ email: usersTable.email, name: usersTable.name })
+        .from(usersTable)
+        .where(sql`${usersTable.id} = ${userId}`)
+        .limit(1);
+      if (userRow?.email) {
+        const newLimit = PLAN_LIMITS[plan] ?? null;
+        fireEmail(
+          sendPlanActivated(userRow.email, userRow.name, plan, newLimit === Infinity ? null : (newLimit ?? null)),
+          `plan-activated:${userId}`,
+        );
+      }
       break;
     }
 
@@ -263,6 +277,18 @@ async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         WHERE user_id = ${userId}
       `);
       logger.info({ userId, gracePeriodEndsAt }, "Zahlung fehlgeschlagen — Grace Period gestartet");
+
+      const [userRowFailed] = await db
+        .select({ email: usersTable.email, name: usersTable.name })
+        .from(usersTable)
+        .where(sql`${usersTable.id} = ${userId}`)
+        .limit(1);
+      if (userRowFailed?.email) {
+        fireEmail(
+          sendPaymentFailed(userRowFailed.email, userRowFailed.name, userId, gracePeriodEndsAt),
+          `payment-failed:${userId}`,
+        );
+      }
       break;
     }
 

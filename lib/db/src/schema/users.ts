@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const usersTable = pgTable("users", {
   id: text("id").primaryKey(),
@@ -10,6 +10,7 @@ export const usersTable = pgTable("users", {
     .notNull()
     .defaultNow(),
   onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+  digestOptOut: boolean("digest_opt_out").notNull().default(false),
 });
 
 export type User = typeof usersTable.$inferSelect;

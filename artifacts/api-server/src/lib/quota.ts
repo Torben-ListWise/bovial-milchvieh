@@ -1,5 +1,7 @@
-import { sql } from "drizzle-orm";
-import { db, subscriptionsTable, analysisQuotaTable } from "@workspace/db";
+import { sql, eq } from "drizzle-orm";
+import { db, subscriptionsTable, analysisQuotaTable, usersTable } from "@workspace/db";
+import { sendQuotaWarning, fireEmail } from "./emailService";
+import { logger } from "./logger";
 
 export const PLAN_LIMITS: Record<string, number> = {
   free: 10,
@@ -82,4 +84,36 @@ export async function checkQuota(userId: string): Promise<{
   }
 
   return { allowed: used < limit, plan, limit, used };
+}
+
+/**
+ * Checks if the user just crossed the 80% quota threshold after an increment,
+ * and if so, fires a one-time quota warning e-mail (fire-and-forget).
+ *
+ * Call this after incrementQuota() completes. It fires exactly once per month
+ * when `used === ceil(limit * 0.8)`.
+ */
+export async function maybeSendQuotaWarning(userId: string): Promise<void> {
+  try {
+    const { plan, limit, used } = await getQuotaStatus(userId);
+    if (limit === Infinity || limit === 0) return;
+
+    const threshold = Math.ceil(limit * 0.8);
+    if (used !== threshold) return;
+
+    const [user] = await db
+      .select({ email: usersTable.email, name: usersTable.name })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+
+    if (!user?.email) return;
+
+    fireEmail(
+      sendQuotaWarning(user.email, user.name, userId, used, limit, plan),
+      `quota-warning:${userId}`,
+    );
+  } catch (err) {
+    logger.warn({ err, userId }, "maybeSendQuotaWarning fehlgeschlagen");
+  }
 }

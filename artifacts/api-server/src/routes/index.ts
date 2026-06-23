@@ -17,6 +17,7 @@ import publicRouter from "./public";
 import checkoutRouter from "./checkout";
 import billingRouter from "./billing";
 import teamRouter from "./team";
+import emailRouter from "./email";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(publicRouter);
 router.use(checkoutRouter);
 router.use(billingRouter);
 router.use(teamRouter);
+router.use(emailRouter);
 
 export default router;

@@ -301,3 +301,62 @@ pm2 monit               # live CPU/RAM monitor
 pm2 restart milchvieh-api
 pm2 stop milchvieh-api
 ```
+
+---
+
+## 13. Transaktions-E-Mails mit Resend
+
+### Voraussetzungen (Betreiber erledigt vorab)
+
+1. **Resend-Konto anlegen** unter [resend.com](https://resend.com) (EU-Server wählbar).
+2. **Domain verifizieren** — ohne verifizierte Domain landen E-Mails im Spam.
+   - Öffne Resend → Domains → Add Domain → trage z.B. `milchvieh.de` ein.
+   - Füge folgende DNS-Einträge beim Domain-Registrar ein:
+
+   | Typ | Name | Wert |
+   |-----|------|------|
+   | MX | `send.milchvieh.de` | `feedback-smtp.eu-west-1.amazonses.com` (Resend gibt exakte Werte vor) |
+   | TXT (SPF) | `send.milchvieh.de` | `v=spf1 include:amazonses.com ~all` |
+   | CNAME (DKIM) | `resend._domainkey.milchvieh.de` | *(Resend-Dashboard gibt exakten Wert vor)* |
+   | TXT (DMARC) | `_dmarc.milchvieh.de` | `v=DMARC1; p=none; rua=mailto:dmarc@milchvieh.de` |
+
+   > **Hinweis:** Die genauen Werte werden im Resend-Dashboard angezeigt. DNS-Propagation dauert bis zu 48 h.
+
+3. **API-Key erstellen**: Resend → API Keys → Create API Key (Scope: Sending access).
+
+### Umgebungsvariablen setzen
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxxxxx        # Resend API Key
+EMAIL_FROM=noreply@milchvieh.de       # Verifizierte Absender-Adresse
+APP_URL=https://app.milchvieh.de      # Basis-URL der App (für Links in E-Mails)
+```
+
+> Ohne `RESEND_API_KEY` werden alle E-Mail-Aufrufe still übersprungen — die App läuft stabil, nur ohne E-Mails.
+
+### E-Mail-Typen
+
+| Trigger | Methode | Zeitpunkt |
+|---------|---------|-----------|
+| Erste Anmeldung | `sendWelcome` | Sofort nach User-Provisioning |
+| Stripe-Zahlung erfolgreich | `sendPlanActivated` | Webhook `checkout.session.completed` |
+| 80 % Kontingent verbraucht | `sendQuotaWarning` | Nach Quota-Increment (einmalig pro Monat) |
+| Zahlung fehlgeschlagen | `sendPaymentFailed` | Webhook `invoice.payment_failed` |
+| Monatlicher Digest | `sendMonthlyDigest` | 1. des Monats, 07:00 Uhr (Cron oder in-process) |
+
+### Digest-Cron (externer Trigger, empfohlen für Produktion)
+
+```bash
+# POST am 1. des Monats um 07:00 Uhr
+curl -X POST https://api.milchvieh.de/api/admin/cron/run-digest \
+  -H "X-Cron-Secret: $CRON_SECRET"
+```
+
+Alternativ läuft ein In-Process-Scheduler mit stündlicher Prüfung (automatisch aktiv).
+
+### Abmeldung (DSGVO / TDDDG)
+
+Digest-E-Mails enthalten einen Abmelde-Link:
+`GET /api/email/unsubscribe?token=<hmac>&uid=<userId>`
+
+Der Token ist ein HMAC-SHA256 über die User-ID (Schlüssel: `RESEND_API_KEY`). Stateless, kein DB-Lookup für die Validierung nötig.
