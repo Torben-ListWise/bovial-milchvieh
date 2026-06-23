@@ -14,6 +14,7 @@ import privacyRouter from "./privacy";
 import { knowledgeRouter } from "./knowledge";
 import templatesRouter from "./templates";
 import publicRouter from "./public";
+import checkoutRouter from "./checkout";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(privacyRouter);
 router.use(knowledgeRouter);
 router.use(templatesRouter);
 router.use(publicRouter);
+router.use(checkoutRouter);
 
 export default router;

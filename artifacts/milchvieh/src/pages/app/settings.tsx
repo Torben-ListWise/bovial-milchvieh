@@ -1,7 +1,8 @@
 import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Trash2, ShieldCheck, Tractor, Loader2 } from "lucide-react";
+import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
@@ -149,6 +150,34 @@ export function SettingsPage() {
         <h1 className="text-3xl font-bold text-foreground">Einstellungen & DSGVO</h1>
         <p className="text-muted-foreground mt-1">Verwalte deine Daten und Privatsphäre.</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            Tarif &amp; Abonnement
+          </CardTitle>
+          <CardDescription>
+            Upgrade dein Konto für mehr Analysen und erweiterte Funktionen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
+            <div>
+              <h3 className="font-medium text-foreground">Verfügbare Tarife</h3>
+              <p className="text-sm text-muted-foreground">
+                Starter (19,00 € / Monat) oder Pro (49,00 € / Monat) — alle Preise inkl. 19 % MwSt.
+              </p>
+            </div>
+            <Button asChild className="gap-2 shrink-0">
+              <Link href="/app/upgrade">
+                <Sparkles className="w-4 h-4" />
+                Jetzt upgraden
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <FocusAreasSection />
 

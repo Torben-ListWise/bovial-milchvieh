@@ -25,6 +25,7 @@ import {
   Wheat,
   Menu,
   X,
+  Bot,
 } from "lucide-react";
 
 const SECTOR_META: Record<string, { icon: React.ElementType; label: string }> = {
@@ -52,6 +53,8 @@ function DatasetAwareHeader({
 
   const sectorMeta = dataset ? (SECTOR_META[(dataset as any).sector ?? "dairy"] ?? SECTOR_META.dairy) : null;
 
+  const isAnalysesPage = currentPath.startsWith('/app/analyses');
+
   return (
     <header className="h-14 md:h-16 border-b bg-card/95 backdrop-blur-sm flex items-center px-3 md:px-6 shrink-0 gap-2 md:gap-3">
       {/* Mobile hamburger */}
@@ -70,12 +73,21 @@ function DatasetAwareHeader({
           {navItems.find(i => currentPath.startsWith(i.href))?.name || "App"}
         </span>
       </div>
-      {sectorMeta && (
-        <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-2.5 py-1 rounded-full shrink-0">
-          <sectorMeta.icon className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{sectorMeta.label}</span>
-        </span>
-      )}
+
+      <div className="ml-auto flex items-center gap-2 shrink-0">
+        {isAnalysesPage && (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary border border-border px-2.5 py-1 rounded-full" title="Antworten werden durch KI (Anthropic Claude) generiert und können Fehler enthalten. (EU AI Act Art. 50)">
+            <Bot className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">KI-generierte Antworten</span>
+          </span>
+        )}
+        {sectorMeta && (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-2.5 py-1 rounded-full">
+            <sectorMeta.icon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{sectorMeta.label}</span>
+          </span>
+        )}
+      </div>
     </header>
   );
 }
@@ -265,7 +277,22 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
         </nav>
 
         <hr className="my-0 border-border/40 mx-2" />
-        
+
+        {/* Legal footer links */}
+        {!navCollapsed && (
+          <div className="px-3 py-2 flex flex-wrap gap-x-3 gap-y-1">
+            <Link href="/impressum">
+              <a className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Impressum</a>
+            </Link>
+            <Link href="/agb">
+              <a className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">AGB</a>
+            </Link>
+            <Link href="/datenschutz">
+              <a className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Datenschutz</a>
+            </Link>
+          </div>
+        )}
+
         <div className="p-2 border-t">
           <div
             className={cn(
@@ -380,6 +407,13 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
         </nav>
 
         <hr className="border-border/40 mx-3" />
+
+        {/* Legal footer links */}
+        <div className="px-4 py-2 flex flex-wrap gap-x-3 gap-y-1">
+          <Link href="/impressum" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Impressum</Link>
+          <Link href="/agb" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">AGB</Link>
+          <Link href="/datenschutz" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Datenschutz</Link>
+        </div>
 
         {/* User section */}
         <div className="p-3">

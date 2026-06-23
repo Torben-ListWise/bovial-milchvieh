@@ -130,6 +130,11 @@ import { OperatorTemplatesPage } from "@/pages/operator/templates";
 import { FocusAreasOnboardingDialog } from "@/components/FocusAreasOnboardingDialog";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { GuestAnalysisPage } from "@/pages/app/guest-analysis";
+import { ImpressumPage } from "@/pages/Impressum";
+import { AGBPage } from "@/pages/AGB";
+import { DatenschutzPage } from "@/pages/Datenschutz";
+import { CookieBanner } from "@/components/CookieBanner";
+import { UpgradePage } from "@/pages/app/upgrade";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -297,6 +302,17 @@ function LandingPage() {
           </div>
         </div>
       </main>
+      <footer className="border-t bg-card/80 mt-auto">
+        <div className="max-w-5xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+          <span>© {new Date().getFullYear()} Milchvieh Assistent</span>
+          <div className="flex flex-wrap gap-4">
+            <a href={`${basePath}/impressum`} className="hover:text-foreground transition-colors">Impressum</a>
+            <a href={`${basePath}/agb`} className="hover:text-foreground transition-colors">AGB</a>
+            <a href={`${basePath}/datenschutz`} className="hover:text-foreground transition-colors">Datenschutz</a>
+          </div>
+        </div>
+      </footer>
+      <CookieBanner />
     </div>
   );
 }
@@ -391,6 +407,7 @@ function AppPortal() {
         <Route path="/app/reports" component={ReportsPage} />
         <Route path="/app/rules" component={RulesPage} />
         <Route path="/app/settings" component={SettingsPage} />
+        <Route path="/app/upgrade" component={UpgradePage} />
         <Route path="/app">
           {effectiveView === 'operator'
             ? <Redirect to="/app/monitoring" />
@@ -542,6 +559,9 @@ function ClerkProviderWithRoutes() {
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRedirect} />
+            <Route path="/impressum" component={ImpressumPage} />
+            <Route path="/agb" component={AGBPage} />
+            <Route path="/datenschutz" component={DatenschutzPage} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route path="/app" component={ProtectedApp} />
