@@ -57,6 +57,18 @@ export async function warmupEmbeddingModel(): Promise<void> {
     _model = (await pipeline("feature-extraction", HF_MODEL_ID, {
       dtype: "fp32",
     })) as FeatureExtractionPipeline;
+
+    // Run a small dummy inference to prime the ONNX JIT so the first real
+    // user request does not incur the ~18 s cold-start penalty.
+    logger.info({ model: HF_MODEL_ID }, "Embedding-Modell geladen — starte ONNX-Warmup-Inferenz...");
+    const t0 = Date.now();
+    await _model("warmup", { pooling: "mean", normalize: true });
+    const ms = Date.now() - t0;
+    logger.info(
+      { model: HF_MODEL_ID, warmupMs: ms },
+      "ONNX-Warmup abgeschlossen — Modell ist heiß und bereit",
+    );
+
     _resolveReady();
     logger.info(
       { model: HF_MODEL_ID },
