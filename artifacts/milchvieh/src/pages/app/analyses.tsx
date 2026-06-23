@@ -922,10 +922,20 @@ export function AnalysesPage() {
     return new Date(msg.createdAt).getTime() > mountedAtRef.current;
   }
 
+  // Scroll to top after React renders a new user message so the question
+  // appears at the top and the assistant answer fills in below.
+  useEffect(() => {
+    const msgs = analysis?.messages ?? [];
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg?.role !== "user") return;
+    if (!isNewMessage(lastMsg)) return;
+    if (chatScrollRef.current) chatScrollRef.current.scrollTop = 0;
+  }, [analysis?.messages?.length]);
+
   // Auto-scroll to bottom when new messages or system messages arrive.
-  // Skip when the newest message is a user message — handleSubmit already
-  // scrolled to top so the new question is visible; we only want to scroll
-  // down when the assistant answer actually arrives.
+  // Skip when the newest message is a user message — the effect above
+  // already scrolled to top; we only want to scroll down when the
+  // assistant answer actually arrives.
   useEffect(() => {
     const msgs = analysis?.messages ?? [];
     const lastMsg = msgs[msgs.length - 1];
@@ -991,12 +1001,6 @@ export function AnalysesPage() {
     if (!text) return;
 
     pendingQuestionRef.current = text;
-
-    // Scroll to top so the new question appears at the top and
-    // the answer fills down into the visible area
-    requestAnimationFrame(() => {
-      if (chatScrollRef.current) chatScrollRef.current.scrollTop = 0;
-    });
 
     if (!activeAnalysisId) {
       createAnalysis.mutate({
