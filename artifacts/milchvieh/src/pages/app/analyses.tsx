@@ -739,10 +739,12 @@ const ResultCard = memo(function ResultCard({
 function AnalysisResultsPanel({
   analysis,
   isWorking,
+  pendingQuestion,
   onAsk,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
+  pendingQuestion?: string;
   onAsk: (q: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -773,6 +775,17 @@ function AnalysisResultsPanel({
     lastResult &&
     (lastResult.followUpQuestions?.length ?? 0) > 0;
 
+  // Pending question to show in loading indicators:
+  // prefer the ref value (set just before submission), fall back to the last
+  // persisted user message (covers reload/resume while agent is still working).
+  const lastUserMsg = [...msgs].reverse().find((m) => m.role === "user")?.content ?? "";
+  const rawWorkingQuestion = pendingQuestion || lastUserMsg;
+  const workingQuestion = rawWorkingQuestion
+    ? rawWorkingQuestion.length > 60
+      ? rawWorkingQuestion.slice(0, 60) + "…"
+      : rawWorkingQuestion
+    : null;
+
   if (!analysis) {
     return (
       <div className="flex flex-col h-full items-center justify-center p-8 text-center">
@@ -799,7 +812,10 @@ function AnalysisResultsPanel({
     return (
       <div className="flex flex-col h-full items-center justify-center p-8 text-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
-        <p className="text-sm text-muted-foreground">Ergebnis wird berechnet…</p>
+        <p className="text-sm text-muted-foreground">Berechne Ergebnis…</p>
+        {workingQuestion && (
+          <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">„{workingQuestion}"</p>
+        )}
       </div>
     );
   }
@@ -829,6 +845,11 @@ function AnalysisResultsPanel({
               </span>
               <span className="text-sm font-medium text-foreground">Berechne Ergebnis…</span>
             </div>
+            {workingQuestion && (
+              <p className="text-xs text-muted-foreground mt-1.5 truncate max-w-[360px]">
+                „{workingQuestion}"
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -1472,7 +1493,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} onAsk={(q) => handleSubmit(q)} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} onAsk={(q) => handleSubmit(q)} />
           </div>
         </div>
       </div>
@@ -1490,7 +1511,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} onAsk={(q) => handleSubmit(q)} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} onAsk={(q) => handleSubmit(q)} />
             </div>
           )}
         </div>
