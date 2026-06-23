@@ -808,6 +808,8 @@ export interface KnowledgeDocument {
   errorMessage?: string | null;
   /** @nullable */
   sourceUrl?: string | null;
+  /** @nullable */
+  category?: string | null;
   createdAt: string;
 }
 

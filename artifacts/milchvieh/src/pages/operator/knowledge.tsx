@@ -17,6 +17,10 @@ import {
   BookOpen,
   Globe,
   Link,
+  Sparkles,
+  Tag,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +67,35 @@ function StatusBadge({ status, chunkCount }: { status: string; chunkCount?: numb
   );
 }
 
+// Stable colour palette for category badges
+const CATEGORY_COLORS: Record<string, string> = {
+  "Milchleistung & Laktation": "bg-blue-100 text-blue-800 border-blue-200",
+  "Eutergesundheit & Zellzahl": "bg-purple-100 text-purple-800 border-purple-200",
+  "Fruchtbarkeit & Reproduktion": "bg-pink-100 text-pink-800 border-pink-200",
+  "Tiergesundheit & Medizin": "bg-red-100 text-red-800 border-red-200",
+  "Fütterung & Ernährung": "bg-green-100 text-green-800 border-green-200",
+  "Herdenmanagement": "bg-teal-100 text-teal-800 border-teal-200",
+  "Recht & Förderung": "bg-gray-100 text-gray-800 border-gray-200",
+  "Technik & Stallbau": "bg-orange-100 text-orange-800 border-orange-200",
+  "Betriebswirtschaft": "bg-yellow-100 text-yellow-800 border-yellow-200",
+  "Umwelt & Nachhaltigkeit": "bg-lime-100 text-lime-800 border-lime-200",
+  "Biogas & Energie": "bg-amber-100 text-amber-800 border-amber-200",
+  "Ackerbau & Pflanzenbau": "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "Schweinehaltung": "bg-rose-100 text-rose-800 border-rose-200",
+  "Geflügelhaltung": "bg-orange-100 text-orange-800 border-orange-200",
+  "Sonstiges": "bg-slate-100 text-slate-700 border-slate-200",
+};
+
+function CategoryBadge({ category }: { category: string }) {
+  const cls = CATEGORY_COLORS[category] ?? "bg-slate-100 text-slate-700 border-slate-200";
+  return (
+    <Badge className={cn("gap-1 border text-xs font-normal", cls)}>
+      <Tag className="w-2.5 h-2.5" />
+      {category}
+    </Badge>
+  );
+}
+
 interface UploadItem {
   file: File;
   title: string;
@@ -81,6 +114,9 @@ export function KnowledgePage() {
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
+  const [categorizing, setCategorizing] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["knowledge-docs"],
@@ -120,6 +156,39 @@ export function KnowledgePage() {
       toast({ title: "Fehler beim Löschen", variant: "destructive" });
     },
   });
+
+  async function handleCategorizeAll() {
+    setCategorizing(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/knowledge/categorize-all`, {
+        method: "POST",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title: "Kategorisierung fehlgeschlagen",
+          description: (body as any).error ?? "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+      const { updated, message } = body as { updated: number; message?: string };
+      queryClient.invalidateQueries({ queryKey: ["knowledge-docs"] });
+      toast({
+        title: updated > 0
+          ? `${updated} Dokument${updated !== 1 ? "e" : ""} kategorisiert`
+          : "Alle Dokumente bereits kategorisiert",
+        description: message,
+      });
+    } catch {
+      toast({ title: "Netzwerkfehler", variant: "destructive" });
+    } finally {
+      setCategorizing(false);
+    }
+  }
 
   async function uploadFile(item: UploadItem) {
     const updateItem = (patch: Partial<UploadItem>) =>
@@ -270,207 +339,322 @@ export function KnowledgePage() {
 
   const pendingCount = uploadItems.filter((i) => i.status === "pending").length;
 
+  // Build category stats from ready docs
+  const readyDocs = docs.filter((d) => d.status === "ready");
+  const uncategorizedCount = readyDocs.filter((d) => !d.category).length;
+  const categoryMap = new Map<string, number>();
+  for (const doc of readyDocs) {
+    if (doc.category) {
+      categoryMap.set(doc.category, (categoryMap.get(doc.category) ?? 0) + 1);
+    }
+  }
+  const categories = Array.from(categoryMap.entries()).sort((a, b) => b[1] - a[1]);
+  const MAX_VISIBLE_CATEGORIES = 6;
+  const visibleCategories = showAllCategories ? categories : categories.slice(0, MAX_VISIBLE_CATEGORIES);
+
+  // Filter docs by active category
+  const filteredDocs = activeCategory === null
+    ? docs
+    : activeCategory === "__uncategorized__"
+      ? docs.filter((d) => d.status === "ready" && !d.category)
+      : docs.filter((d) => d.category === activeCategory);
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-3">
-          <BookOpen className="w-8 h-8 text-primary" />
-          Wissensbibliothek
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Dokumente hochladen oder Websites hinzufügen. Der Assistent durchsucht diese Inhalte
-          semantisch bei Fachfragen.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <BookOpen className="w-8 h-8 text-primary" />
+            Wissensbibliothek
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Dokumente hochladen oder Websites hinzufügen. Der Assistent durchsucht diese Inhalte
+            semantisch bei Fachfragen.
+          </p>
+        </div>
+        {readyDocs.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={handleCategorizeAll}
+            disabled={categorizing || uncategorizedCount === 0}
+            className="shrink-0 gap-2"
+          >
+            {categorizing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {categorizing
+              ? "Kategorisiere..."
+              : uncategorizedCount > 0
+                ? `KI-Kategorisierung (${uncategorizedCount})`
+                : "Alle kategorisiert"}
+          </Button>
+        )}
       </div>
 
-      {/* Upload Card with tabs */}
-      <Card>
-        <CardHeader className="pb-0">
-          <div className="flex gap-1 border-b">
-            <button
-              onClick={() => setActiveTab("file")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                activeTab === "file"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Upload className="w-4 h-4" />
-              Datei hochladen
-            </button>
-            <button
-              onClick={() => setActiveTab("url")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                activeTab === "url"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Globe className="w-4 h-4" />
-              URL hinzufügen
-            </button>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-4 space-y-4">
-          {activeTab === "file" && (
-            <>
-              <div
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onClick={() => fileInputRef.current?.click()}
+      {/* Category filter chips */}
+      {categories.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Tag className="w-3.5 h-3.5" />
+              Nach Thema filtern
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveCategory(null)}
                 className={cn(
-                  "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                  isDragging
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30",
+                  "px-3 py-1 rounded-full text-sm border transition-colors",
+                  activeCategory === null
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border hover:bg-muted",
                 )}
               >
-                <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
-                <p className="font-medium text-sm">Datei hierher ziehen</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  PDF, Word, Excel, PowerPoint, CSV, TXT — oder klicken zum Auswählen
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.pptx,.ppt,.xlsx,.xls,.ods,.csv,.tsv,.txt,.docx,.doc"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
-                />
-              </div>
-
-              {uploadItems.length > 0 && (
-                <div className="space-y-2">
-                  {uploadItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-3 p-3 rounded-md border bg-muted/30"
-                    >
-                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        {item.status === "pending" ? (
-                          <Input
-                            value={item.title}
-                            onChange={(e) =>
-                              setUploadItems((prev) =>
-                                prev.map((i, i2) =>
-                                  i2 === idx ? { ...i, title: e.target.value } : i,
-                                )
-                              )
-                            }
-                            className="h-7 text-sm"
-                            placeholder="Titel (optional)"
-                          />
-                        ) : (
-                          <p className="text-sm font-medium truncate">
-                            {item.title || item.file.name}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted-foreground truncate">
-                          {item.file.name} · {formatBytes(item.file.size)}
-                        </p>
-                        {item.status === "error" && item.error && (
-                          <p className="text-xs text-red-600 mt-0.5">{item.error}</p>
-                        )}
-                      </div>
-                      <div className="shrink-0">
-                        {item.status === "pending" && (
-                          <Badge variant="secondary">Bereit</Badge>
-                        )}
-                        {item.status === "uploading" && (
-                          <Badge className="bg-blue-100 text-blue-800 gap-1">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Lade hoch
-                          </Badge>
-                        )}
-                        {item.status === "ingesting" && (
-                          <Badge className="bg-blue-100 text-blue-800 gap-1">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Verarbeite
-                          </Badge>
-                        )}
-                        {item.status === "done" && (
-                          <Badge className="bg-green-100 text-green-800 gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            Fertig
-                          </Badge>
-                        )}
-                        {item.status === "error" && (
-                          <Badge className="bg-red-100 text-red-800 gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            Fehler
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {pendingCount > 0 && (
-                    <Button onClick={startUpload} className="w-full">
-                      <Upload className="w-4 h-4 mr-2" />
-                      {pendingCount === 1
-                        ? "1 Dokument hochladen"
-                        : `${pendingCount} Dokumente hochladen`}
-                    </Button>
+                Alle ({docs.length})
+              </button>
+              {visibleCategories.map(([cat, count]) => {
+                const colorCls = CATEGORY_COLORS[cat] ?? "bg-slate-100 text-slate-700 border-slate-200";
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-sm border transition-colors",
+                      activeCategory === cat
+                        ? "ring-2 ring-offset-1 ring-primary"
+                        : "hover:opacity-80",
+                      colorCls,
+                    )}
+                  >
+                    {cat} ({count})
+                  </button>
+                );
+              })}
+              {uncategorizedCount > 0 && (
+                <button
+                  onClick={() => setActiveCategory(activeCategory === "__uncategorized__" ? null : "__uncategorized__")}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-sm border transition-colors",
+                    activeCategory === "__uncategorized__"
+                      ? "bg-muted-foreground/20 border-muted-foreground ring-2 ring-offset-1 ring-primary"
+                      : "bg-muted/50 border-border hover:bg-muted text-muted-foreground",
                   )}
-                </div>
+                >
+                  Ohne Kategorie ({uncategorizedCount})
+                </button>
               )}
-            </>
-          )}
-
-          {activeTab === "url" && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Website-URL eingeben — der Inhalt wird automatisch geladen, aufbereitet und zur
-                Wissensbibliothek hinzugefügt (bis zu 20 Seiten, eine Ebene tief).
-              </p>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    value={urlInput}
-                    onChange={(e) => {
-                      setUrlInput(e.target.value);
-                      if (urlError) setUrlError(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void handleIngestUrl();
-                    }}
-                    placeholder="https://www.lfl.bayern.de/itz/rind/..."
-                    className="pl-9"
-                    disabled={urlLoading}
-                  />
-                </div>
-                <Button onClick={handleIngestUrl} disabled={urlLoading || !urlInput.trim()}>
-                  {urlLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Lädt...
-                    </>
+              {categories.length > MAX_VISIBLE_CATEGORIES && (
+                <button
+                  onClick={() => setShowAllCategories((v) => !v)}
+                  className="px-3 py-1 rounded-full text-sm border border-border hover:bg-muted text-muted-foreground flex items-center gap-1"
+                >
+                  {showAllCategories ? (
+                    <><ChevronUp className="w-3 h-3" /> Weniger</>
                   ) : (
-                    "Laden"
+                    <><ChevronDown className="w-3 h-3" /> +{categories.length - MAX_VISIBLE_CATEGORIES} mehr</>
                   )}
-                </Button>
-              </div>
-              {urlError && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {urlError}
-                </p>
+                </button>
               )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upload Card with tabs */}
+      {activeCategory === null && (
+        <Card>
+          <CardHeader className="pb-0">
+            <div className="flex gap-1 border-b">
+              <button
+                onClick={() => setActiveTab("file")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === "file"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Upload className="w-4 h-4" />
+                Datei hochladen
+              </button>
+              <button
+                onClick={() => setActiveTab("url")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === "url"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Globe className="w-4 h-4" />
+                URL hinzufügen
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4">
+            {activeTab === "file" && (
+              <>
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+                    isDragging
+                      ? "border-primary bg-primary/5"
+                      : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30",
+                  )}
+                >
+                  <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
+                  <p className="font-medium text-sm">Datei hierher ziehen</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    PDF, Word, Excel, PowerPoint, CSV, TXT — oder klicken zum Auswählen
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.pptx,.ppt,.xlsx,.xls,.ods,.csv,.tsv,.txt,.docx,.doc"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
+                  />
+                </div>
+
+                {uploadItems.length > 0 && (
+                  <div className="space-y-2">
+                    {uploadItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-3 p-3 rounded-md border bg-muted/30"
+                      >
+                        <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          {item.status === "pending" ? (
+                            <Input
+                              value={item.title}
+                              onChange={(e) =>
+                                setUploadItems((prev) =>
+                                  prev.map((i, i2) =>
+                                    i2 === idx ? { ...i, title: e.target.value } : i,
+                                  )
+                                )
+                              }
+                              className="h-7 text-sm"
+                              placeholder="Titel (optional)"
+                            />
+                          ) : (
+                            <p className="text-sm font-medium truncate">
+                              {item.title || item.file.name}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground truncate">
+                            {item.file.name} · {formatBytes(item.file.size)}
+                          </p>
+                          {item.status === "error" && item.error && (
+                            <p className="text-xs text-red-600 mt-0.5">{item.error}</p>
+                          )}
+                        </div>
+                        <div className="shrink-0">
+                          {item.status === "pending" && (
+                            <Badge variant="secondary">Bereit</Badge>
+                          )}
+                          {item.status === "uploading" && (
+                            <Badge className="bg-blue-100 text-blue-800 gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Lade hoch
+                            </Badge>
+                          )}
+                          {item.status === "ingesting" && (
+                            <Badge className="bg-blue-100 text-blue-800 gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Verarbeite
+                            </Badge>
+                          )}
+                          {item.status === "done" && (
+                            <Badge className="bg-green-100 text-green-800 gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              Fertig
+                            </Badge>
+                          )}
+                          {item.status === "error" && (
+                            <Badge className="bg-red-100 text-red-800 gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Fehler
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {pendingCount > 0 && (
+                      <Button onClick={startUpload} className="w-full">
+                        <Upload className="w-4 h-4 mr-2" />
+                        {pendingCount === 1
+                          ? "1 Dokument hochladen"
+                          : `${pendingCount} Dokumente hochladen`}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === "url" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Website-URL eingeben — der Inhalt wird automatisch geladen, aufbereitet und zur
+                  Wissensbibliothek hinzugefügt (bis zu 20 Seiten, eine Ebene tief).
+                </p>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={urlInput}
+                      onChange={(e) => {
+                        setUrlInput(e.target.value);
+                        if (urlError) setUrlError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void handleIngestUrl();
+                      }}
+                      placeholder="https://www.lfl.bayern.de/itz/rind/..."
+                      className="pl-9"
+                      disabled={urlLoading}
+                    />
+                  </div>
+                  <Button onClick={handleIngestUrl} disabled={urlLoading || !urlInput.trim()}>
+                    {urlLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Lädt...
+                      </>
+                    ) : (
+                      "Laden"
+                    )}
+                  </Button>
+                </div>
+                {urlError && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    {urlError}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Document List */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Dokumente ({docs.length})</CardTitle>
+          <CardTitle className="text-base">
+            Dokumente ({filteredDocs.length}{filteredDocs.length !== docs.length ? ` von ${docs.length}` : ""})
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -478,22 +662,24 @@ export function KnowledgePage() {
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
               Laden...
             </div>
-          ) : docs.length === 0 ? (
+          ) : filteredDocs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Noch keine Dokumente hochgeladen.</p>
+              <p className="text-sm">
+                {activeCategory ? "Keine Dokumente in dieser Kategorie." : "Noch keine Dokumente hochgeladen."}
+              </p>
             </div>
           ) : (
             <div className="divide-y">
-              {docs.map((doc) => (
+              {filteredDocs.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center gap-4 py-3 first:pt-0 last:pb-0"
+                  className="flex items-start gap-4 py-3 first:pt-0 last:pb-0"
                 >
                   {doc.sourceUrl ? (
-                    <Globe className="w-5 h-5 text-muted-foreground shrink-0" />
+                    <Globe className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                   ) : (
-                    <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                    <FileText className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{doc.title}</p>
@@ -522,18 +708,25 @@ export function KnowledgePage() {
                         {doc.errorMessage}
                       </p>
                     )}
+                    {doc.category && (
+                      <div className="mt-1.5">
+                        <CategoryBadge category={doc.category} />
+                      </div>
+                    )}
                   </div>
-                  <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => deleteMutation.mutate(doc.id)}
-                    disabled={deleteMutation.isPending}
-                    title="Dokument löschen"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="shrink-0 flex items-center gap-2 mt-0.5">
+                    <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteMutation.mutate(doc.id)}
+                      disabled={deleteMutation.isPending}
+                      title="Dokument löschen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

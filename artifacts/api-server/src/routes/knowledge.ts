@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
   db,
@@ -11,6 +11,7 @@ import { ObjectStorageService } from "../lib/objectStorage";
 import { ingestKnowledgeDoc } from "../lib/ingest";
 import { scrapeUrl, validateUrl, canonicalizeUrl } from "../lib/scraper";
 import { logger } from "../lib/logger";
+import Anthropic from "@anthropic-ai/sdk";
 
 interface KnowledgeUploadUrlBodyType {
   filename: string;
@@ -64,6 +65,7 @@ router.get(
         size: d.size ?? null,
         errorMessage: d.errorMessage ?? null,
         sourceUrl: d.sourceUrl ?? null,
+        category: d.category ?? null,
         createdAt: d.createdAt,
       })),
     );
@@ -253,6 +255,142 @@ router.post(
     }
     void ingestKnowledgeDoc(id);
     res.json({ accepted: true });
+  },
+);
+
+// PATCH /knowledge/:id — update category (and optionally title) for a single doc
+router.patch(
+  "/knowledge/:id",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { category, title } = req.body as { category?: string; title?: string };
+    const patch: Record<string, unknown> = {};
+    if (typeof category === "string") patch.category = category || null;
+    if (typeof title === "string" && title.trim()) patch.title = title.trim();
+    if (Object.keys(patch).length === 0) {
+      res.status(400).json({ error: "Nichts zu aktualisieren" });
+      return;
+    }
+    const [updated] = await db
+      .update(knowledgeDocumentsTable)
+      .set(patch)
+      .where(eq(knowledgeDocumentsTable.id, id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Dokument nicht gefunden" });
+      return;
+    }
+    res.json({ ok: true, category: updated.category ?? null });
+  },
+);
+
+// POST /knowledge/categorize-all — AI categorizes all ready documents that have no category yet
+router.post(
+  "/knowledge/categorize-all",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      res.status(503).json({ error: "ANTHROPIC_API_KEY nicht konfiguriert" });
+      return;
+    }
+
+    // Fetch all ready docs (already categorised docs will be re-categorised on force, skip here)
+    const docs = await db
+      .select({
+        id: knowledgeDocumentsTable.id,
+        title: knowledgeDocumentsTable.title,
+        category: knowledgeDocumentsTable.category,
+      })
+      .from(knowledgeDocumentsTable)
+      .where(eq(knowledgeDocumentsTable.status, "ready"));
+
+    const uncategorized = docs.filter((d) => !d.category);
+    if (uncategorized.length === 0) {
+      res.json({ updated: 0, message: "Alle Dokumente sind bereits kategorisiert" });
+      return;
+    }
+
+    // Fetch first chunk text for each doc to give Claude context
+    const docIds = uncategorized.map((d) => d.id);
+    const chunks = await db
+      .select({
+        docId: knowledgeChunksTable.docId,
+        chunkText: knowledgeChunksTable.chunkText,
+      })
+      .from(knowledgeChunksTable)
+      .where(and(
+        inArray(knowledgeChunksTable.docId, docIds),
+        eq(knowledgeChunksTable.chunkIndex, 0),
+      ));
+
+    const chunkByDocId = new Map(chunks.map((c) => [c.docId, c.chunkText]));
+
+    const docList = uncategorized.map((d, i) => {
+      const snippet = (chunkByDocId.get(d.id) ?? "").slice(0, 400);
+      return `${i + 1}. Titel: "${d.title}"\n   Textauszug: ${snippet || "(kein Text verfügbar)"}`;
+    }).join("\n\n");
+
+    const prompt = `Du bist ein Assistent für eine landwirtschaftliche Wissensplattform. Kategorisiere die folgenden Dokumente nach ihrem Hauptthema. Wähle für jedes Dokument EINE passende Kategorie aus dieser Liste oder schlage eine neue vor, wenn keine passt:
+
+Verfügbare Kategorien:
+- Milchleistung & Laktation
+- Eutergesundheit & Zellzahl
+- Fruchtbarkeit & Reproduktion
+- Tiergesundheit & Medizin
+- Fütterung & Ernährung
+- Herdenmanagement
+- Recht & Förderung
+- Technik & Stallbau
+- Betriebswirtschaft
+- Umwelt & Nachhaltigkeit
+- Biogas & Energie
+- Ackerbau & Pflanzenbau
+- Schweinehaltung
+- Geflügelhaltung
+- Sonstiges
+
+Dokumente:
+${docList}
+
+Antworte NUR mit einem JSON-Array in dieser Form, ohne weiteren Text:
+[{"index":1,"category":"Eutergesundheit & Zellzahl"},{"index":2,"category":"Fruchtbarkeit & Reproduktion"},...]`;
+
+    let categorized: Array<{ index: number; category: string }> = [];
+    try {
+      const client = new Anthropic({ apiKey });
+      const msg = await client.messages.create({
+        model: "claude-3-5-haiku-20241022",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const raw = (msg.content[0] as { type: string; text: string }).text.trim();
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        categorized = JSON.parse(jsonMatch[0]) as Array<{ index: number; category: string }>;
+      }
+    } catch (err) {
+      logger.error({ err }, "KI-Kategorisierung fehlgeschlagen");
+      res.status(502).json({ error: "KI-Kategorisierung fehlgeschlagen" });
+      return;
+    }
+
+    let updated = 0;
+    for (const item of categorized) {
+      const doc = uncategorized[item.index - 1];
+      if (!doc || !item.category) continue;
+      await db
+        .update(knowledgeDocumentsTable)
+        .set({ category: item.category })
+        .where(eq(knowledgeDocumentsTable.id, doc.id));
+      updated++;
+    }
+
+    logger.info({ updated, total: uncategorized.length }, "KI-Kategorisierung abgeschlossen");
+    res.json({ updated, total: uncategorized.length });
   },
 );
 

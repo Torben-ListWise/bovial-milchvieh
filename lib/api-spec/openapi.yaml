@@ -1879,6 +1879,10 @@ components:
           type: ["integer", "null"]
         errorMessage:
           type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time

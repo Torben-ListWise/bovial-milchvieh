@@ -56,6 +56,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS embedding_model TEXT"
   );
+  // Migration: category column for AI-based topic classification
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS category TEXT"
+  );
   // Performance: HNSW vector index for fast cosine similarity search on knowledge chunks
   try {
     await pool.query(`
