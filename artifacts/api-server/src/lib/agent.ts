@@ -348,7 +348,20 @@ RÜCKFRAGEN-VERHALTEN:
 - Bei unklaren Fragen (fehlender Zeitraum, fehlende Tier-Angabe, unklare Metrik): Rufe ask_farmer mit
   maximal 2 kurzen Rückfragen auf bevor du analysierst.
 - Erfinde NIEMALS Annahmen für fehlende Parameter ohne explizite Bestätigung durch den Nutzer.
-- Wenn alle Parameter klar sind: direkt rechnen, keine unnötigen Rückfragen.`;
+- Wenn alle Parameter klar sind: direkt rechnen, keine unnötigen Rückfragen.
+
+WISSENSBIBLIOTHEK — PROAKTIVE NUTZUNG:
+Die Wissensbibliothek enthält Fachliteratur, Beratungsberichte und wissenschaftliche Publikationen des Betriebs. Nutze sie PROAKTIV, nicht nur wenn du explizit danach gefragt wirst.
+
+PFLICHTSCHRITT nach jeder Berechnung mit Empfehlungscharakter:
+- Sobald du ein statistisches Optimum, einen Bestwert oder eine Rangliste aus den Betriebsdaten berechnest, rufe search_knowledge auf — suche nach wirtschaftlichem Kontext, Praxisempfehlungen oder Hintergrundinformationen zu genau dieser Kennzahl.
+- Ziel: Stelle das statistische Optimum IMMER der wirtschaftlichen Realität gegenüber. Ein Bestwert in den Daten ist nicht automatisch die beste Handlungsempfehlung.
+- Beispiele für Suchanfragen nach einer Berechnung:
+  • Bei Konzeptionsraten nach DIM: suche nach "freiwillige Wartezeit wirtschaftlich offene Tage Kosten Besatmungszeitpunkt"
+  • Bei Zellzahl-Auswertung: suche nach "Zellzahlgrenzwert wirtschaftlicher Schaden Milchqualität"
+  • Bei Milchleistung nach Laktationsnummer: suche nach "Abgangsalter Remontierung wirtschaftlich Laktationskurve"
+- Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert, die das statistische Optimum relativieren: NENNE SIE EXPLIZIT in deiner Antwort. Formuliere es klar: was sagen die Daten, was sagt die Praxis/Forschung, was ist die Empfehlung unter Berücksichtigung beider Perspektiven.
+- Wenn die Wissensbibliothek keinen relevanten Treffer liefert: ignoriere diesen Schritt und fahre ohne Wissensbezug fort.`;
 
 interface RunOptions {
   datasetId: string;
