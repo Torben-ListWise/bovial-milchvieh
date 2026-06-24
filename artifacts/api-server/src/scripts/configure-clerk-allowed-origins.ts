@@ -2,14 +2,24 @@
 /**
  * configure-clerk-allowed-origins.ts
  *
- * Idempotent one-time script: adds https://bovial.com and
- * https://www.bovial.com to the Clerk instance's allowed_origins list.
+ * Idempotent reconcile script: ensures Clerk's allowed_origins list contains
+ * exactly the domains in REQUIRED_ORIGINS and none of the domains in
+ * BANNED_ORIGINS.
  *
- * Clerk's security policy requires every origin that can host the app to be
- * explicitly whitelisted. Without this, browser requests from bovial.com to
- * Clerk's Frontend API are rejected with a 401 / CORS-style auth error even
- * though the Express CORS allowlist (ALLOWED_ORIGINS env var) is configured
- * correctly.
+ * Why not additive-only?  An additive script cannot clean up stale entries.
+ * This script reads the live list, computes the desired state, and only writes
+ * if a change is required.
+ *
+ * REQUIRED domains
+ * ────────────────
+ * https://bovial.com — the canonical production origin.
+ *
+ * BANNED domains (must be absent)
+ * ────────────────────────────────
+ * https://www.bovial.com — the www subdomain is redirected to the apex domain
+ * via a server-level 301 before any Clerk interaction.  Keeping it in
+ * allowed_origins would be stale config that could confuse future debugging
+ * or allow a misconfigured client to complete an auth flow on the wrong domain.
  *
  * HOW TO RUN
  * ==========
@@ -23,14 +33,18 @@
  *
  * SAFETY
  * ======
- * - Reads current allowed_origins first; merges bovial.com entries without
- *   removing any existing values.
- * - Idempotent: safe to run multiple times; re-running when the origins are
- *   already present is a no-op.
+ * - Reads current allowed_origins first; only PATCHes when a change is needed.
+ * - Idempotent: safe to run multiple times.
+ * - Does NOT touch any other instance settings — only allowed_origins.
  */
 
 const CLERK_API_BASE = "https://api.clerk.com/v1";
-const DOMAINS_TO_ADD = ["https://bovial.com", "https://www.bovial.com"];
+
+const REQUIRED_ORIGINS = new Set(["https://bovial.com"]);
+
+const BANNED_ORIGINS = new Set([
+  "https://www.bovial.com",
+]);
 
 async function clerkFetch(
   path: string,
@@ -73,25 +87,35 @@ async function main(): Promise<void> {
   const current: string[] = instance.allowed_origins ?? [];
   console.log(`   Current allowed_origins: ${JSON.stringify(current)}`);
 
-  const toAdd = DOMAINS_TO_ADD.filter((d) => !current.includes(d));
-  if (toAdd.length === 0) {
-    console.log("\n✅ All required origins are already present — nothing to do.");
+  // Compute desired state: keep non-banned existing entries, add any missing required ones.
+  const desired = [
+    ...current.filter((d) => !BANNED_ORIGINS.has(d)),
+    ...[...REQUIRED_ORIGINS].filter((d) => !current.includes(d)),
+  ];
+
+  const toAdd = desired.filter((d) => !current.includes(d));
+  const toRemove = current.filter((d) => !desired.includes(d));
+
+  if (toAdd.length === 0 && toRemove.length === 0) {
+    console.log("\n✅ allowed_origins already matches desired state — nothing to do.");
+    console.log(`   Desired: ${JSON.stringify(desired)}`);
     return;
   }
 
-  const updated = [...current, ...toAdd];
-  console.log(`\n2. Adding: ${JSON.stringify(toAdd)}`);
-  console.log(`   New allowed_origins will be: ${JSON.stringify(updated)}`);
+  if (toAdd.length > 0) {
+    console.log(`\n   Adding:   ${JSON.stringify(toAdd)}`);
+  }
+  if (toRemove.length > 0) {
+    console.log(`   Removing: ${JSON.stringify(toRemove)}`);
+  }
+  console.log(`\n2. Applying new allowed_origins: ${JSON.stringify(desired)}`);
 
   await clerkFetch("/instance", {
     method: "PATCH",
-    body: JSON.stringify({ allowed_origins: updated }),
+    body: JSON.stringify({ allowed_origins: desired }),
   });
 
   console.log("\n✅ Clerk instance updated successfully.");
-  console.log(
-    "   bovial.com and www.bovial.com are now in Clerk's allowed_origins.",
-  );
 }
 
 main().catch((err) => {

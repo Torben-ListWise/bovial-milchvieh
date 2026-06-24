@@ -1,9 +1,9 @@
 # Operator Runbook — bovial.com Custom Domain Setup
 
 This runbook documents every step required to make the app available at
-`https://bovial.com` and `https://www.bovial.com`. Some steps require
-clicking in the Replit UI or the DNS registrar panel — they cannot be
-automated in code.
+`https://bovial.com`. The www subdomain redirects to the apex domain at the
+server level (301 permanent). Some steps require clicking in the Replit UI
+or the DNS registrar panel — they cannot be automated in code.
 
 ---
 
@@ -15,17 +15,19 @@ automated in code.
 | `.env.example` documentation | Agent | Code | ✅ Done |
 | Register custom domain in Replit | Operator | Replit UI | ⏳ Pending |
 | DNS CNAME/A records at registrar | Operator | DNS panel | ⏳ Pending (after step above) |
-| Clerk allowed origins | Agent | Clerk Backend API (`configure-clerk-allowed-origins.ts`) | ✅ Done |
+| Clerk allowed origins (apex only) | Agent | Clerk Backend API (`configure-clerk-allowed-origins.ts`) | ✅ Done |
+| Clerk redirect URLs (www removed) | Agent | Clerk Backend API + verified 2026-06-24 | ✅ Done |
 | TLS certificate | Replit | Automatic | ⏳ Auto (after DNS verified) |
 
 ---
 
 ## 1. CORS — already configured
 
-`ALLOWED_ORIGINS=https://bovial.com,https://www.bovial.com` is already set
-as a production environment variable. The API server (`artifacts/api-server/src/app.ts`)
-reads this at startup and merges it into the CORS allowlist alongside the
-Replit-assigned subdomains. No further code change is needed.
+`ALLOWED_ORIGINS=https://bovial.com` is set as a production environment
+variable. The API server (`artifacts/api-server/src/app.ts`) reads this at
+startup and merges it into the CORS allowlist alongside the Replit-assigned
+subdomains. The www subdomain is excluded because a server-level 301 redirect
+(www → apex) is in place before any CORS handling. No further code change is needed.
 
 ---
 
@@ -88,24 +90,48 @@ the correct publishable key for the incoming hostname. This is the standard
 Replit-managed Clerk multi-domain pattern and works with bovial.com without
 any code change.
 
+### Clerk redirect URLs — verified clean ✅
+
+Clerk's **User & Authentication → Redirects** (allowed redirect URLs) was
+audited on 2026-06-24 via the Clerk Backend API:
+
+```bash
+# GET /v1/redirect_urls returns the full list of allowed redirect URLs
+curl -s -H "Authorization: Bearer $CLERK_SECRET_KEY" \
+  https://api.clerk.com/v1/redirect_urls
+# Output: []
+```
+
+The list is empty — `https://www.bovial.com` was never registered as an
+allowed redirect URL, and no stale entries exist.
+
 ### Clerk allowed origins — already configured ✅
 
 Even though the proxy works domain-agnostically, Clerk's security policy
-requires every origin to be explicitly whitelisted in the instance settings.
+requires every origin to be explicitly whitelisted in the instance settings
+(`allowed_origins`).
 
-This was applied programmatically via the Clerk Backend API using
-`artifacts/api-server/src/scripts/configure-clerk-allowed-origins.ts`.
-Running that script confirmed both origins are registered:
+Only the apex domain `https://bovial.com` is whitelisted.
+`https://www.bovial.com` was removed on 2026-06-24 via `PATCH /v1/instance`
+because the server-level 301 redirect (www → apex) fires before Clerk sees
+any request — the www origin entry was dead config.
 
+Verified via the Clerk Backend API after removal:
+
+```bash
+curl -s -H "Authorization: Bearer $CLERK_SECRET_KEY" \
+  https://api.clerk.com/v1/instance \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('allowed_origins'))"
+# Output: ['https://bovial.com']
 ```
-Current allowed_origins: ["https://bovial.com","https://www.bovial.com"]
-✅ All required origins are already present — nothing to do.
-```
 
-To re-verify or re-apply at any time (idempotent):
+To re-verify or re-apply at any time (idempotent reconcile script):
 
 ```bash
 pnpm --filter @workspace/api-server tsx src/scripts/configure-clerk-allowed-origins.ts
+# Output when state is correct:
+# ✅ allowed_origins already matches desired state — nothing to do.
+# Desired: ["https://bovial.com"]
 ```
 
 ### UI-only cookies
@@ -144,7 +170,7 @@ curl -I -X OPTIONS https://bovial.com/api/health \
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| CORS error in browser | ALLOWED_ORIGINS missing www variant | Check production env var includes both values |
+| CORS error in browser | ALLOWED_ORIGINS missing bovial.com | Check production env var is set to `https://bovial.com` |
 | 401 on login | Clerk allowed origins not set | Complete step 4 in the Auth pane |
 | `NET::ERR_CERT_AUTHORITY_INVALID` | TLS not yet provisioned | Wait for DNS propagation, then Replit auto-provisions cert |
 | Clerk proxy returns 502 | Clerk FAPI unreachable | Transient; retry. Check `CLERK_SECRET_KEY` is set |

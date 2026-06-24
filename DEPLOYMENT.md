@@ -120,7 +120,7 @@ CLERK_WEBHOOK_SECRET=whsec_...
 ANTHROPIC_API_KEY=sk-ant-...
 
 # ── App ────────────────────────────────────────────────────────────────────
-ALLOWED_ORIGINS=https://bovial.com,https://www.bovial.com
+ALLOWED_ORIGINS=https://bovial.com
 CRON_SECRET=<random-32-char-string>
 ```
 
