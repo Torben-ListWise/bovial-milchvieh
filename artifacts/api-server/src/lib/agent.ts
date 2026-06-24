@@ -1005,6 +1005,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
   let finalText = "";
   let toolWasCalled = false;
+  let firstTextDeltaFired = false;
   const backQuestions: string[] = [];
   const maxTurns = 20;
 
@@ -1032,11 +1033,19 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
         ),
         tools: TOOLS,
-        tool_choice: { type: "auto" },
+        tool_choice: (turn === 0 && opts.conversation.length === 1)
+          ? { type: "tool" as const, name: "get_schema" }
+          : { type: "auto" as const },
         messages,
       });
       if (opts.onTextDelta) {
-        stream.on("text", (delta) => opts.onTextDelta!(delta));
+        stream.on("text", (delta) => {
+          if (!firstTextDeltaFired) {
+            firstTextDeltaFired = true;
+            opts.onProgress?.("Generiere Antwort…");
+          }
+          opts.onTextDelta!(delta);
+        });
       }
       return stream.finalMessage();
     });
@@ -1089,7 +1098,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   // Grounding enforcement: if the model returned text without calling any
   // compute tool, replace the response with a safe fallback. This prevents
   // hallucinated numbers from reaching the user.
-  if (!toolWasCalled && finalText) {
+  if (!toolWasCalled && finalText && opts.conversation.length === 1) {
     logger.warn(
       { datasetId: opts.datasetId },
       "Agent antwortete ohne Werkzeugaufruf — Antwort wird verworfen (Grounding-Garantie)",
