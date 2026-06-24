@@ -1416,12 +1416,14 @@ function AnalysisResultsPanel({
   pendingQuestion,
   streamingText,
   streamingCharts,
+  scrollToTopKey,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
   pendingQuestion?: string;
   streamingText?: string;
   streamingCharts?: Chart[];
+  scrollToTopKey?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
@@ -1438,7 +1440,17 @@ function AnalysisResultsPanel({
     }
   }
 
-  // Auto-scroll to newest result card
+  // Scroll to top when a new question is submitted (key increments immediately on submit)
+  useEffect(() => {
+    if (scrollToTopKey) scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [scrollToTopKey]);
+
+  // Scroll to top when switching to a different analysis
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [analysis?.id]);
+
+  // Auto-scroll to newest result card when it arrives
   useEffect(() => {
     if (resultPairs.length === 0) return;
     lastCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1602,6 +1614,7 @@ export function AnalysesPage() {
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
   const [pinnedChips, setPinnedChips] = useState<string[]>([]);
   const [chipsExiting, setChipsExiting] = useState(false);
+  const [resultsScrollKey, setResultsScrollKey] = useState(0);
   const lastChipsRef = useRef<string[]>([]);
   const chipsExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatWidth, setChatWidth] = useState<number>(() => {
@@ -2087,6 +2100,7 @@ export function AnalysesPage() {
     if (!text) return;
 
     pendingQuestionRef.current = text;
+    if (activeAnalysisId) setResultsScrollKey((k) => k + 1);
 
     if (!activeAnalysisId) {
       createAnalysis.mutate({
@@ -2432,7 +2446,6 @@ export function AnalysesPage() {
     }
 
     const msgs = analysis?.messages ?? [];
-    const chatFollowUpQuestions = msgs.filter(m => m.role === "assistant").pop()?.followUpQuestions ?? [];
 
     // Determine if the last assistant message triggers a BackQuestionForm
     const lastAssistantMsg = [...msgs].reverse().find((m) => m.role === "assistant" && !m.error);
@@ -2722,7 +2735,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} scrollToTopKey={resultsScrollKey} />
           </div>
         </div>
       </div>
@@ -2744,7 +2757,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} scrollToTopKey={resultsScrollKey} />
             </div>
           )}
         </div>

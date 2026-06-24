@@ -193,9 +193,13 @@ export async function processQuestion(
     }
 
     // Await follow-up questions so they are bundled directly into the message.
-    const followUpQuestions = agentResultText
-      ? await generateFollowUps(question, agentResultText).catch(() => [])
-      : [];
+    let followUpQuestions: string[] = [];
+    if (agentResultText) {
+      followUpQuestions = await generateFollowUps(question, agentResultText);
+      if (followUpQuestions.length === 0) {
+        followUpQuestions = await generateFollowUps(question, agentResultText);
+      }
+    }
 
     const [assistant] = await db
       .insert(messagesTable)
