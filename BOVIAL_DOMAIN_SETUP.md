@@ -15,7 +15,7 @@ automated in code.
 | `.env.example` documentation | Agent | Code | ✅ Done |
 | Register custom domain in Replit | Operator | Replit UI | ⏳ Pending |
 | DNS CNAME/A records at registrar | Operator | DNS panel | ⏳ Pending (after step above) |
-| Clerk allowed origins | Operator | Clerk Auth pane | ⏳ Pending |
+| Clerk allowed origins | Agent | Clerk Backend API (`configure-clerk-allowed-origins.ts`) | ✅ Done |
 | TLS certificate | Replit | Automatic | ⏳ Auto (after DNS verified) |
 
 ---
@@ -88,20 +88,25 @@ the correct publishable key for the incoming hostname. This is the standard
 Replit-managed Clerk multi-domain pattern and works with bovial.com without
 any code change.
 
-### Clerk allowed origins (operator action)
+### Clerk allowed origins — already configured ✅
 
 Even though the proxy works domain-agnostically, Clerk's security policy
-requires the new origin to be explicitly whitelisted:
+requires every origin to be explicitly whitelisted in the instance settings.
 
-1. Open the **Auth pane** in the Replit workspace toolbar (all Clerk config
-   is done here — there is no external Clerk dashboard for Replit-managed
-   auth).
-2. Navigate to **Allowed Origins** (or **Domains**).
-3. Add `https://bovial.com` and `https://www.bovial.com`.
+This was applied programmatically via the Clerk Backend API using
+`artifacts/api-server/src/scripts/configure-clerk-allowed-origins.ts`.
+Running that script confirmed both origins are registered:
 
-Without this step, browser requests from bovial.com will be rejected by Clerk
-with a 401 or CORS-style auth error even though the API CORS allowlist is
-configured correctly.
+```
+Current allowed_origins: ["https://bovial.com","https://www.bovial.com"]
+✅ All required origins are already present — nothing to do.
+```
+
+To re-verify or re-apply at any time (idempotent):
+
+```bash
+pnpm --filter @workspace/api-server tsx src/scripts/configure-clerk-allowed-origins.ts
+```
 
 ### UI-only cookies
 
