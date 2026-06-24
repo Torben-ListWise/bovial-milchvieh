@@ -15,8 +15,6 @@ export type StreamCallbacks = {
 const MAX_RETRIES = 3;
 const BACKOFF_DELAYS_MS = [1000, 2000, 4000] as const;
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
-
 export function useAnalysisStream(callbacks: StreamCallbacks) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
@@ -24,79 +22,89 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
   const stoppedRef = useRef(false);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const doStream = useCallback((analysisId: string) => {
     if (stoppedRef.current) return;
 
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
+    // Close any existing WebSocket
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
     (async () => {
       try {
         const token = await callbacksRef.current.getToken();
-        const res = await fetch(`${API_BASE}/api/analyses/${analysisId}/stream`, {
-          signal: ctrl.signal,
-          headers: {
-            Accept: "text/event-stream",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
+        if (!token) throw new Error("No auth token");
+        if (stoppedRef.current) return;
 
-        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        // Construct WebSocket URL — same host as the page, wss:// protocol
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const host = window.location.host;
+        const url = `${proto}//${host}/api/ws/stream?analysisId=${encodeURIComponent(analysisId)}&token=${encodeURIComponent(token)}`;
 
-        retryCountRef.current = 0;
+        const ws = new WebSocket(url);
+        wsRef.current = ws;
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
+        ws.onopen = () => {
+          retryCountRef.current = 0;
+        };
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
+        ws.onmessage = (evt) => {
+          if (stoppedRef.current) return;
+          try {
+            const msg = JSON.parse(evt.data as string) as Record<string, unknown>;
+            const event = msg.event as string;
+            const cb = callbacksRef.current;
 
-          const parts = buf.split("\n\n");
-          buf = parts.pop() ?? "";
-
-          for (const part of parts) {
-            if (!part.trim()) continue;
-            let eventType = "message";
-            let dataLine = "";
-            for (const line of part.split("\n")) {
-              if (line.startsWith("event:")) eventType = line.slice(6).trim();
-              else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+            if (event === "delta") {
+              cb.onDelta((msg.text as string) ?? "");
+            } else if (event === "progress") {
+              cb.onProgress((msg.step as string) ?? "");
+            } else if (event === "chart") {
+              cb.onChart(msg.chart as Chart);
+            } else if (event === "sources") {
+              cb.onSources((msg.sources as string[]) ?? []);
+            } else if (event === "done") {
+              if (wsRef.current === ws) wsRef.current = null;
+              ws.close();
+              cb.onDone();
+            } else if (event === "error") {
+              if (wsRef.current === ws) wsRef.current = null;
+              ws.close();
+              throw new Error((msg.message as string) ?? "Stream error");
             }
-            if (!dataLine) continue;
-
-            try {
-              const payload = JSON.parse(dataLine);
-              const cb = callbacksRef.current;
-              if (eventType === "delta") {
-                cb.onDelta(payload.text ?? "");
-              } else if (eventType === "progress") {
-                cb.onProgress(payload.step ?? "");
-              } else if (eventType === "chart") {
-                cb.onChart(payload.chart as Chart);
-              } else if (eventType === "sources") {
-                cb.onSources(payload.sources ?? []);
-              } else if (eventType === "done") {
-                reader.cancel();
-                cb.onDone();
-                return;
-              } else if (eventType === "error") {
-                reader.cancel();
-                throw new Error(payload.message ?? "SSE error");
-              }
-            } catch {
-              // ignore malformed events
-            }
+            // "connected" event: no action needed, just confirmation
+          } catch (parseErr) {
+            // ignore malformed frames
           }
-        }
-        throw new Error("Stream ended without done event");
+        };
+
+        ws.onerror = () => {
+          // onerror is always followed by onclose — handle retry in onclose
+        };
+
+        ws.onclose = (evt) => {
+          if (wsRef.current === ws) wsRef.current = null;
+          if (stoppedRef.current) return;
+          // 1000 = normal close (done/error events send this), 4001/4003 = auth errors
+          if (evt.code === 1000 || evt.code === 4001 || evt.code === 4003) return;
+          // Abnormal close — retry
+          const n = retryCountRef.current;
+          if (n < MAX_RETRIES) {
+            retryCountRef.current = n + 1;
+            const delay = BACKOFF_DELAYS_MS[n] ?? 4000;
+            retryTimerRef.current = setTimeout(() => doStream(analysisId), delay);
+          } else {
+            callbacksRef.current.onFallback?.();
+          }
+        };
       } catch (err) {
-        if (stoppedRef.current || ctrl.signal.aborted) return;
+        if (stoppedRef.current) return;
         const n = retryCountRef.current;
         if (n < MAX_RETRIES) {
           retryCountRef.current = n + 1;
@@ -128,8 +136,13 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    abortRef.current?.abort();
-    abortRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
   }, []);
 
   useEffect(() => () => stopStream(), [stopStream]);

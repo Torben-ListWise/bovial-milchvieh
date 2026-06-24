@@ -1,3 +1,4 @@
+import { createServer } from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
@@ -7,6 +8,7 @@ import { ensureExtensions, pool, db, knowledgeDocumentsTable, analysesTable, mes
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
 import { warmupEmbeddingModel, embeddingModelReady, LOCAL_MODEL_NAME } from "./lib/embeddings";
+import { attachWebSocketServer } from "./lib/wsHandler";
 
 const rawPort = process.env["PORT"];
 
@@ -173,7 +175,10 @@ ensureExtensions()
     // farmer upload never pays the ONNX cold-start penalty (~2-5 s).
     await warmupEmbeddingModel();
 
-    app.listen(port, (err) => {
+    const httpServer = createServer(app);
+    attachWebSocketServer(httpServer);
+
+    httpServer.listen(port, (err?: Error) => {
       if (err) {
         logger.error({ err }, "Error listening on port");
         process.exit(1);
