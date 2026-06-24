@@ -27,7 +27,9 @@ export async function generateFollowUps(question: string, answer: string): Promi
         content: `Frage: "${question.slice(0, 200)}"\nAntwort: "${answer.slice(0, 600)}"\n\nGeneriere genau 3 kurze Folgefragen auf Deutsch (max. 7 Wörter je Frage) als JSON-Array von Strings. Antworte NUR mit dem JSON-Array.`,
       }],
     });
-    const text = resp.content.find(b => b.type === "text")?.text?.trim() ?? "[]";
+    const raw = resp.content.find(b => b.type === "text")?.text?.trim() ?? "[]";
+    // Strip optional markdown code fences (```json ... ``` or ``` ... ```)
+    const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);

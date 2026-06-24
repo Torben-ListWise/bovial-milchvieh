@@ -1772,8 +1772,6 @@ export function AnalysesPage() {
   const isAgentWorking =
     (ask.isPending && !!activeAnalysisId) ||
     analysis?.agentProgress != null ||
-    // SSE stream is actively receiving data
-    (!!streaming.text || !!streaming.progressStep) ||
     // Background agent started but no messages in DB yet
     (!!activeAnalysisId && (analysis?.messages?.length ?? 0) === 0 && !!pendingQuestionRef.current);
 
@@ -2526,9 +2524,11 @@ export function AnalysesPage() {
             {isAgentWorking && streaming.sources.length > 0 && (
               <LiveSourcesActivity sources={streaming.sources} />
             )}
-            {isAgentWorking && (
+            {isAgentWorking && completedSteps.length > 0 ? (
+              <AgentStepsTimeline completedSteps={completedSteps} currentStep={currentStep} />
+            ) : isAgentWorking ? (
               <AgentWorkingBanner currentStep={currentStep} />
-            )}
+            ) : null}
 
           {(pinnedChips.length > 0 || chipsExiting) && (
             <FollowUpChips
