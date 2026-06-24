@@ -565,14 +565,17 @@ function MessageBubble({
         </div>
         {isAssistant && msg.citations && msg.citations.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {msg.citations.map((c, i) => (
-              <span
-                key={i}
-                className="text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
-              >
-                {c.label}: {c.value}
-              </span>
-            ))}
+            {msg.citations.map((c, i) => {
+              const isDocSource = c.value === "PDF-Dokument" || c.value === "Wissensbibliothek";
+              return (
+                <span
+                  key={i}
+                  className="text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
+                >
+                  {isDocSource ? c.label : `${c.label}: ${c.value}`}
+                </span>
+              );
+            })}
           </div>
         )}
         <span className="text-[10px] text-muted-foreground">

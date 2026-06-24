@@ -618,19 +618,36 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const rawText = docContext
           .replace(/^\n\nHOCHGELADENE DOKUMENTE.*?:\n/s, "")
           .trim();
-        // Push citations for each document (unique by name)
+        // Push citations for each document (unique by name), use category as topic label
         const seenDocNames = new Set<string>();
+        const docTitles: string[] = [];
         const docNameMatches = rawText.matchAll(/^--- Dokument: (.+?) ---$/gm);
         for (const m of docNameMatches) {
           const name = m[1].trim();
           if (!seenDocNames.has(name)) {
             seenDocNames.add(name);
-            citations.push({
-              label: name,
-              value: "PDF-Dokument",
-              basis: null,
-              sourceType: "pdf",
-            });
+            docTitles.push(name);
+          }
+        }
+        if (docTitles.length > 0) {
+          const catRows = await db.execute(
+            sql`SELECT title, category FROM knowledge_documents WHERE title = ANY(${docTitles}) AND status = 'ready'`,
+          );
+          const catMap = new Map<string, string | null>(
+            (catRows.rows as { title: string; category: string | null }[]).map((r) => [r.title, r.category]),
+          );
+          const seenTopics = new Set<string>();
+          for (const title of docTitles) {
+            const topic = catMap.get(title)?.trim() || "Hochgeladenes Dokument";
+            if (!seenTopics.has(topic)) {
+              seenTopics.add(topic);
+              citations.push({
+                label: topic,
+                value: "PDF-Dokument",
+                basis: null,
+                sourceType: "pdf",
+              });
+            }
           }
         }
         return { text: rawText };
@@ -716,7 +733,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           const vecStr = `[${queryVec.join(",")}]`;
           const rows = await db.execute(
             sql`
-              SELECT kc.chunk_text, kd.title,
+              SELECT kc.chunk_text, kd.title, kd.category,
                      (1 - (kc.embedding <=> ${vecStr}::vector)) AS similarity
               FROM knowledge_chunks kc
               JOIN knowledge_documents kd ON kd.id = kc.doc_id
@@ -725,7 +742,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               LIMIT ${topK}
             `,
           );
-          const allRows = rows.rows as { chunk_text: string; title: string; similarity: number }[];
+          const allRows = rows.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
           const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
           if (relevantRows.length === 0) {
             const topScore = allRows[0] ? Number(allRows[0].similarity).toFixed(3) : null;
@@ -741,16 +758,22 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             (r) => ({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity) }),
           );
           // Push one citation per unique document title found in relevant results
+          // Use category as label (topic) instead of filename
           const seenTitles = new Set<string>();
-          for (const r of results) {
+          const seenTopics = new Set<string>();
+          for (const r of relevantRows) {
             if (!seenTitles.has(r.title)) {
               seenTitles.add(r.title);
-              citations.push({
-                label: r.title,
-                value: "Wissensbibliothek",
-                basis: null,
-                sourceType: "wissen",
-              });
+              const topic = r.category?.trim() || "Wissensquelle";
+              if (!seenTopics.has(topic)) {
+                seenTopics.add(topic);
+                citations.push({
+                  label: topic,
+                  value: "Wissensbibliothek",
+                  basis: null,
+                  sourceType: "wissen",
+                });
+              }
             }
           }
           // Notify SSE listener which documents were found
