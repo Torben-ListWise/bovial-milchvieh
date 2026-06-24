@@ -120,7 +120,7 @@ CLERK_WEBHOOK_SECRET=whsec_...
 ANTHROPIC_API_KEY=sk-ant-...
 
 # ── App ────────────────────────────────────────────────────────────────────
-ALLOWED_ORIGINS=https://yourdomain.de
+ALLOWED_ORIGINS=https://bovial.com,https://www.bovial.com
 CRON_SECRET=<random-32-char-string>
 ```
 
@@ -166,7 +166,7 @@ pm2 startup   # follow the printed command to enable on boot
 cat > /etc/nginx/sites-available/milchvieh << 'EOF'
 server {
     listen 80;
-    server_name yourdomain.de www.yourdomain.de;
+    server_name <your-domain> www.<your-domain>;
 
     # Frontend static files
     root /opt/milchvieh/artifacts/milchvieh/dist;
@@ -207,7 +207,7 @@ ln -s /etc/nginx/sites-available/milchvieh /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 
 # Obtain SSL certificate
-certbot --nginx -d yourdomain.de -d www.yourdomain.de
+certbot --nginx -d <your-domain> -d www.<your-domain>
 ```
 
 ---
