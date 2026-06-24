@@ -206,6 +206,8 @@ router.post(
         processQuestion(analysis, question, {
           onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
           onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
+          onProgress: (step) => sseWriters.get(id)?.sendProgress(step),
+          onChart: (chart) => sseWriters.get(id)?.sendChart(chart),
           onDone: () => sseWriters.get(id)?.sendDone(),
         }).catch((err) => {
           sseWriters.get(id)?.sendError("Verarbeitungsfehler");
@@ -270,10 +272,18 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
   const { analysisId } = req.params;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Cache-Control", "no-cache, no-store, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // Tell any intermediate proxy not to buffer this response
+  res.setHeader("X-Replit-Proxy-Buffering", "no");
+
+  // Disable Nagle's algorithm: forces small packets (individual text deltas)
+  // to be sent immediately rather than being batched into larger TCP segments.
+  // This is the same technique Vite uses for its HMR SSE stream.
+  const socket = (res.socket ?? (res as any).req?.socket) as import("net").Socket | undefined;
+  if (socket) socket.setNoDelay(true);
 
   // Flush headers immediately so the client sees 200 + SSE content-type
   // before any data arrives — critical for proxies and the browser's
@@ -281,9 +291,8 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
   res.flushHeaders();
 
   function flush() {
-    // Express may buffer res.write() calls; (res as any).flush() forces
-    // the underlying socket to drain immediately (works with compression
-    // middleware too via the flush() shim it injects).
+    // (res as any).flush() is injected by compression middleware; without it
+    // we fall back to socket.write flushing via setNoDelay above.
     if (typeof (res as any).flush === "function") (res as any).flush();
   }
 
@@ -316,10 +325,13 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
 
   sseWriters.set(analysisId, writer);
 
-  // Heartbeat every 15 s to keep the connection alive through proxies
+  // Heartbeat every 10 s to keep the connection alive through proxies
   const heartbeat = setInterval(() => {
-    if (!res.writableEnded) res.write(": heartbeat\n\n");
-  }, 15_000);
+    if (!res.writableEnded) {
+      res.write(": heartbeat\n\n");
+      flush();
+    }
+  }, 10_000);
 
   req.on("close", () => {
     clearInterval(heartbeat);
