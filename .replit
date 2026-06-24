@@ -44,4 +44,4 @@ channel = "stable-25_05"
 OPERATOR_EMAILS = "t_richelsen@hotmail.de"
 
 [userenv.production]
-ALLOWED_ORIGINS = "https://bovial.com,https://www.bovial.com"
+ALLOWED_ORIGINS = "https://bovial.com"

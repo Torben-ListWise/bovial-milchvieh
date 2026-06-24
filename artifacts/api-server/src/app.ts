@@ -13,6 +13,19 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Redirect www.bovial.com → bovial.com (301 permanent).
+// Must run before everything else so www requests never touch auth or CORS.
+app.use((req, res, next) => {
+  const host = req.headers.host ?? "";
+  if (host.startsWith("www.")) {
+    const apex = host.slice(4);
+    const redirectUrl = `https://${apex}${req.originalUrl}`;
+    res.redirect(301, redirectUrl);
+    return;
+  }
+  next();
+});
+
 app.use(
   pinoHttp({
     logger,
