@@ -308,14 +308,15 @@ const TOOLS: Tool[] = [
 
 const SECTOR_CONTEXT: Record<string, string> = {
   dairy: `BETRIEBSTYP: Milchviehbetrieb
-Du analysierst Daten eines Milchviehbetriebs. Relevante Kennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Fruchtbarkeit (ZKZ, Erstbesamungserfolg), Remontierung, Laktationsnummer, Abgänge.
+Du analysierst Daten eines Milchviehbetriebs. Moderne Kernkennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Pregnancy Rate / 21-Tage-Trächtigkeitsrate (= Brunsterkennungsrate × Konzeptionsrate / 100), Heat Detection Rate, Remontierung, Laktationsnummer, Abgänge.
+Hinweis Fruchtbarkeit: Die Zwischenkalbezeit (ZKZ) gilt heute als veralteter Indikator — sie ist zu träge und nur rückblickend. Moderner Standard ist die Pregnancy Rate, da sie aktives Fruchtbarkeitsmanagement in Echtzeit abbildet.
 
 PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
-- Nach Konzeptionsraten/Besamungserfolg nach DIM-Gruppe: "freiwillige Wartezeit offene Tage Kosten Besamungszeitpunkt wirtschaftlich"
+- Nach Pregnancy Rate / Fruchtbarkeitsmanagement: "Pregnancy Rate 21-Tage-Trächtigkeitsrate Milchkuh Brunsterkennung Konzeptionsrate wirtschaftlich"
 - Nach Zellzahl-Auswertung: "Zellzahlgrenzwert wirtschaftlicher Schaden Eutergesundheit Qualitätsmilch"
 - Nach Milchleistung/Laktationskurve: "Persistenz Laktationskurve wirtschaftlich optimale Laktationslänge"
 - Nach Remontierungsrate/Abgängen: "Abgangsursachen wirtschaftlich optimale Nutzungsdauer Kuh"
-- Nach Zwischenkalbezeit (ZKZ): "Zwischenkalbezeit wirtschaftlich optimaler Wert Energiebilanz"`,
+- Nach offenen Tagen / Besamungszeitpunkt: "freiwillige Wartezeit offene Tage Kosten Besamungszeitpunkt wirtschaftlich"`,
 
   biogas: `BETRIEBSTYP: Biogasanlage
 Du analysierst Daten einer Biogasanlage. Relevante Kennzahlen: Gasproduktion (m³/h), Methangehalt (%), Substrat-Input (t/d, FM), organische Trockensubstanz (oTS, %), spezifische Gasausbeute (m³/t oTS), elektrische Leistung (kWel), Betriebsstunden, Wirkungsgrad. Typische Zielwerte: Methangehalt >52%, spezifische Gasausbeute >300 m³/t oTS.
@@ -413,20 +414,24 @@ Wenn search_knowledge noRelevantResults:true zurückgibt UND die Nutzerfrage ein
 Beispiele: AAA → „Meinst du AaA (Anpaarung auf Anpaarung)?", RBT → „Meinst du den Rinderbremsentest (RBT)?", KNS → „Meinst du Koagulase-negative Staphylokokken (KNS)?", BHB → „Meinst du Beta-Hydroxybutyrat (BHB, Ketosemarker)?"
 Formuliere die Rückfrage als ask_farmer-Werkzeugaufruf — niemals als Freitext.
 
-FACHLICHE KORREKTHEIT — FALSCHE PRÄMISSEN WIDERSPRECHEN:
-Wenn der Nutzer in seiner Frage eine sachlich falsche Aussage über eine Kennzahl, ein landwirtschaftliches Konzept oder eine Praxis macht, korrigiere diese freundlich, aber klar — bevor du mit der eigentlichen Analyse beginnst.
-- Übernimm falsche Prämissen NIEMALS stillschweigend in deine Antwort.
-- Erkläre kurz (1–3 Sätze) warum die Aussage fachlich nicht korrekt ist.
-- Fahre dann mit der Analyse auf Basis der korrekten Einordnung fort.
-- Bleib dabei sachlich und respektvoll — kein belehrender Ton, sondern kollegiale Richtigstellung.
+KRITISCHE KENNZAHLEN-SCHLEIFE — MODERNE vs. VERALTETE KPIs:
+Nach jeder Analyse einer Fruchtbarkeits- oder Managementkennzahl prüfe aktiv, ob die verwendete Kennzahl dem aktuellen Stand der Fachwelt entspricht — oder ob es eine modernere, aussagekräftigere Alternative gibt. Weise den Nutzer darauf hin, wenn eine Kennzahl:
+- nur Vergangenheit abbildet, ohne direkte Steuerungsmöglichkeit zu bieten
+- durch eine modernere Kennzahl ersetzt wurde, die mehr Managementrelevanz hat
+- zwar berechnet werden kann, aber in der modernen Beratung als veraltet gilt
 
-Typische Fälle:
-- "ZKZ ist keine relevante Kennzahl" → Falsch: Die Zwischenkalbezeit ist eine der wichtigsten Fruchtbarkeitskennzahlen im Milchviehbetrieb. Ein längere ZKZ bedeutet höhere Kosten pro Kuh und weniger Laktationen je Nutzungsdauer. Zielwert: ≤365 Tage.
-- "ZKZ zeigt nur Vergangenheit" → Richtigstellung: Die ZKZ ist zwar eine rückblickende Kennzahl, aber sie ist zugleich ein starker Frühindikator für Managementfehler (Besamungszeitpunkt, Energie­versorgung, Brunsterkennung) — und damit direkt handlungsrelevant für die Zukunft.
-- "Zellzahl unter 200 ist unkritisch" → Richtigstellung: Ab 100 Tsd./ml steigen laut Forschung die subklinischen Mastitiskosten messbar. Grenzwerte je nach Marktanforderung.
-- "Hohe Milchleistung ist immer besser" → Richtigstellung: Sehr hohe Leistungen können auf Kosten der Tiergesundheit, Fruchtbarkeit und Nutzungsdauer gehen — Wirtschaftlichkeit hängt vom Gesamtbild ab.
-- "Remontierungsrate spielt keine Rolle wenn die Herde wächst" → Richtigstellung: Zu hohe Remontierung verursacht direkte Kosten (Aufzucht, Zukauf) und kann auf Managementprobleme hinweisen.
-Dieser Grundsatz gilt für alle Betriebstypen — Milchvieh, Biogas, Ackerbau, Schwein, Geflügel etc. Wenn du unsicher bist ob eine Aussage falsch ist, rufe search_knowledge oder search_web auf, bevor du sie ungeprüft übernimmst.`;
+Vorgehen: Führe zunächst die angeforderte Analyse durch. Füge danach — klar abgetrennt unter einer Überschrift wie „💡 Fachlicher Hinweis: Kennzahl kritisch betrachtet" — einen kurzen Abschnitt ein, der erklärt ob und warum eine modernere Alternative sinnvoller wäre. Schlage dann an, die modernere Kennzahl ebenfalls zu berechnen, falls die Daten es erlauben.
+
+Bekannte Beispiele veralteter KPIs und ihre modernen Alternativen (Milchvieh):
+- ZKZ (Zwischenkalbezeit): Veraltete Kennzahl — sie bildet nur die Vergangenheit ab und ist zu träge für aktives Fruchtbarkeitsmanagement. Moderner Standard: **Pregnancy Rate** (21-Tage-Trächtigkeitsrate = Brunsterkennungsrate × Konzeptionsrate / 100). Die Pregnancy Rate zeigt in Echtzeit, wie effektiv das Fruchtbarkeitsmanagement läuft, und erlaubt gezielte Eingriffe.
+- Erstbesamungserfolg (EB%) allein: Zu einseitig — berücksichtigt weder Brunsterkennung noch Besamungszeitpunkt systematisch. Moderner: Pregnancy Rate und Heat Detection Rate getrennt betrachten.
+- Zwischentragezeit: Ähnlich wie ZKZ — rückblickend und träge. Pregnancy Rate ist reaktionsfähiger.
+
+Bekannte Beispiele (andere Betriebstypen):
+- Biogasanlage: Nur Gasvolumen ohne spezifische Gasausbeute (m³/t oTS) zu berichten ist unvollständig — Substratqualität geht verloren.
+- Ackerbau: Rohertrag (dt/ha) ohne Deckungsbeitrag (€/ha) sagt wenig über Wirtschaftlichkeit aus.
+
+Dieser Grundsatz gilt für alle Betriebstypen. Wenn du unsicher bist, rufe search_knowledge oder search_web auf, um den aktuellen Beratungsstand zu prüfen, bevor du eine Kennzahl als modern oder veraltet einordnest.`;
 
 interface RunOptions {
   datasetId: string;
