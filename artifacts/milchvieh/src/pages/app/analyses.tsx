@@ -749,25 +749,30 @@ function preprocessFootnotes(text: string, ns: string): string {
 }
 
 // Replace trust-label italic markdown with styled HTML badge spans.
-// Pattern emitted by the agent: *[📚 Bibliothek]*, *[🌐 Web]*, *[💭 Allgemeinwissen]*
+// New format (emoji-free): *[Bibliothek]*, *[Web]*, *[Allgemeinwissen]*
+// Legacy format (backward-compat): *[📚 Bibliothek]*, *[🌐 Web]*, *[💭 Allgemeinwissen]*
 function preprocessTrustLabels(text: string): string {
   return text
-    .replace(/\*\[📚 Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library" tabindex="0">📚 Bibliothek<span class="trust-tooltip">Aus eurer Wissensdatenbank — eigene Dokumente und Handbücher</span></span>')
-    .replace(/\*\[🌐 Web\]\*/g, '<span class="trust-badge trust-badge-web" tabindex="0">🌐 Web<span class="trust-tooltip">Aus dem Internet recherchiert — externe Quellen und aktuelle Informationen</span></span>')
-    .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general" tabindex="0">💭 Allgemeinwissen<span class="trust-tooltip">Allgemeines KI-Wissen — keine spezifische Quelle zugeordnet</span></span>');
+    .replace(/\*\[📚 Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library" tabindex="0">Bibliothek<span class="trust-tooltip">Aus eurer Wissensdatenbank — eigene Dokumente und Handbücher</span></span>')
+    .replace(/\*\[Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library" tabindex="0">Bibliothek<span class="trust-tooltip">Aus eurer Wissensdatenbank — eigene Dokumente und Handbücher</span></span>')
+    .replace(/\*\[🌐 Web\]\*/g, '<span class="trust-badge trust-badge-web" tabindex="0">Web<span class="trust-tooltip">Aus dem Internet recherchiert — externe Quellen und aktuelle Informationen</span></span>')
+    .replace(/\*\[Web\]\*/g, '<span class="trust-badge trust-badge-web" tabindex="0">Web<span class="trust-tooltip">Aus dem Internet recherchiert — externe Quellen und aktuelle Informationen</span></span>')
+    .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general" tabindex="0">Allgemeinwissen<span class="trust-tooltip">Allgemeines KI-Wissen — keine spezifische Quelle zugeordnet</span></span>')
+    .replace(/\*\[Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general" tabindex="0">Allgemeinwissen<span class="trust-tooltip">Allgemeines KI-Wissen — keine spezifische Quelle zugeordnet</span></span>');
 }
 
 // Extract de-duplicated trust sources present in a message text.
 // Returns an ordered array of the sources that appear (library → web → general).
+// Matches both new emoji-free format and legacy emoji format.
 type TrustSource = { label: string; className: string };
 function extractTrustSources(text: string): TrustSource[] {
   const sources: TrustSource[] = [];
-  if (/\*\[📚 Bibliothek\]\*/.test(text))
-    sources.push({ label: "📚 Bibliothek", className: "trust-badge trust-badge-library" });
-  if (/\*\[🌐 Web\]\*/.test(text))
-    sources.push({ label: "🌐 Web", className: "trust-badge trust-badge-web" });
-  if (/\*\[💭 Allgemeinwissen\]\*/.test(text))
-    sources.push({ label: "💭 Allgemeinwissen", className: "trust-badge trust-badge-general" });
+  if (/\*\[(?:📚 )?Bibliothek\]\*/.test(text))
+    sources.push({ label: "Bibliothek", className: "trust-badge trust-badge-library" });
+  if (/\*\[(?:🌐 )?Web\]\*/.test(text))
+    sources.push({ label: "Web", className: "trust-badge trust-badge-web" });
+  if (/\*\[(?:💭 )?Allgemeinwissen\]\*/.test(text))
+    sources.push({ label: "Allgemeinwissen", className: "trust-badge trust-badge-general" });
   return sources;
 }
 
