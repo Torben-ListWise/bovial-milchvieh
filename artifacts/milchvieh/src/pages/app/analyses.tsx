@@ -748,17 +748,23 @@ function preprocessFootnotes(text: string, ns: string): string {
   );
 }
 
-// Replace trust-label italic markdown with styled HTML badge spans.
-// New format (emoji-free): *[Bibliothek]*, *[Web]*, *[Allgemeinwissen]*
-// Legacy format (backward-compat): *[📚 Bibliothek]*, *[🌐 Web]*, *[💭 Allgemeinwissen]*
-function preprocessTrustLabels(text: string): string {
+// Strip all trust/source markers from text so they don't appear inline.
+// Sources are collected separately via extractTrustSources and shown below the text.
+function stripTrustMarkers(text: string): string {
   return text
-    .replace(/\*\[📚 Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library" tabindex="0">Bibliothek<span class="trust-tooltip">Aus eurer Wissensdatenbank — eigene Dokumente und Handbücher</span></span>')
-    .replace(/\*\[Bibliothek\]\*/g, '<span class="trust-badge trust-badge-library" tabindex="0">Bibliothek<span class="trust-tooltip">Aus eurer Wissensdatenbank — eigene Dokumente und Handbücher</span></span>')
-    .replace(/\*\[🌐 Web\]\*/g, '<span class="trust-badge trust-badge-web" tabindex="0">Web<span class="trust-tooltip">Aus dem Internet recherchiert — externe Quellen und aktuelle Informationen</span></span>')
-    .replace(/\*\[Web\]\*/g, '<span class="trust-badge trust-badge-web" tabindex="0">Web<span class="trust-tooltip">Aus dem Internet recherchiert — externe Quellen und aktuelle Informationen</span></span>')
-    .replace(/\*\[💭 Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general" tabindex="0">Allgemeinwissen<span class="trust-tooltip">Allgemeines KI-Wissen — keine spezifische Quelle zugeordnet</span></span>')
-    .replace(/\*\[Allgemeinwissen\]\*/g, '<span class="trust-badge trust-badge-general" tabindex="0">Allgemeinwissen<span class="trust-tooltip">Allgemeines KI-Wissen — keine spezifische Quelle zugeordnet</span></span>');
+    // New emoji-free format
+    .replace(/\s*\*\[Bibliothek\]\*/g, "")
+    .replace(/\s*\*\[Web\]\*/g, "")
+    .replace(/\s*\*\[Allgemeinwissen\]\*/g, "")
+    .replace(/\s*\*\[Betriebsdaten\]\*/g, "")
+    // Legacy emoji format
+    .replace(/\s*\*\[📚 Bibliothek\]\*/g, "")
+    .replace(/\s*\*\[🌐 Web\]\*/g, "")
+    .replace(/\s*\*\[💭 Allgemeinwissen\]\*/g, "")
+    // Inline [Dokument] markers the agent appends to cited values
+    .replace(/\s*\[Dokument\]/g, "")
+    // Tidy up orphaned spaces before punctuation
+    .replace(/ ([.,;:])/g, "$1");
 }
 
 // Extract de-duplicated trust sources present in a message text.
@@ -879,7 +885,7 @@ const ResultMarkdownContent = memo(function ResultMarkdownContent({
   text: string;
   msgId: string;
 }) {
-  const processed = preprocessFootnotes(preprocessTrustLabels(text), msgId);
+  const processed = preprocessFootnotes(stripTrustMarkers(text), msgId);
   return (
     <div className={
       PROSE_CLASSES +
@@ -1394,48 +1400,46 @@ const ResultCard = memo(function ResultCard({
       </div>
       {!collapsed && (
         <div className="px-4 py-3 space-y-3">
-          {(() => {
-            const sources = extractTrustSources(msg.content ?? "");
-            return sources.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5 pb-1">
-                {sources.map((s) => (
-                  <span key={s.label} className={s.className}>{s.label}</span>
-                ))}
-              </div>
-            ) : null;
-          })()}
           <ResultMarkdownContent text={msg.content ?? ""} msgId={msg.id} />
-          {msg.citations && msg.citations.length > 0 && (
-            <div className="pt-2 border-t border-border/40 space-y-1.5">
-              <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Quellen</p>
-              <div className="flex flex-wrap gap-1.5">
-                {msg.citations.map((c, i) => {
-                  const icon =
-                    c.sourceType === "betriebsdaten" ? "📊" :
-                    c.sourceType === "pdf" ? "📄" :
-                    c.sourceType === "wissen" ? "📚" :
-                    c.sourceType === "web" ? "🌐" : "📌";
-                  return (
-                    <span
-                      key={i}
-                      id={`cite-${msg.id}-${i + 1}`}
-                      title={c.basis ?? undefined}
-                      className="inline-flex items-center gap-1 text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
-                    >
-                      <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0">[{i + 1}]</span>
-                      <span>{icon}</span>
-                      <span className="font-medium">{c.label}</span>
-                      <span className="text-muted-foreground/70">·</span>
-                      <span className="text-muted-foreground">{c.value}</span>
-                      {c.basis && (
-                        <span className="text-[10px] text-muted-foreground/50 ml-0.5">({c.basis})</span>
-                      )}
-                    </span>
-                  );
-                })}
+          {(() => {
+            const trustSources = extractTrustSources(msg.content ?? "");
+            const hasCitations = msg.citations && msg.citations.length > 0;
+            if (!trustSources.length && !hasCitations) return null;
+            return (
+              <div className="pt-2 border-t border-border/30 space-y-1.5">
+                <p className="text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-wider">Quellen</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {trustSources.map((s) => (
+                    <span key={s.label} className={s.className} style={{ fontSize: "0.65rem" }}>{s.label}</span>
+                  ))}
+                  {hasCitations && msg.citations!.map((c, i) => {
+                    const icon =
+                      c.sourceType === "betriebsdaten" ? "📊" :
+                      c.sourceType === "pdf" ? "📄" :
+                      c.sourceType === "wissen" ? "📚" :
+                      c.sourceType === "web" ? "🌐" : "📌";
+                    return (
+                      <span
+                        key={i}
+                        id={`cite-${msg.id}-${i + 1}`}
+                        title={c.basis ?? undefined}
+                        className="inline-flex items-center gap-1 text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
+                      >
+                        <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0">[{i + 1}]</span>
+                        <span>{icon}</span>
+                        <span className="font-medium">{c.label}</span>
+                        <span className="text-muted-foreground/70">·</span>
+                        <span className="text-muted-foreground">{c.value}</span>
+                        {c.basis && (
+                          <span className="text-[10px] text-muted-foreground/50 ml-0.5">({c.basis})</span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           {msg.charts && msg.charts.length > 0 && (
             <div className="space-y-4">
               {msg.charts.map((chart, i) => (
