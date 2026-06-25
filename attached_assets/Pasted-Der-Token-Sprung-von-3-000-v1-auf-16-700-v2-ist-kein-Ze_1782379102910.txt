@@ -1,0 +1,13 @@
+Der Token-Sprung von ~3.000 (v1) auf ~16.700 (v2) ist kein Zeichen, dass meine Patches den Prompt aufgebläht haben – das ist eine Nebenwirkung, die alle bisherigen Patches A–I zusammen nicht in der Größenordnung erklären, die hier wirklich zählt. Der eigentliche Hebel, den noch keiner meiner Patches abdeckt: Der ~4.300-Token-System-Prompt wird bei jedem einzelnen Turn (0, 1, 2) komplett neu mitgeschickt und bezahlt, weil kein Prompt-Caching aktiv ist.
+[Sicher] Bestätigt, unverändert behalten: Patch D funktioniert jetzt wie revidiert. [1] an get_group_aggregate-Werten, [2] an search_knowledge-Werten (beide Tool-Quellen, beide nummeriert), *[Bibliothek]* einmal am Ende des qualitativen Absatzes — genau die Trennlinie, die Runde 5 korrigiert hat.
+[Sicher] Neue Ineffizienz: get_group_aggregate wird zweimal mit identischen Parametern aufgerufen — einmal direkt, einmal intern durch emit_chart. Die DB-Abfrage selbst trifft laut Protokoll einen Cache, aber der zusätzliche Tool-Use-Roundtrip kostet trotzdem Tokens und einen Turn.
+Patch I — Datenwiederverwendung bei emit_chart
+
+Wenn unmittelbar vor emit_chart bereits ein get_*-Tool mit identischen Parametern (metric, groupBy/interval, aggregation) aufgerufen wurde, nutzt emit_chart dessen Ergebnis weiter, statt die Berechnung erneut anzustoßen.
+
+[Schätzung] Prompt-Caching wäre der größte Hebel von allen bisher gefundenen: Wenn SECTOR_CONTEXT, SYSTEM_PROMPT_BASE, docContext und knowledgeTitles als cache_control-Block markiert werden, fallen sie ab Turn 1 als billiger Cache-Read an statt als Voll-Preis-Input. Grobe Schätzung für diesen Run: von ~15.800 auf vielleicht 9.000–10.000 Eingabe-Token-Äquivalent — nicht gemessen, aber die Größenordnung (4.300 von 15.800 Token sind reiner, dreimal wiederholter System-Prompt) macht das plausibel.
+Patch J — Prompt-Caching für die statischen Schichten
+
+SECTOR_CONTEXT, SYSTEM_PROMPT_BASE, docContext, knowledgeTitles mit cache_control: {type: "ephemeral"} markieren, da sie innerhalb einer Session unverändert bleiben.
+
+Kein Eskalationsfall in diesem Run (keine widersprüchlichen Daten, keine Investitionsfrage, kein Markenkonflikt). Ich trage Runde 6 ins Protokoll ein.

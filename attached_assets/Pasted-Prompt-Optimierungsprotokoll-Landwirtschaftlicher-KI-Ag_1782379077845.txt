@@ -1,0 +1,272 @@
+Prompt-Optimierungsprotokoll — Landwirtschaftlicher KI-Agent
+
+Ausgangslage & Limitierung
+
+Dieses Protokoll ist eine Logik-Audit, keine empirische Messung. Es gibt keinen Zugriff auf:
+
+
+echte get_schema/get_kpis-Ergebnisse,
+echte Landwirt-Fragen aus dem Betrieb,
+echtes Nutzerfeedback zur bisherigen Agenten-Performance.
+
+
+Alle Patches sind additiv — keine bestehende Regel wurde verändert, gekürzt oder entfernt (Leitplanke "Ändere niemals die Regeln" wird eingehalten). Effekte sind als Hypothese markiert, bis du sie mit echten Sessions verifizierst.
+
+
+Runde 1 — Tool-Call-Effizienz & fehlende Fehlerpfade
+
+Befund 1: "Immer mit get_schema beginnen" ist für Folgefragen in derselben Session nicht spezifiziert. Wörtlich gelesen müsste der Agent bei jeder einzelnen Nutzerfrage erneut get_schema aufrufen — auch wenn sich am Datensatz nichts geändert hat. Das kostet unnötige Tool-Calls und Latenz.
+
+Patch A — Schema-Caching-Regel
+
+
+get_schema wird innerhalb einer Session nur erneut aufgerufen, wenn (a) es der erste Aufruf der Session ist, (b) der Nutzer einen anderen Betrieb/Datensatz referenziert, oder (c) seit dem letzten get_schema-Aufruf mehr als 5 Turns vergangen sind. Annahme: 5 Turns als Startwert — bei Bedarf anpassen.
+
+
+
+Befund 2: Die Regel "Wenn get_schema 0 Felder UND dokumentAvailable: true" deckt nur einen Fall ab. Der Fall "0 Felder UND dokumentAvailable: false" (keine Datenquelle vorhanden) ist nicht definiert → Risiko: Agent versucht trotzdem DB-Tools oder beantwortet ohne Quellenbasis.
+
+Patch B — Fallback ohne Datenquelle
+
+
+Wenn get_schema 0 Felder liefert UND dokumentAvailable: false: keine DB- oder Dokument-Tools verwenden. Dem Nutzer transparent mitteilen, dass keine Betriebsdaten verfügbar sind. search_web ist die einzig zulässige Quelle, Kennzeichnung [Web] zwingend.
+
+
+
+Entscheidung: Beide Patches behalten — sie schließen reale Lücken, ohne bestehende Logik zu berühren. Hypothese: reduziert redundante Calls und verhindert einen unspezifizierten Zustand.
+
+
+Runde 2 — Antwortkonsistenz (Länge & Zitiersysteme)
+
+Befund 3: "Einfache Fragen: max. 3–5 Abschnitte, komplexe Analysen dürfen länger sein" — ohne Schwellenwert führt das zu inkonsistenter Länge je nach subjektiver Einschätzung des Modells.
+
+Patch C — Komplexitäts-Heuristik
+
+
+Einfache Frage = 1 Kennzahl/1 Maßnahme, keine Tabelle nötig. Komplexe Analyse = ≥2 Variablen im Vergleich, Zeitreihen-Betrachtung, oder Investitionsentscheidung. Nur die komplexe Klasse darf über 5 Abschnitte gehen.
+
+
+
+Befund 4: Zwei parallele Quellensysteme — numerisch [1][2][3] für Werkzeugwerte und kursiv *[Bibliothek]*/*[Web]*/*[Allgemeinwissen]* für Empfehlungsvertrauen — sind nicht gegeneinander abgegrenzt. Ohne Trennregel kann ein Satz wie "Pregnancy Rate liegt bei 22 % [1] [Bibliothek]" entstehen, was uneindeutig ist: Bezieht sich [Bibliothek] auf die Zahl oder auf die folgende Empfehlung?
+
+Patch D — Trennregel Zitiersysteme
+
+
+[n]-Marker ausschließlich an quantitative Werte aus DB/Dokument. *[Bibliothek]*/*[Web]*/*[Allgemeinwissen]* ausschließlich an qualitative Aussagen/Empfehlungssätze, nie an dieselbe Zahl wie [n]. Beide Marker dürfen im selben Abschnitt, aber nie am selben Token stehen.
+
+
+
+Befund 5: Die Regel "Bestwert aus Daten ≠ beste Handlungsempfehlung" benennt das Problem, aber kein Antwortformat für den Konfliktfall.
+
+Patch E — Konfliktdarstellung
+
+
+Bei Abweichung zwischen statistischem Bestwert und Bibliotheksempfehlung: beide Werte explizit nennen, kurze Begründung der Abweichung (1–2 Sätze), danach klare Empfehlung mit Quellen-Tag.
+
+
+
+Entscheidung: Patches C–E behalten. Hypothese: konsistentere Antwortlänge, eindeutigere Zuordnung von Vertrauensgraden.
+
+
+Runde 3 — Governance: Eskalation & Abbruchkriterium der Loop
+
+Befund 6: "Eskaliere an mich, wenn es aus deiner Sicht Sinn macht" hat kein objektives Trigger-Set. Für eine Loop, die selbstständig laufen soll, ist das ein unscharfes Abbruch-/Eskalationskriterium.
+
+Patch F — Eskalationstrigger (konkret)
+
+
+Eskalation an den Betreiber erfolgt, wenn:
+
+
+zwei Werkzeuge widersprüchliche Werte zur gleichen Kennzahl liefern,
+eine Empfehlung ein Investitionsvolumen über einem definierten Schwellenwert betrifft (Vorschlag: 10.000 €, anpassbar) und kein Bibliothekstreffer ≥ 0,55 vorliegt,
+der Nutzer trotz Erklärung wiederholt eine Marken-/Produktempfehlung verlangt,
+zu einer sicherheitsrelevanten Frage (z. B. Tierwohl, Düngeverordnung, Gülleverordnung) weder Bibliothek noch Web einen belastbaren Treffer liefern.
+
+
+
+
+Befund 7: "So lange, bis keine messbare Verbesserung mehr erreicht wird" — es existiert keine definierte Messgröße. Ohne Metrik kann die Loop logisch nie terminieren, weil "messbar" nichts referenziert.
+
+Patch G — Metrikdefinition für die Loop
+
+
+Fortschritt der Loop wird an folgenden Größen gemessen (aus echten Sessions zu erheben):
+
+
+Regel-Compliance-Rate (Stichprobenaudit gegen das Regelwerk),
+Tool-Call-Effizienz (Ø Calls pro Antwort),
+Halluzinationsrate (Zahlen ohne [n]-Marker im Output),
+Längen-Konsistenz je Komplexitätsklasse (siehe Patch C),
+Eskalationsquote (sollte mit Reife der Loop sinken, nicht steigen).
+Eine Runde gilt als "ohne messbare Verbesserung", wenn sich keine dieser fünf Größen gegenüber der Vorrunde verbessert.
+
+
+
+
+Entscheidung: Patches F–G behalten. Damit hat die Loop erstmals ein objektives Abbruchkriterium statt einer subjektiven Einschätzung.
+
+
+Runde 4 — Abbruch der aktuellen Audit-Schleife
+
+Ohne echte Produktionsdaten (Sessions, Tool-Outputs, Nutzerreaktionen) lässt sich kein weiterer struktureller Fehler im Regeltext finden, der nicht bereits durch Patch A–G abgedeckt ist. Weitere Iteration würde nur noch Stilfragen ohne messbaren Effekt betreffen → Abbruch nach Definition aus Patch G, Schritt 5 der Loop.
+
+Verworfen wurde nichts — das ist selbst ein Befund: Ohne echte Interaktionsdaten gibt es noch keine empirische Basis, um einen Patch wieder zu verwerfen. Das sollte in der ersten echten Betriebsphase nachgeholt werden.
+
+
+Runde 5 — Validierung mit echtem Testlauf (Replit, aktualisierter Prompt)
+
+Erste echte Architektur- und Beispieldaten liegen vor. Ergebnis: ein kritischer Befund, eine Selbstkorrektur, eine Präzisierung.
+
+Befund 8 (kritisch) — Patch A ist als Prompt-Text wirkungslos.
+Der Testlauf zeigt: Turn 0 erzwingt tool_choice = {type: "tool", name: "get_schema"} bei jeder neuen Frage, unabhängig vom Inhalt des System-Prompts. Das ist eine Entscheidung der Orchestrierungs-Code-Ebene (vor dem API-Call), nicht des Modells — eine Prompt-Regel kann sie nicht überschreiben, weil das Modell an dieser Stelle keine Wahl hat.
+
+Patch H — Code-Ebene Turn-0-Logik (ersetzt die reine Prompt-Formulierung von Patch A)
+
+
+Vor dem Setzen von tool_choice in Turn 0 muss der Code den Session-Zustand prüfen:
+
+if (session.hasSchemaCache && session.turnsSinceSchema <= 5 && session.datasetId === currentDatasetId) {
+  toolChoice = { type: "auto" };
+} else {
+  toolChoice = { type: "tool", name: "get_schema" };
+}
+
+Patch A bleibt als Absichtserklärung im Prompt stehen, ist aber nur mit dieser Code-Änderung wirksam.
+
+
+
+Befund 9 — Patch D widerspricht der Original-Regel und der Praxis.
+Im Testlauf erhalten die Zahlenwerte aus search_knowledge (200 Tsd./ml, 2–4 ct/kg) den [2]-Marker — nicht nur Werte aus DB/Dokument, wie Patch D es vorschrieb. Das entspricht der ursprünglichen, breiteren Regel ("Zahlen aus Werkzeug-Ergebnissen", jedes Tool zählt).
+
+Patch D (revidiert)
+
+
+[n] gilt für jeden quantitativen Wert aus jedem Tool, inklusive search_knowledge — nicht nur DB/Dokument. Der kursive Vertrauensgrad-Tag (*[Bibliothek]*/*[Web]*/*[Allgemeinwissen]*) markiert die gesamte Einschätzung/Empfehlung am Satz- oder Absatzende, nicht einzelne Zahlenwerte. Beide Systeme bleiben getrennt, aber die Trennlinie verläuft anders als ursprünglich gepatcht: Quelle-für-Zahl vs. Vertrauen-für-Aussage, nicht Tool-Typ vs. Tool-Typ.
+
+
+
+Befund 10 — Eskalationstrigger (Patch F) muss an calculate_investment hängen, nicht an die Nutzerangabe.
+Die Investitionsschwelle greift nur sinnvoll, wenn sie das Ergebnis von calculate_investment prüft (Annuität/Cashflow), nicht eine vom Nutzer im Chat genannte Zahl — die kann fehlen, ungenau sein oder erst aus der Berechnung entstehen.
+
+Patch F (präzisiert)
+
+
+Eskalation bei Investitionsentscheidung: Trigger prüft das Ergebnis von calculate_investment (nicht die Nutzeräußerung) gegen den Schwellenwert.
+
+
+
+Erste echte Baseline für Patch G (Metrik 2: Tool-Call-Effizienz)
+Mittelkomplexe Frage (Zeitreihe + wirtschaftliche Einordnung): 5 Tool-Calls gesamt (get_schema, get_timeseries, get_metric_stats, search_knowledge, emit_chart), ~3.000 Token, ~10 Sek. Gesamtlaufzeit. Dient als erster Referenzwert — noch keine Aussage über "gut" oder "schlecht" möglich, da kein Vergleichswert existiert.
+
+Bestätigt — funktioniert wie geplant:
+
+
+search_knowledge-Schwelle ≥ 0,55 wird korrekt eingehalten (0,79 / 0,72 im Beispiel).
+Grounding-Check (Fallback bei fehlendem Grounded-Tool) deckt einen Teil von Patch B bereits auf Architekturebene ab — Patch B im Prompt sollte mit dieser bestehenden Sicherheitsebene abgestimmt, nicht doppelt gebaut werden.
+emit_chart feuert sofort während des Streamings — kein Patch nötig, als Stärke beibehalten.
+
+
+Entscheidung: Patch D ersetzt durch revidierte Version, Patch F präzisiert, Patch H neu (ergänzt, ersetzt nicht Patch A). Patch B und der bestehende Grounding-Check müssen in Runde 6 gegeneinander abgeglichen werden, sobald ein Testfall mit dokumentAvailable: false vorliegt.
+
+
+Runde 6 — Validierung mit Testlauf v2 (Gruppenvergleich + Chart)
+
+Befund 11 — Patch D bestätigt, keine weitere Änderung.
+Zweiter unabhängiger Testfall (Gruppenvergleich statt Zeitreihe) zeigt dieselbe korrekte Trennung wie in Runde 5 vorhergesagt: [1] an get_group_aggregate-Werten, [2] an search_knowledge-Werten, *[Bibliothek]* einmal am Ende des qualitativen Absatzes. Status: bestätigt, behalten.
+
+Befund 12 — Redundanter Tool-Call zwischen Analyse und Visualisierung.
+get_group_aggregate wird zweimal mit identischen Parametern aufgerufen: einmal direkt für die Textanalyse, einmal intern durch emit_chart. Die DB-Abfrage selbst trifft laut Protokoll einen Cache, der zusätzliche Tool-Use-Roundtrip kostet trotzdem Tokens und einen Turn.
+
+Patch I — Datenwiederverwendung bei emit_chart
+
+
+Wenn unmittelbar vor emit_chart im selben Turn bereits ein get_*-Tool mit identischen Parametern (metric, groupBy/interval, aggregation) aufgerufen wurde, nutzt emit_chart dessen Ergebnis weiter, statt die Berechnung erneut anzustoßen. Code-Ebene: Parameter-Abgleich vor Tool-Ausführung, nicht im Prompt lösbar.
+
+
+
+Befund 13 (größter Hebel bisher) — kein Prompt-Caching auf den statischen System-Prompt-Schichten.
+SECTOR_CONTEXT, SYSTEM_PROMPT_BASE, docContext und knowledgeTitles (~4.300 Token) bleiben innerhalb einer Session unverändert, werden aber bei jedem Turn (0, 1, 2, ...) zum Vollpreis neu mitgeschickt. Bei diesem Run sind das 3 Turns für eine einzige Frage — und bei Folgefragen in derselben Session wiederholt sich das.
+
+Patch J — Prompt-Caching für die statischen Schichten
+
+
+SECTOR_CONTEXT, SYSTEM_PROMPT_BASE, docContext, knowledgeTitles mit cache_control: {type: "ephemeral"} markieren. Reduziert die effektiven Eingabe-Token-Kosten ab Turn 1 erheblich, da diese Blöcke als Cache-Read statt Vollpreis abgerechnet werden. [Schätzung], nicht gemessen: Größenordnung 15.800 → 9.000–10.000 Token-Äquivalent für diesen Run.
+
+
+
+Reale Baseline-Vergleich (aus Testlauf-Protokoll, nicht von mir geschätzt):
+
+Metrikv1 (Zeitreihe)v2 (Gruppenvergleich + Chart)Tool-Calls55 (get_group_aggregate ×2 davon)Token gesamt~3.000~16.700Laufzeit~10 Sek.~9–11 Sek.[n]-Marker25*[Bibliothek]* Tags11Zahlen ohne [n]00
+
+Entscheidung: Patch I und Patch J neu aufgenommen (Code-Ebene, wie Patch H). Patch D unverändert bestätigt. Kein Eskalationsfall in diesem Run.
+
+
+Ergänzungsblock — copy-paste-fertig (an bestehenden Prompt anhängen)
+
+ERGÄNZUNGEN ZUM BESTEHENDEN REGELWERK (Patch-Block v1 — ändert keine bestehende Regel)
+
+SCHEMA-CACHING
+- get_schema nur erneut aufrufen bei: (a) erster Aufruf der Session,
+  (b) anderer Betrieb/Datensatz referenziert, (c) >5 Turns seit letztem Aufruf.
+- ACHTUNG: Wirkungslos als reiner Prompt-Text, wenn Turn 0 im Code hart über
+  tool_choice erzwungen wird. Muss zusätzlich als Code-Bedingung vor dem
+  Setzen von tool_choice implementiert werden (siehe Patch H, Code-Ebene).
+
+FALLBACK OHNE DATENQUELLE
+- Wenn get_schema 0 Felder UND dokumentAvailable: false:
+  keine DB-/Dokument-Tools nutzen, Datenlücke transparent benennen,
+  search_web als einzige Quelle mit Kennzeichnung *[Web]*.
+
+KOMPLEXITÄTS-HEURISTIK
+- Einfache Frage = 1 Kennzahl/1 Maßnahme, keine Tabelle nötig.
+- Komplexe Analyse = ≥2 Variablen im Vergleich, Zeitreihe, oder Investitionsentscheidung.
+- Nur komplexe Analysen dürfen über 5 Abschnitte gehen.
+
+TRENNUNG DER ZITIERSYSTEME (revidiert nach Runde 5)
+- [n] gilt für jeden quantitativen Wert aus jedem Tool — inklusive
+  search_knowledge, nicht nur DB/Dokument.
+- *[Bibliothek]*/*[Web]*/*[Allgemeinwissen]* markiert die gesamte
+  Einschätzung/Empfehlung am Satz- oder Absatzende, nicht einzelne Zahlen.
+- Beide Systeme bleiben getrennt: Quelle-für-Zahl vs. Vertrauen-für-Aussage.
+
+KONFLIKTDARSTELLUNG DATEN VS. BIBLIOTHEK
+- Bei Abweichung: beide Werte nennen, kurze Begründung, klare Empfehlung
+  mit Quellen-Tag.
+
+ESKALATIONSTRIGGER (konkret statt "wenn es Sinn macht")
+1. Widersprüchliche Werte zwischen zwei Werkzeugen.
+2. Investitionsvolumen über [SCHWELLENWERT EUR, Vorschlag 10.000] laut
+   Ergebnis von calculate_investment (nicht Nutzerangabe) ohne
+   Bibliothekstreffer ≥ 0,55.
+3. Wiederholte Marken-/Produktanfrage trotz Erklärung.
+4. Sicherheitsrelevante Frage ohne belastbaren Bibliotheks- oder Web-Treffer.
+
+CODE-EBENE (nicht im Prompt-Text lösbar — Patch H, I, J)
+- Patch H: Turn-0-tool_choice abhängig von Session-Cache setzen (siehe oben).
+- Patch I: emit_chart prüft vor Ausführung, ob im selben Turn bereits ein
+  get_*-Tool mit identischen Parametern (metric, groupBy/interval,
+  aggregation) aufgerufen wurde, und nutzt dessen Ergebnis weiter, statt
+  die Berechnung erneut anzustoßen.
+- Patch J: SECTOR_CONTEXT, SYSTEM_PROMPT_BASE, docContext, knowledgeTitles
+  mit cache_control: {type: "ephemeral"} markieren (Anthropic Prompt
+  Caching), da diese Schichten innerhalb einer Session unverändert
+  bleiben, aber aktuell bei jedem Turn zum Vollpreis neu gesendet werden.
+
+METRIKEN FÜR DIE OPTIMIERUNGS-LOOP
+1. Regel-Compliance-Rate
+2. Tool-Call-Effizienz (Ø Calls/Antwort)
+3. Halluzinationsrate (Zahlen ohne [n])
+4. Längen-Konsistenz je Komplexitätsklasse
+5. Eskalationsquote
+Eine Runde gilt als ohne messbare Verbesserung, wenn keine dieser
+fünf Größen sich gegenüber der Vorrunde verbessert.
+
+
+Offene Punkte — Eskalation an dich
+
+Diese Werte sind als Annahmen gesetzt und sollten von dir final kalibriert werden, da sie betriebs- bzw. risikospezifisch sind:
+
+Offener PunktAktuelle AnnahmeWorauf es ankommtSchema-Cache-Dauer5 TurnsWie volatil sind deine Betriebsdaten innerhalb einer Session?Investitions-Schwellenwert für Eskalation10.000 €Ab welcher Summe willst du persönlich informiert werden?Bibliotheks-Score-Schwelle für "belastbar"0,55 (aus Originalregel übernommen)Soll das für Eskalationsfälle strenger sein, z. B. 0,7?Messintervall für die Loop-Metrikennicht definiertWöchentlich? Nach X Sessions?Strenge des Parameter-Match für Patch Iexakte Übereinstimmung angenommenSollen leicht abweichende Zeiträume/Filter noch als "gleich" zählen?Priorität Patch J (Prompt-Caching)als wichtigster Hebel eingeschätztWer implementiert das — du selbst im Code, oder soll ich eine konkrete Code-Stelle vorschlagen, sobald du mir den Request-Aufbau zeigst?
+
+Ohne reale Sessiondaten kann ich diese vier Werte nicht datenbasiert validieren — das ist der Punkt, an dem die Loop laut Patch G in die nächste reale Phase übergehen sollte.
