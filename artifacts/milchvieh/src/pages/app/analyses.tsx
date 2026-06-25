@@ -974,6 +974,15 @@ function getMsgBackQuestions(msg: AnalysisMessage): string[] | null {
 
 // ── Interactive back-question form ────────────────────────────────────────────
 
+/** Strip leading emoji and **Bold:** label prefixes the agent sometimes adds. */
+function cleanQuestionText(q: string): string {
+  // Remove leading emoji characters (including variation selectors + ZWJ sequences)
+  let s = q.replace(/^[\p{Emoji}\s]+/u, "").trim();
+  // Remove **Label:** or **Label** prefix pattern
+  s = s.replace(/^\*\*[^*]{1,40}\*\*\s*:?\s*/, "").trim();
+  return s || q;
+}
+
 function BackQuestionForm({
   questions,
   onSubmit,
@@ -981,25 +990,17 @@ function BackQuestionForm({
   questions: string[];
   onSubmit: (answer: string) => void;
 }) {
-  const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ""));
-  const [skipped, setSkipped] = useState<boolean[]>(() => questions.map(() => false));
+  const capped = questions.slice(0, 3);
+  const [answers, setAnswers] = useState<string[]>(() => capped.map(() => ""));
+  const [skipped, setSkipped] = useState<boolean[]>(() => capped.map(() => false));
   const [submitted, setSubmitted] = useState(false);
 
   if (submitted) return null;
 
   const allSkipped = skipped.every(Boolean);
 
-  function handleSkip(i: number) {
-    setSkipped((prev) => prev.map((v, idx) => (idx === i ? true : v)));
-    setAnswers((prev) => prev.map((v, idx) => (idx === i ? "" : v)));
-  }
-
-  function handleUnskip(i: number) {
-    setSkipped((prev) => prev.map((v, idx) => (idx === i ? false : v)));
-  }
-
   function handleSend() {
-    const parts = questions.map((q, i) => {
+    const parts = capped.map((q, i) => {
       const ans = skipped[i] ? "keine Angabe" : (answers[i].trim() || "keine Angabe");
       return `${i + 1}. ${q}: ${ans}`;
     });
@@ -1013,59 +1014,43 @@ function BackQuestionForm({
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
         <AiIcon size={14} className="text-primary" />
       </div>
-      <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-3 max-w-[90%]">
-        {questions.map((q, i) => (
-          <div key={i} className="space-y-1">
-            <div className="flex items-start justify-between gap-2">
-              <label
-                className={cn(
-                  "text-sm font-medium leading-snug flex-1",
-                  skipped[i] ? "line-through text-muted-foreground" : "text-foreground"
-                )}
-              >
-                {q}
-              </label>
-              {skipped[i] ? (
+      <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-2.5 max-w-[90%]">
+        {capped.map((q, i) => {
+          const clean = cleanQuestionText(q);
+          return (
+            <div key={i} className={cn("space-y-1.5", skipped[i] && "opacity-50")}>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[10px] font-semibold text-primary/70 tabular-nums shrink-0 mt-0.5">
+                  {i + 1}.
+                </span>
+                <span className={cn("text-sm leading-snug text-foreground flex-1", skipped[i] && "line-through")}>
+                  {clean}
+                </span>
                 <button
                   type="button"
-                  onClick={() => handleUnskip(i)}
-                  className="text-xs text-primary hover:underline shrink-0"
+                  onClick={() =>
+                    setSkipped((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
+                  }
+                  className="text-[10px] text-muted-foreground hover:text-foreground shrink-0 transition-colors"
                 >
-                  Rückgängig
+                  {skipped[i] ? "Hinzufügen" : "Überspringen"}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleSkip(i)}
-                  className="text-xs text-muted-foreground hover:text-foreground shrink-0"
-                >
-                  Überspringen
-                </button>
+              </div>
+              {!skipped[i] && (
+                <input
+                  type="text"
+                  maxLength={500}
+                  value={answers[i]}
+                  onChange={(e) =>
+                    setAnswers((prev) => prev.map((a, idx) => (idx === i ? e.target.value : a)))
+                  }
+                  placeholder="Deine Antwort…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+                />
               )}
             </div>
-            <textarea
-              rows={1}
-              maxLength={4_000}
-              disabled={skipped[i]}
-              value={answers[i]}
-              onChange={(e) => {
-                const v = e.target.value.slice(0, 4_000);
-                setAnswers((prev) => prev.map((a, idx) => (idx === i ? v : a)));
-              }}
-              placeholder="Deine Antwort…"
-              className={cn(
-                "w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors",
-                skipped[i] && "opacity-40 cursor-not-allowed bg-muted"
-              )}
-              style={{ minHeight: "2.5rem" }}
-              onInput={(e) => {
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = `${el.scrollHeight}px`;
-              }}
-            />
-          </div>
-        ))}
+          );
+        })}
         <Button
           type="button"
           size="sm"
@@ -1073,7 +1058,7 @@ function BackQuestionForm({
           disabled={allSkipped}
           className="w-full mt-1"
         >
-          Antworten senden
+          Senden
         </Button>
       </div>
     </div>

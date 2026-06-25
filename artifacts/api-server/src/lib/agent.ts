@@ -258,7 +258,8 @@ const TOOLS: Tool[] = [
         questions: {
           type: "array",
           items: { type: "string" },
-          description: "Liste der konkreten Rückfragen an den Landwirt, z.B. ['Für welchen Zeitraum soll ich auswerten?', 'Welche Investitionssumme planst du?']",
+          maxItems: 3,
+          description: "Liste der konkreten Rückfragen an den Landwirt. MAXIMAL 3 Fragen — wähle nur die wichtigsten. Formuliere jede Frage als einfachen deutschen Satz ohne Emoji, ohne Fett-Formatierung und ohne Kategorielabel-Präfix (kein '**Label:** Frage', sondern direkt 'Welche Investitionssumme planst du?').",
         },
       },
       required: ["questions"],
@@ -394,6 +395,8 @@ WENN IN EINEM FOLGEGESPRÄCH EINE GRAFIK GEWÜNSCHT WIRD UND NUR PDF-DATEN VORHA
 RÜCKFRAGEN-VERHALTEN:
 - Wenn du Rückfragen an den Landwirt stellen musst, verwende IMMER das Werkzeug ask_farmer({questions:[...]}).
   Formuliere Rückfragen NIEMALS als Freitext in deiner Antwort — nur über das Werkzeug.
+- MAXIMAL 3 Rückfragen pro ask_farmer-Aufruf — wähle nur die wirklich entscheidenden Parameter.
+- FORMAT der Fragen: Jede Frage ist ein einfacher klarer deutscher Satz. Kein Emoji am Anfang. Kein Kategorielabel in Fett (kein „**Kompatibilität:** Funktioniert…"). Direkt die Frage stellen: „Welche Investitionssumme planst du?" statt „**Investitionssumme:** Wie viel willst du investieren?".
 - Bei Investitions-, Wirtschaftlichkeits- oder Planungsfragen: Rufe ZUERST get_schema und get_kpis auf.
   Fasse die relevanten Betriebsdaten kurz zusammen. Rufe dann ask_farmer mit maximal 3 konkreten
   Fragen auf (Investitionssumme, Laufzeit, Zinssatz, erwarteter Jahresnutzen). Rechne erst
