@@ -532,7 +532,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary">
               🇩🇪 Daten in Deutschland · DSGVO-konform
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white leading-[1.1]">
               Deine Betriebsdaten.<br className="hidden sm:block" />
               <span className="text-primary"> KI-Analyse.</span><br className="hidden sm:block" />
               Made in Germany.
@@ -551,7 +551,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
               </a>
               <button
                 onClick={() => setDemoOpen(true)}
-                className="inline-flex items-center gap-2 text-base font-semibold text-foreground glass px-8 py-4 rounded-xl hover:bg-white/10 transition-all w-full sm:w-auto justify-center"
+                className="inline-flex items-center gap-2 text-base font-semibold text-white glass px-8 py-4 rounded-xl hover:bg-white/10 transition-all w-full sm:w-auto justify-center"
               >
                 <Play className="w-4 h-4 text-primary fill-primary" />
                 Demo ansehen
@@ -612,7 +612,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
 
               {/* State label */}
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-semibold tracking-widest uppercase"
-                style={{ color: "hsl(var(--primary)/0.5)", transition: "opacity 0.4s" }}>
+                style={{ color: "hsl(var(--primary)/0.8)", transition: "opacity 0.4s" }}>
                 {aiWorking ? "Analysiert…" : "Bereit"}
               </div>
             </div>
