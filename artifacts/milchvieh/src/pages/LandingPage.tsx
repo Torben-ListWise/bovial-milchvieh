@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { AiIcon } from "../components/AiIcon";
 import {
   Upload,
   Zap,
@@ -383,6 +384,19 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 export function LandingPage({ basePath }: LandingPageProps) {
   const [demoOpen, setDemoOpen] = useState(false);
   const { isDark, toggle } = useTheme();
+  const [aiWorking, setAiWorking] = useState(true);
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    function cycle() {
+      timers.push(setTimeout(() => { setAiWorking(false); cycle2(); }, 4000));
+    }
+    function cycle2() {
+      timers.push(setTimeout(() => { setAiWorking(true); cycle(); }, 2500));
+    }
+    cycle();
+    return () => timers.forEach(clearTimeout);
+  }, []);
 
   const pricingPlans = [
     {
@@ -543,6 +557,66 @@ export function LandingPage({ basePath }: LandingPageProps) {
                 Demo ansehen
               </button>
             </div>
+            {/* Animated AiIcon centrepiece */}
+            <div className="relative mx-auto flex items-center justify-center" style={{ width: 260, height: 260 }}>
+              {/* Aurora glow rings */}
+              <div className="absolute inset-0 rounded-full" style={{
+                background: "radial-gradient(ellipse at center, hsl(var(--primary)/0.18) 0%, transparent 70%)",
+                animation: "glow-pulse 3s ease-in-out infinite",
+              }} />
+              <div className="absolute rounded-full border border-primary/15" style={{
+                inset: 20,
+                animation: "spin-arc 18s linear infinite",
+              }} />
+              <div className="absolute rounded-full border border-cyan-400/10" style={{
+                inset: 8,
+                animation: "spin-arc 28s linear infinite reverse",
+              }} />
+              <div className="absolute rounded-full border border-violet-400/10" style={{
+                inset: 36,
+                animation: "spin-arc 22s linear infinite",
+              }} />
+
+              {/* Floating data-node dots */}
+              {[
+                { top: "14%",  left: "12%",  size: 6,  delay: "0s",    dur: "3.2s" },
+                { top: "72%",  left: "8%",   size: 5,  delay: "0.8s",  dur: "4s"   },
+                { top: "18%",  left: "80%",  size: 7,  delay: "0.4s",  dur: "3.6s" },
+                { top: "76%",  left: "78%",  size: 5,  delay: "1.2s",  dur: "2.9s" },
+                { top: "50%",  left: "4%",   size: 4,  delay: "1.6s",  dur: "3.8s" },
+                { top: "50%",  left: "91%",  size: 4,  delay: "0.6s",  dur: "3.3s" },
+                { top: "88%",  left: "42%",  size: 5,  delay: "1.0s",  dur: "4.1s" },
+              ].map((dot, i) => (
+                <div
+                  key={i}
+                  className="absolute rounded-full bg-primary/50"
+                  style={{
+                    top: dot.top,
+                    left: dot.left,
+                    width: dot.size,
+                    height: dot.size,
+                    animation: `spark-pulse ${dot.dur} ease-in-out infinite`,
+                    animationDelay: dot.delay,
+                  }}
+                />
+              ))}
+
+              {/* The icon itself */}
+              <div className="relative z-10" style={{ transition: "opacity 0.6s ease" }}>
+                <AiIcon
+                  size={88}
+                  working={aiWorking}
+                  className="text-primary drop-shadow-[0_0_18px_hsl(var(--primary)/0.6)]"
+                />
+              </div>
+
+              {/* State label */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-semibold tracking-widest uppercase"
+                style={{ color: "hsl(var(--primary)/0.5)", transition: "opacity 0.4s" }}>
+                {aiWorking ? "Analysiert…" : "Bereit"}
+              </div>
+            </div>
+
             {/* App mockup */}
             <div className="mx-auto max-w-3xl mt-8">
               <div className="aspect-[16/9] bg-card rounded-2xl shadow-2xl ring-1 ring-border/50 overflow-hidden flex flex-col">
