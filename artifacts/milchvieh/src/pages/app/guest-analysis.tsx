@@ -3,10 +3,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import { ArrowRight, Bot, Lock, User } from "lucide-react";
+import { ArrowRight, Bot, ChevronRight, Lock, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { DynamicChart } from "@/components/DynamicChart";
+import type { Chart } from "@workspace/api-client-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -16,7 +18,7 @@ interface PublicMessage {
   id: string;
   role: string;
   content: string | null;
-  charts: unknown[];
+  charts: Chart[];
   citations: unknown[];
   followUpQuestions: string[];
   createdAt: string;
@@ -97,40 +99,90 @@ const PROSE_CLASSES =
   "[&_tbody_tr:nth-child(even)]:bg-muted/20 " +
   "[&_td[align=right]]:text-right [&_th[align=right]]:text-right [&_td[align=center]]:text-center [&_th[align=center]]:text-center";
 
+function GuestFollowUpChips({ questions }: { questions: string[] }) {
+  if (questions.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 pl-10">
+      <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+        <ChevronRight className="w-3 h-3" />
+        Weiter fragen
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {questions.map((q, i) => (
+          <a
+            key={i}
+            href={`${basePath}/sign-up`}
+            title="Anmelden, um diese Frage zu stellen"
+            className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left"
+          >
+            {q}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MessageBubble({ msg }: { msg: PublicMessage }) {
   const isUser = msg.role === "user";
+  const hasCharts = !isUser && msg.charts && msg.charts.length > 0;
+  const hasFollowUps = !isUser && msg.followUpQuestions && msg.followUpQuestions.length > 0;
+
   return (
-    <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser && (
-        <div className="shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
-          <Bot className="w-4 h-4 text-primary" />
+    <div className="flex flex-col gap-2">
+      <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+        {!isUser && (
+          <div className="shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+            <Bot className="w-4 h-4 text-primary" />
+          </div>
+        )}
+        <div
+          className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+            isUser
+              ? "bg-primary text-primary-foreground rounded-tr-sm"
+              : "bg-card border border-border rounded-tl-sm"
+          }`}
+        >
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          ) : (
+            <div className="space-y-4">
+              <div className={PROSE_CLASSES}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+                  components={TABLE_COMPONENTS}
+                >
+                  {msg.content ?? ""}
+                </ReactMarkdown>
+              </div>
+              {hasCharts && (
+                <div className="space-y-4 pt-1">
+                  {msg.charts.map((chart, i) => (
+                    <div key={(chart as any).id ?? i}>
+                      {chart.title && (
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                          {chart.title}
+                        </p>
+                      )}
+                      <div className="h-64">
+                        <DynamicChart chart={chart} fillContainer />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-          isUser
-            ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-card border border-border rounded-tl-sm"
-        }`}
-      >
-        {isUser ? (
-          <p className="whitespace-pre-wrap">{msg.content}</p>
-        ) : (
-          <div className={PROSE_CLASSES}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
-              components={TABLE_COMPONENTS}
-            >
-              {msg.content ?? ""}
-            </ReactMarkdown>
+        {isUser && (
+          <div className="shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center mt-0.5">
+            <User className="w-4 h-4 text-muted-foreground" />
           </div>
         )}
       </div>
-      {isUser && (
-        <div className="shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center mt-0.5">
-          <User className="w-4 h-4 text-muted-foreground" />
-        </div>
+      {hasFollowUps && (
+        <GuestFollowUpChips questions={msg.followUpQuestions.slice(0, 3)} />
       )}
     </div>
   );
