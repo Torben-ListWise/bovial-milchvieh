@@ -967,9 +967,12 @@ function msgIsBackQuestion(msg: AnalysisMessage): boolean {
   return isBackQuestion(msg.content);
 }
 
-function getMsgBackQuestions(msg: AnalysisMessage): string[] | null {
-  if (msg.backQuestions && msg.backQuestions.length > 0) return msg.backQuestions;
-  return extractBackQuestions(msg.content);
+function getMsgBackQuestions(msg: AnalysisMessage): FarmerQuestion[] | null {
+  if (msg.backQuestions && msg.backQuestions.length > 0) {
+    return msg.backQuestions as FarmerQuestion[];
+  }
+  const extracted = extractBackQuestions(msg.content);
+  return extracted ? extracted.map((text) => ({ text })) : null;
 }
 
 // ── Interactive back-question form ────────────────────────────────────────────
@@ -983,11 +986,13 @@ function cleanQuestionText(q: string): string {
   return s || q;
 }
 
+type FarmerQuestion = { text: string; options?: string[] };
+
 function BackQuestionForm({
   questions,
   onSubmit,
 }: {
-  questions: string[];
+  questions: FarmerQuestion[];
   onSubmit: (answer: string) => void;
 }) {
   const capped = questions.slice(0, 3);
@@ -1002,7 +1007,7 @@ function BackQuestionForm({
   function handleSend() {
     const parts = capped.map((q, i) => {
       const ans = skipped[i] ? "keine Angabe" : (answers[i].trim() || "keine Angabe");
-      return `${i + 1}. ${q}: ${ans}`;
+      return `${i + 1}. ${q.text}: ${ans}`;
     });
     const text = `Zu deinen Fragen:\n${parts.join("\n")}`;
     setSubmitted(true);
@@ -1014,11 +1019,13 @@ function BackQuestionForm({
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
         <AiIcon size={14} className="text-primary" />
       </div>
-      <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-2.5 max-w-[90%]">
+      <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-3 max-w-[90%]">
         {capped.map((q, i) => {
-          const clean = cleanQuestionText(q);
+          const clean = cleanQuestionText(q.text);
+          const opts = q.options ?? [];
           return (
-            <div key={i} className={cn("space-y-1.5", skipped[i] && "opacity-50")}>
+            <div key={i} className={cn("space-y-2", skipped[i] && "opacity-50")}>
+              {/* Question header */}
               <div className="flex items-baseline gap-2">
                 <span className="text-[10px] font-semibold text-primary/70 tabular-nums shrink-0 mt-0.5">
                   {i + 1}.
@@ -1036,17 +1043,48 @@ function BackQuestionForm({
                   {skipped[i] ? "Hinzufügen" : "Überspringen"}
                 </button>
               </div>
+
               {!skipped[i] && (
-                <input
-                  type="text"
-                  maxLength={500}
-                  value={answers[i]}
-                  onChange={(e) =>
-                    setAnswers((prev) => prev.map((a, idx) => (idx === i ? e.target.value : a)))
-                  }
-                  placeholder="Deine Antwort…"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
-                />
+                <div className="pl-5 space-y-2">
+                  {/* Option chips */}
+                  {opts.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {opts.map((opt) => {
+                        const selected = answers[i] === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() =>
+                              setAnswers((prev) =>
+                                prev.map((a, idx) => (idx === i ? (a === opt ? "" : opt) : a)),
+                              )
+                            }
+                            className={cn(
+                              "text-xs px-3 py-1 rounded-full border transition-all",
+                              selected
+                                ? "bg-primary text-primary-foreground border-primary font-medium"
+                                : "bg-background border-border text-foreground hover:border-primary/50 hover:bg-primary/5",
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Free text */}
+                  <input
+                    type="text"
+                    maxLength={500}
+                    value={answers[i]}
+                    onChange={(e) =>
+                      setAnswers((prev) => prev.map((a, idx) => (idx === i ? e.target.value : a)))
+                    }
+                    placeholder={opts.length > 0 ? "Oder eigene Antwort…" : "Deine Antwort…"}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+                  />
+                </div>
               )}
             </div>
           );

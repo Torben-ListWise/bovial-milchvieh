@@ -91,6 +91,15 @@ function serializeAnalysis(a: Analysis, messageCount?: number) {
   };
 }
 
+type FarmerQuestion = { text: string; options?: string[] };
+
+function normalizeBackQuestions(raw: unknown): FarmerQuestion[] | null {
+  if (!raw || !Array.isArray(raw) || raw.length === 0) return null;
+  return raw.map((item) =>
+    typeof item === "string" ? { text: item } : (item as FarmerQuestion),
+  );
+}
+
 function serializeMessage(m: Message) {
   return {
     id: m.id,
@@ -98,7 +107,7 @@ function serializeMessage(m: Message) {
     role: m.role as "user" | "assistant",
     content: m.content ?? null,
     followUpQuestions: ((m as any).followUpQuestions as string[] | null) ?? [],
-    backQuestions: ((m as any).backQuestions as string[] | null) ?? null,
+    backQuestions: normalizeBackQuestions((m as any).backQuestions),
     charts: (m.charts as Chart[] | null) ?? [],
     citations: (m.citations as Citation[] | null) ?? [],
     error: m.error ?? null,

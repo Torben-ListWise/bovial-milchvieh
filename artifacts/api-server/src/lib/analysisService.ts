@@ -110,7 +110,7 @@ export async function processQuestion(
     let content: string;
     let charts: Chart[] = [];
     let citations: Citation[] = [];
-    let backQuestions: string[] = [];
+    let backQuestions: import("./agent").FarmerQuestion[] = [];
     let error: string | null = null;
     let agentResultText: string | undefined;
 

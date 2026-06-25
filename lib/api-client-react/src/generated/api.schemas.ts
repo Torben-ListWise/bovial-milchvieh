@@ -401,7 +401,7 @@ export interface AnalysisMessage {
   citations?: Citation[];
   followUpQuestions?: string[];
   /** @nullable */
-  backQuestions?: string[] | null;
+  backQuestions?: Array<{ text: string; options?: string[] }> | null;
   /** @nullable */
   error?: string | null;
   createdAt: string;

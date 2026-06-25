@@ -84,11 +84,16 @@ export interface Citation {
   sourceType?: "betriebsdaten" | "pdf" | "wissen" | "web" | null;
   shortLabel?: string | null;
 }
+export interface FarmerQuestion {
+  text: string;
+  options?: string[];
+}
+
 export interface AgentResult {
   text: string;
   charts: Chart[];
   citations: Citation[];
-  backQuestions: string[];
+  backQuestions: FarmerQuestion[];
 }
 
 export class MissingApiKeyError extends Error {}
@@ -287,9 +292,24 @@ const TOOLS: Tool[] = [
       properties: {
         questions: {
           type: "array",
-          items: { type: "string" },
           maxItems: 3,
-          description: "Liste der konkreten Rückfragen an den Landwirt. MAXIMAL 3 Fragen — wähle nur die wirklich entscheidenden. Formuliere jede Frage als kurzen, einfachen deutschen Satz (maximal 12 Wörter). Keine Klammern, keine Beispiele, keine Aufzählungen von Optionen, keine Firmen- oder Organisationsnamen, keine Abkürzungen in Klammern — nur die offene Frage selbst. Kein Emoji, keine Fett-Formatierung, kein Kategorielabel-Präfix.",
+          description: "MAXIMAL 3 Rückfragen — nur die wirklich entscheidenden. Jede Frage ist ein Objekt mit 'text' und optionalem 'options'.",
+          items: {
+            type: "object",
+            properties: {
+              text: {
+                type: "string",
+                description: "Die Frage als kurzer, einfacher deutscher Satz (maximal 10 Wörter). Keine Klammern, keine Firmennamen, keine Abkürzungen, keine Beispiele — nur die offene Frage.",
+              },
+              options: {
+                type: "array",
+                maxItems: 4,
+                items: { type: "string" },
+                description: "Optionale Antwort-Chips (2–4 kurze Optionen), z.B. ['Ja', 'Nein', 'Weiß nicht'] oder ['< 5 %', '5–10 %', '> 10 %']. Nur angeben wenn klare Auswahlmöglichkeiten existieren. Bei Fragen die freie Antworten erfordern: weglassen.",
+              },
+            },
+            required: ["text"],
+          },
         },
       },
       required: ["questions"],
@@ -427,7 +447,7 @@ RÜCKFRAGEN-VERHALTEN:
 - Wenn du Rückfragen an den Landwirt stellen musst, verwende IMMER das Werkzeug ask_farmer({questions:[...]}).
   Formuliere Rückfragen NIEMALS als Freitext in deiner Antwort — nur über das Werkzeug.
 - MAXIMAL 3 Rückfragen pro ask_farmer-Aufruf — wähle nur die wirklich entscheidenden Parameter.
-- FORMAT der Fragen: Jede Frage ist ein kurzer, einfacher deutscher Satz (maximal 12 Wörter). Keine Klammern, keine Aufzählungen von Optionen, keine Firmen- oder Organisationsnamen, keine Beispiele in Klammern. Kein Emoji. Kein Kategorielabel in Fett. Direkt die offene Frage: „Welche Investitionssumme planst du?" statt „Welche Investitionssumme (z.B. 50.000–200.000 €) planst du?"
+- FORMAT: Jedes Fragen-Objekt hat 'text' (kurzer Satz, max. 10 Wörter, kein Emoji, kein Fett, keine Klammern/Firmennamen/Abkürzungen) und optional 'options' (2–4 kurze Antwort-Chips). 'options' nur wenn klare Auswahlmöglichkeiten existieren, z.B. text:"Treten Ketosefälle häufiger auf?", options:["Ja","Nein","Gelegentlich"].
 - Bei Investitions-, Wirtschaftlichkeits- oder Planungsfragen: Rufe ZUERST get_schema und get_kpis auf.
   Fasse die relevanten Betriebsdaten kurz zusammen. Rufe dann ask_farmer mit maximal 3 konkreten
   Fragen auf (Investitionssumme, Laufzeit, Zinssatz, erwarteter Jahresnutzen). Rechne erst
@@ -1015,10 +1035,15 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         }
       }
       case "ask_farmer": {
-        const qs = (input.questions as string[] | undefined) ?? [];
+        const qs = (input.questions as Array<{text?: string; options?: string[]} | string> | undefined) ?? [];
         for (const q of qs) {
-          if (typeof q === "string" && q.trim()) {
-            backQuestions.push(q.trim());
+          if (typeof q === "string") {
+            if (q.trim()) backQuestions.push({ text: q.trim() });
+          } else if (q && typeof q.text === "string" && q.text.trim()) {
+            backQuestions.push({
+              text: q.text.trim(),
+              options: Array.isArray(q.options) ? q.options.filter((o): o is string => typeof o === "string" && Boolean(o)) : undefined,
+            });
           }
         }
         return { acknowledged: true, questionCount: qs.length };
@@ -1143,7 +1168,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   let finalText = "";
   let toolWasCalled = false;
   let firstTextDeltaFired = false;
-  const backQuestions: string[] = [];
+  const backQuestions: FarmerQuestion[] = [];
   const maxTurns = 20;
 
   // Grounding: tools that prove real data was accessed
