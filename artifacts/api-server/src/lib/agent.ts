@@ -33,6 +33,35 @@ import { logger } from "./logger";
 
 const MODEL = "claude-sonnet-4-5";
 
+// ---------------------------------------------------------------------------
+// Prompt-cache metrics accumulator (in-memory, per process, resets on restart)
+// ---------------------------------------------------------------------------
+export interface CacheStats {
+  totalCalls: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheCreationTokens: number;
+  totalCacheReadTokens: number;
+  /** Consecutive API calls where cache_read_input_tokens was 0 */
+  consecutiveZeroReadStreak: number;
+  lastUpdatedAt: string | null;
+}
+
+const _cacheStats: CacheStats = {
+  totalCalls: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalCacheCreationTokens: 0,
+  totalCacheReadTokens: 0,
+  consecutiveZeroReadStreak: 0,
+  lastUpdatedAt: null,
+};
+
+/** Return a snapshot of the current cache stats (shallow copy). */
+export function getCacheStats(): CacheStats {
+  return { ..._cacheStats };
+}
+
 export interface ChartSeries {
   key: string;
   label: string;
@@ -1155,10 +1184,45 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       }
       return stream.finalMessage();
     });
+    const usage = response.usage as {
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+    };
+    const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+    const cacheRead = usage.cache_read_input_tokens ?? 0;
+
+    // Update in-memory accumulator
+    _cacheStats.totalCalls += 1;
+    _cacheStats.totalInputTokens += usage.input_tokens;
+    _cacheStats.totalOutputTokens += usage.output_tokens;
+    _cacheStats.totalCacheCreationTokens += cacheCreation;
+    _cacheStats.totalCacheReadTokens += cacheRead;
+    _cacheStats.lastUpdatedAt = new Date().toISOString();
+    if (cacheRead > 0) {
+      _cacheStats.consecutiveZeroReadStreak = 0;
+    } else {
+      _cacheStats.consecutiveZeroReadStreak += 1;
+    }
+
     logger.debug({
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
+      cache_creation_input_tokens: cacheCreation,
+      cache_read_input_tokens: cacheRead,
+      cache_hit: cacheRead > 0,
     }, "Anthropic usage");
+
+    // Alert when cache reads are absent across multiple consecutive calls —
+    // this indicates cache_control blocks are not being written or TTL expired.
+    if (_cacheStats.consecutiveZeroReadStreak >= 3) {
+      logger.warn({
+        consecutiveZeroReadStreak: _cacheStats.consecutiveZeroReadStreak,
+        totalCalls: _cacheStats.totalCalls,
+        totalCacheCreationTokens: _cacheStats.totalCacheCreationTokens,
+      }, "Prompt-Cache-Warnung: cache_read_input_tokens war in mehreren aufeinanderfolgenden Aufrufen 0 — Cache-Treffer fehlen möglicherweise");
+    }
 
     const textParts = response.content
       .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")

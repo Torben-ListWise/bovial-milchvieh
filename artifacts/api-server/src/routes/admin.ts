@@ -19,6 +19,7 @@ import {
 import { requireAuth, requireOperator } from "../lib/auth";
 import { runScheduledReports } from "../lib/scheduler";
 import { runMonthlyDigest } from "../lib/digestScheduler";
+import { getCacheStats } from "../lib/agent";
 
 const router: IRouter = Router();
 
@@ -358,6 +359,26 @@ router.post(
     }
     const result = await runMonthlyDigest().catch(() => ({ sent: -1, skipped: -1 }));
     res.json({ ok: true, ...result });
+  },
+);
+
+// GET /api/admin/cache-stats — prompt-cache hit/miss counters (in-memory, resets on restart)
+router.get(
+  "/admin/cache-stats",
+  requireAuth,
+  requireOperator,
+  (_req: Request, res: Response) => {
+    const stats = getCacheStats();
+    const hitRate =
+      stats.totalCalls > 0
+        ? stats.totalCacheReadTokens /
+          (stats.totalCacheReadTokens + stats.totalCacheCreationTokens || 1)
+        : null;
+    res.json({
+      ...stats,
+      hitRatePct: hitRate !== null ? Math.round(hitRate * 10000) / 100 : null,
+      note: "In-memory only — resets when the server restarts.",
+    });
   },
 );
 
