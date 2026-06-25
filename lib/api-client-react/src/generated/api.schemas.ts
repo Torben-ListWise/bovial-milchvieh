@@ -861,6 +861,25 @@ export type ForbiddenResponse = ErrorEnvelope;
  */
 export type NotFoundResponse = ErrorEnvelope;
 
+export interface FarmNote {
+  id: string;
+  content: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface FarmNoteInput {
+  /** @minLength 1 */
+  content: string;
+  enabled?: boolean;
+}
+
+export interface FarmNoteUpdate {
+  /** @minLength 1 */
+  content?: string;
+  enabled?: boolean;
+}
+
 /**
  * Server error.
  */

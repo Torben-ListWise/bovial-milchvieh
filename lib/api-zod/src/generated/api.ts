@@ -966,6 +966,47 @@ export const DeleteAdminTemplateParams = zod.object({
 
 
 /**
+ * @summary List farm notes (free-text operator hints)
+ */
+export const FarmNoteItem = zod.object({
+  "id": zod.string(),
+  "content": zod.string(),
+  "enabled": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListFarmNotesResponse = zod.array(FarmNoteItem)
+
+/**
+ * @summary Create a farm note
+ */
+export const CreateFarmNoteBody = zod.object({
+  "content": zod.string().min(1).max(2000),
+  "enabled": zod.boolean().optional()
+})
+
+/**
+ * @summary Update a farm note
+ */
+export const UpdateFarmNoteParams = zod.object({
+  "noteId": zod.coerce.string()
+})
+
+export const UpdateFarmNoteBody = zod.object({
+  "content": zod.string().min(1).max(2000).optional(),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateFarmNoteResponse = FarmNoteItem
+
+/**
+ * @summary Delete a farm note
+ */
+export const DeleteFarmNoteParams = zod.object({
+  "noteId": zod.coerce.string()
+})
+
+
+/**
  * @summary Export all of the current user's data (DSGVO)
  */
 export const ExportMyDataResponse = zod.object({

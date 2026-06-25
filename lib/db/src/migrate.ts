@@ -60,6 +60,19 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"
   );
+  // Migration: farm_notes table — free-text operator hints injected into agent context
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS farm_notes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS farm_notes_user_id_idx ON farm_notes (user_id)"
+  );
   // Backfill: mark existing auto-trigger prompt messages as hidden.
   // Targets user messages in analyses with source='auto' and template_ref='auto_erstanalyse'
   // where the content contains recognizable internal agent instructions.

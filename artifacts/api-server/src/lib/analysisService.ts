@@ -5,6 +5,7 @@ import {
   messagesTable,
   activityLogTable,
   rulesTable,
+  farmNotesTable,
   datasetsTable,
   type Analysis,
   type Message,
@@ -136,6 +137,18 @@ export async function processQuestion(
             .join("\n")}`
         : "";
 
+    // Load free-text farm notes and inject them alongside structured rules.
+    const farmNotes = await db
+      .select()
+      .from(farmNotesTable)
+      .where(and(eq(farmNotesTable.userId, analysis.userId!), eq(farmNotesTable.enabled, true)));
+    const farmNotesContext =
+      farmNotes.length > 0
+        ? `\nBetriebshinweise des Landwirts (wichtige Hintergrundinformationen, die bei jeder Analyse beachtet werden sollen):\n${farmNotes
+            .map((n) => `- ${n.content}`)
+            .join("\n")}`
+        : "";
+
     // Reset step tracking for this run
     const completedSteps: string[] = [];
     let lastProgressStep: string | null = null;
@@ -161,7 +174,7 @@ export async function processQuestion(
           datasetId: analysis.datasetId,
           conversation,
           sector,
-          systemExtra: rulesContext || undefined,
+          systemExtra: [rulesContext, farmNotesContext].filter(Boolean).join("") || undefined,
           userId: analysis.userId ?? undefined,
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
