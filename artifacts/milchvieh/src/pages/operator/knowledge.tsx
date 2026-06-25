@@ -1,16 +1,26 @@
 import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react";
-import type { KnowledgeDocument } from "@workspace/api-client-react";
+import type { KnowledgeDocument, FarmNote } from "@workspace/api-client-react";
+import {
+  useListFarmNotes,
+  getListFarmNotesQueryKey,
+  useCreateFarmNote,
+  useUpdateFarmNote,
+  useDeleteFarmNote,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Upload,
   Trash2,
   FileText,
   CheckCircle,
+  CheckCircle2,
   Clock,
   AlertCircle,
   Loader2,
@@ -24,6 +34,9 @@ import {
   TrendingUp,
   HelpCircle,
   RefreshCw,
+  Plus,
+  Pencil,
+  StickyNote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -217,6 +230,173 @@ interface UploadItem {
   title: string;
   status: "pending" | "uploading" | "ingesting" | "done" | "error";
   error?: string;
+}
+
+// ── Betriebshinweise section ────────────────────────────────────────────────
+
+function FarmNotesSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [noteText, setNoteText] = useState("");
+  const [editingNote, setEditingNote] = useState<FarmNote | null>(null);
+  const [editText, setEditText] = useState("");
+
+  const { data: notes, isLoading } = useListFarmNotes({
+    query: { queryKey: getListFarmNotesQueryKey() },
+  });
+
+  const createNote = useCreateFarmNote({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListFarmNotesQueryKey() });
+        setNoteText("");
+        toast({ title: "Hinweis gespeichert" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Hinweis konnte nicht gespeichert werden." });
+      },
+    },
+  });
+
+  const updateNote = useUpdateFarmNote({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListFarmNotesQueryKey() });
+        setEditingNote(null);
+        toast({ title: "Hinweis aktualisiert" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Hinweis konnte nicht aktualisiert werden." });
+      },
+    },
+  });
+
+  const deleteNote = useDeleteFarmNote({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListFarmNotesQueryKey() });
+        toast({ title: "Hinweis gelöscht" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Hinweis konnte nicht gelöscht werden." });
+      },
+    },
+  });
+
+  const toggleNote = (note: FarmNote) => {
+    updateNote.mutate({ noteId: note.id, data: { enabled: !note.enabled } });
+  };
+
+  const startEdit = (note: FarmNote) => {
+    setEditingNote(note);
+    setEditText(note.content);
+  };
+
+  const saveEdit = () => {
+    if (!editingNote || !editText.trim()) return;
+    updateNote.mutate({ noteId: editingNote.id, data: { content: editText.trim() } });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <StickyNote className="w-5 h-5 text-primary" />
+          Betriebshinweise
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Freitext-Hinweise die bei jeder Kundenanalyse in den Agenten-Kontext einfliessen
+          (z.&thinsp;B. betriebliche Schwerpunkte, wichtige Kennzahlen oder Interpretationsregeln).
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Textarea
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="z. B. Pregrate ist die wichtigste Fertilitatskennzahl. Immer Laktationsnummer beachten."
+            rows={3}
+            maxLength={2000}
+            className="resize-none"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">{noteText.length}/2000 Zeichen</span>
+            <Button
+              size="sm"
+              className="gap-1.5"
+              disabled={!noteText.trim() || createNote.isPending}
+              onClick={() => createNote.mutate({ data: { content: noteText.trim() } })}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Hinweis hinzufügen
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Laden…</p>
+      ) : !notes || notes.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic text-center py-2">
+          Noch keine Betriebshinweise angelegt.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {notes.map((note) => (
+            <Card key={note.id} className={cn(!note.enabled && "opacity-55")}>
+              <CardContent className="p-3">
+                {editingNote?.id === note.id ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      className="resize-none"
+                      autoFocus
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditingNote(null)}>
+                        Abbrechen
+                      </Button>
+                      <Button size="sm" disabled={!editText.trim() || updateNote.isPending} onClick={saveEdit}>
+                        Speichern
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className={cn("w-4 h-4 mt-0.5 shrink-0", note.enabled ? "text-primary" : "text-muted-foreground")} />
+                    <p className="flex-1 text-sm leading-relaxed">{note.content}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Switch
+                        checked={note.enabled}
+                        onCheckedChange={() => toggleNote(note)}
+                        aria-label="Hinweis aktiv"
+                      />
+                      <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => startEdit(note)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-8 h-8 text-destructive hover:text-destructive"
+                        disabled={deleteNote.isPending}
+                        onClick={() => deleteNote.mutate({ noteId: note.id })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function KnowledgePage() {
@@ -852,6 +1032,10 @@ export function KnowledgePage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="border-t pt-6">
+        <FarmNotesSection />
+      </div>
     </div>
   );
 }

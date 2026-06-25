@@ -6,6 +6,7 @@ import {
   activityLogTable,
   rulesTable,
   farmNotesTable,
+  usersTable,
   datasetsTable,
   type Analysis,
   type Message,
@@ -137,11 +138,12 @@ export async function processQuestion(
             .join("\n")}`
         : "";
 
-    // Load free-text farm notes and inject them alongside structured rules.
+    // Load free-text farm notes set by operators and inject them alongside structured rules.
     const farmNotes = await db
-      .select()
+      .select({ id: farmNotesTable.id, content: farmNotesTable.content })
       .from(farmNotesTable)
-      .where(and(eq(farmNotesTable.userId, analysis.userId!), eq(farmNotesTable.enabled, true)));
+      .innerJoin(usersTable, eq(farmNotesTable.userId, usersTable.id))
+      .where(and(eq(usersTable.role, "operator"), eq(farmNotesTable.enabled, true)));
     const farmNotesContext =
       farmNotes.length > 0
         ? `\nBetriebshinweise des Landwirts (wichtige Hintergrundinformationen, die bei jeder Analyse beachtet werden sollen):\n${farmNotes
