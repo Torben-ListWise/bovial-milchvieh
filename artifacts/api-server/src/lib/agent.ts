@@ -14,6 +14,7 @@ import {
   knowledgeDocumentsTable,
   knowledgeChunksTable,
   knowledgeMissedQueriesTable,
+  apiUsageLogTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -1230,6 +1231,16 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     } else {
       _cacheStats.consecutiveZeroReadStreak += 1;
     }
+
+    // Persist usage row to DB so history survives server restarts (fire-and-forget)
+    db.insert(apiUsageLogTable).values({
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheCreationTokens: cacheCreation,
+      cacheReadTokens: cacheRead,
+    }).catch((err: unknown) => {
+      logger.warn({ err }, "api_usage_log insert failed");
+    });
 
     logger.debug({
       input_tokens: usage.input_tokens,

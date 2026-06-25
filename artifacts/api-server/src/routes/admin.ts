@@ -11,6 +11,7 @@ import {
   analysisTemplatesTable,
   messagesTable,
   knowledgeMissedQueriesTable,
+  apiUsageLogTable,
 } from "@workspace/db";
 import {
   GetAdminStatsResponse,
@@ -362,22 +363,85 @@ router.post(
   },
 );
 
-// GET /api/admin/cache-stats — prompt-cache hit/miss counters (in-memory, resets on restart)
+// GET /api/admin/cache-stats — prompt-cache hit/miss counters
+// Query params:
+//   ?window=24h|7d|30d|all  (default: all)
+// The DB aggregate survives server restarts; the in-memory snapshot is also
+// included for the current session (since last restart).
 router.get(
   "/admin/cache-stats",
   requireAuth,
   requireOperator,
-  (_req: Request, res: Response) => {
-    const stats = getCacheStats();
-    const hitRate =
-      stats.totalCalls > 0
-        ? stats.totalCacheReadTokens /
-          (stats.totalCacheReadTokens + stats.totalCacheCreationTokens || 1)
+  async (req: Request, res: Response) => {
+    const windowParam = (req.query["window"] as string | undefined) ?? "all";
+    let since: Date | null = null;
+    if (windowParam === "24h") {
+      since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    } else if (windowParam === "7d") {
+      since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    } else if (windowParam === "30d") {
+      since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const [dbRow] = await db
+      .select({
+        totalCalls: sql<number>`count(*)::int`,
+        totalInputTokens: sql<number>`coalesce(sum(input_tokens), 0)::bigint`,
+        totalOutputTokens: sql<number>`coalesce(sum(output_tokens), 0)::bigint`,
+        totalCacheCreationTokens: sql<number>`coalesce(sum(cache_creation_tokens), 0)::bigint`,
+        totalCacheReadTokens: sql<number>`coalesce(sum(cache_read_tokens), 0)::bigint`,
+        firstRecordedAt: sql<string | null>`min(created_at)`,
+        lastRecordedAt: sql<string | null>`max(created_at)`,
+      })
+      .from(apiUsageLogTable)
+      .where(since ? gte(apiUsageLogTable.createdAt, since) : sql`true`);
+
+    const dbStats = dbRow ?? {
+      totalCalls: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheCreationTokens: 0,
+      totalCacheReadTokens: 0,
+      firstRecordedAt: null,
+      lastRecordedAt: null,
+    };
+
+    const totalCache =
+      Number(dbStats.totalCacheReadTokens) +
+      Number(dbStats.totalCacheCreationTokens);
+    const hitRatePct =
+      totalCache > 0
+        ? Math.round(
+            (Number(dbStats.totalCacheReadTokens) / totalCache) * 10000,
+          ) / 100
         : null;
+
+    const memStats = getCacheStats();
+
     res.json({
-      ...stats,
-      hitRatePct: hitRate !== null ? Math.round(hitRate * 10000) / 100 : null,
-      note: "In-memory only — resets when the server restarts.",
+      window: windowParam,
+      db: {
+        totalCalls: Number(dbStats.totalCalls),
+        totalInputTokens: Number(dbStats.totalInputTokens),
+        totalOutputTokens: Number(dbStats.totalOutputTokens),
+        totalCacheCreationTokens: Number(dbStats.totalCacheCreationTokens),
+        totalCacheReadTokens: Number(dbStats.totalCacheReadTokens),
+        hitRatePct,
+        firstRecordedAt: dbStats.firstRecordedAt,
+        lastRecordedAt: dbStats.lastRecordedAt,
+      },
+      currentSession: {
+        ...memStats,
+        hitRatePct:
+          memStats.totalCalls > 0
+            ? Math.round(
+                (memStats.totalCacheReadTokens /
+                  (memStats.totalCacheReadTokens +
+                    memStats.totalCacheCreationTokens || 1)) *
+                  10000,
+              ) / 100
+            : null,
+      },
     });
   },
 );
