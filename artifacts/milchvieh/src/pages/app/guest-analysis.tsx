@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { ArrowRight, Bot, Lock, User } from "lucide-react";
@@ -58,15 +59,43 @@ function GuestBanner() {
 
 // ── Message bubble ────────────────────────────────────────────────────────────
 
+const TABLE_TAG_NAMES = ["table", "thead", "tbody", "tr", "th", "td", "colgroup", "col"] as const;
+
 const sanitizeSchema = {
   ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "span",
+    ...TABLE_TAG_NAMES,
+  ],
   attributes: {
     ...defaultSchema.attributes,
-    "*": [...(defaultSchema.attributes?.["*"] ?? []), "style", "className", "class"],
-    th: [...(defaultSchema.attributes?.["th"] ?? []), "style"],
-    td: [...(defaultSchema.attributes?.["td"] ?? []), "style"],
+    span: ["class"],
+    th: ["align", "scope"],
+    td: ["align"],
   },
 };
+
+const TABLE_COMPONENTS = {
+  table({ children }: { children?: React.ReactNode }) {
+    return <div className="overflow-x-auto"><table>{children}</table></div>;
+  },
+};
+
+const PROSE_CLASSES =
+  "prose prose-sm max-w-none " +
+  "prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-3 prose-headings:mb-1 " +
+  "prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed " +
+  "prose-strong:text-foreground prose-strong:font-semibold " +
+  "prose-li:text-foreground prose-li:my-0.5 " +
+  "prose-ul:my-1 prose-ol:my-1 " +
+  "prose-ul:pl-4 prose-ol:pl-4 " +
+  "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 " +
+  "[&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:my-3 " +
+  "[&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:bg-muted/60 " +
+  "[&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top " +
+  "[&_tbody_tr:nth-child(even)]:bg-muted/20 " +
+  "[&_td[align=right]]:text-right [&_th[align=right]]:text-right [&_td[align=center]]:text-center [&_th[align=center]]:text-center";
 
 function MessageBubble({ msg }: { msg: PublicMessage }) {
   const isUser = msg.role === "user";
@@ -87,9 +116,11 @@ function MessageBubble({ msg }: { msg: PublicMessage }) {
         {isUser ? (
           <p className="whitespace-pre-wrap">{msg.content}</p>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
+          <div className={PROSE_CLASSES}>
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+              components={TABLE_COMPONENTS}
             >
               {msg.content ?? ""}
             </ReactMarkdown>
