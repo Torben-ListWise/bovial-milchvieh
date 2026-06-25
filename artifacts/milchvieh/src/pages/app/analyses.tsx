@@ -783,7 +783,7 @@ function extractTrustSources(text: string): TrustSource[] {
 }
 
 // Strict sanitize schema: only allow <sup>, <span>, and <a> elements introduced by
-// preprocessFootnotes / preprocessTrustLabels. Everything else the LLM might emit
+// preprocessFootnotes / stripTrustMarkers. Everything else the LLM might emit
 // as raw HTML is stripped.
 const TABLE_TAG_NAMES = ["table", "thead", "tbody", "tr", "th", "td", "colgroup", "col"] as const;
 const TABLE_ATTRIBUTES = {
@@ -861,7 +861,7 @@ const PROSE_CLASSES = "prose prose-sm max-w-none " +
   "[&_td[align=right]]:text-right [&_th[align=right]]:text-right [&_td[align=center]]:text-center [&_th[align=center]]:text-center";
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
-  const processed = preprocessTrustLabels(text);
+  const processed = stripTrustMarkers(text);
   return (
     <div className={PROSE_CLASSES}>
       <ReactMarkdown
