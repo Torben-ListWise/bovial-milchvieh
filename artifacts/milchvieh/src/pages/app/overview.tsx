@@ -26,7 +26,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, Bot, X, ArrowRight, ChevronRight, Loader2 } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, X, ArrowRight, ChevronRight, Loader2 } from "lucide-react";
+import { AiIcon } from "@/components/AiIcon";
 
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
@@ -46,7 +47,7 @@ function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; dat
   return (
     <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-5 py-3">
       <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-        <Bot className="w-4 h-4 text-primary" />
+        <AiIcon size={16} className="text-primary" />
       </div>
       <p className="flex-1 text-sm font-medium text-foreground">
         🤖 Erstanalyse bereit — Dein vollständiger Betriebsspiegel wurde automatisch erstellt.

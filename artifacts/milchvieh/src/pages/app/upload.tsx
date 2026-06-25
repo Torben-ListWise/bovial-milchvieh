@@ -257,7 +257,7 @@ export function UploadPage() {
       </div>
 
       {!hasFiles && (
-        <Card className="border-dashed bg-secondary/10">
+        <Card className="border-dashed bg-secondary/10 upload-pulse-border">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
               <UploadCloud className="w-8 h-8 text-primary" />

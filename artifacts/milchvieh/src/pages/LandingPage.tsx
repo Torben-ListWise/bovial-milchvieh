@@ -470,7 +470,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
       <DemoModal open={demoOpen} onClose={() => setDemoOpen(false)} />
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b bg-card/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8" />
           <span className="font-bold text-lg text-primary">Milchvieh Assistent</span>
@@ -486,7 +486,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
           </a>
           <a
             href={`${basePath}/sign-up`}
-            className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-all glow-sm"
           >
             Kostenlos starten
           </a>
@@ -495,7 +495,13 @@ export function LandingPage({ basePath }: LandingPageProps) {
 
       <main className="flex-1">
         {/* ── Hero ── */}
-        <section className="px-6 py-16 md:py-24">
+        <section className="relative px-6 py-16 md:py-24 aurora-bg overflow-hidden">
+          {/* Aurora glow orbs */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-primary/8 blur-[120px]" />
+            <div className="absolute top-20 -right-20 w-[400px] h-[400px] rounded-full bg-cyan-500/6 blur-[100px]" />
+            <div className="absolute top-40 -left-20 w-[300px] h-[300px] rounded-full bg-violet-500/5 blur-[80px]" />
+          </div>
           <div className="max-w-5xl mx-auto text-center space-y-8">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary">
               🇩🇪 Daten in Deutschland · DSGVO-konform
@@ -512,14 +518,14 @@ export function LandingPage({ basePath }: LandingPageProps) {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
                 href={`${basePath}/sign-up`}
-                className="inline-flex items-center gap-2 text-base font-semibold bg-primary text-primary-foreground px-8 py-4 rounded-xl shadow-lg hover:bg-primary/90 hover:-translate-y-0.5 transition-all w-full sm:w-auto justify-center"
+                className="inline-flex items-center gap-2 text-base font-semibold bg-primary text-primary-foreground px-8 py-4 rounded-xl shadow-lg hover:bg-primary/90 hover:-translate-y-0.5 transition-all w-full sm:w-auto justify-center glow-md"
               >
                 Kostenlos starten
                 <ArrowRight className="w-5 h-5" />
               </a>
               <button
                 onClick={() => setDemoOpen(true)}
-                className="inline-flex items-center gap-2 text-base font-semibold text-foreground bg-secondary px-8 py-4 rounded-xl hover:bg-secondary/80 transition-all w-full sm:w-auto justify-center"
+                className="inline-flex items-center gap-2 text-base font-semibold text-foreground glass px-8 py-4 rounded-xl hover:bg-white/10 transition-all w-full sm:w-auto justify-center"
               >
                 <Play className="w-4 h-4 text-primary fill-primary" />
                 Demo ansehen
@@ -575,7 +581,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
         </section>
 
         {/* ── Trust bar ── */}
-        <section className="border-y bg-card">
+        <section className="border-y border-border/50 bg-card/60 backdrop-blur-sm">
           <div className="max-w-5xl mx-auto px-6 py-5">
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-muted-foreground">
               <div className="flex items-center gap-2">
@@ -640,7 +646,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
               ].map(({ icon: Icon, step, title, desc }) => (
                 <div
                   key={step}
-                  className="relative bg-card border border-border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow"
+                  className="relative bg-card/60 border border-white/[0.08] rounded-2xl p-8 shadow-sm hover:shadow-[0_0_24px_rgba(52,211,153,0.1)] hover:border-primary/30 transition-all duration-200 glass-card"
                 >
                   <div className="absolute -top-3 -right-3 text-xs font-bold text-primary/30 text-6xl leading-none select-none">
                     {step}
@@ -657,8 +663,11 @@ export function LandingPage({ basePath }: LandingPageProps) {
         </section>
 
         {/* ── Pricing ── */}
-        <section id="pricing" className="px-6 py-20 bg-muted/30">
-          <div className="max-w-5xl mx-auto">
+        <section id="pricing" className="px-6 py-20 relative overflow-hidden">
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-primary/5 blur-[100px]" />
+          </div>
+          <div className="max-w-5xl mx-auto relative">
             <div className="text-center mb-14">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
                 Einfache, transparente Preise
@@ -680,7 +689,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
             </p>
 
             {/* Pricing FAQ */}
-            <div className="mt-12 bg-card border border-border rounded-2xl px-6 md:px-10 max-w-2xl mx-auto">
+            <div className="mt-12 bg-card/60 border border-white/[0.07] glass-card rounded-2xl px-6 md:px-10 max-w-2xl mx-auto">
               <div className="py-6 border-b border-border">
                 <h3 className="text-base font-bold text-foreground">Häufige Fragen zum Pricing</h3>
               </div>
@@ -708,7 +717,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
         </section>
 
         {/* ── Social Proof ── */}
-        <section className="px-6 py-20">
+        <section className="px-6 py-20 bg-muted/20">
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
@@ -742,7 +751,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
               ].map(({ name, farm, quote }) => (
                 <div
                   key={name}
-                  className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4 relative"
+                  className="bg-card/50 border border-white/[0.08] glass-card rounded-2xl p-6 shadow-sm space-y-4 relative hover:border-primary/20 transition-all"
                 >
                   <div className="absolute top-4 right-4 text-[10px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                     Platzhalter
@@ -764,7 +773,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
         </section>
 
         {/* ── FAQ ── */}
-        <section id="faq" className="px-6 py-20 bg-muted/30">
+        <section id="faq" className="px-6 py-20 bg-muted/10">
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -772,7 +781,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
               </h2>
               <p className="text-muted-foreground">Alles, was du wissen musst, bevor du startest.</p>
             </div>
-            <div className="bg-card border border-border rounded-2xl px-6 md:px-10">
+            <div className="bg-card/60 border border-white/[0.07] glass-card rounded-2xl px-6 md:px-10">
               {faqs.map((faq) => (
                 <FaqItem key={faq.question} {...faq} />
               ))}

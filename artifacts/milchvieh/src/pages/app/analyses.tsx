@@ -52,8 +52,9 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAnalysisStream, useStreamingState } from "@/hooks/use-analysis-stream";
+import { AiIcon } from "@/components/AiIcon";
 import {
-  Bot, User, AlertCircle, Send,
+  User, AlertCircle, Send,
   BarChart3, UploadCloud, MessageSquare, TrendingUp,
   Loader2, ChevronRight, Upload,
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
@@ -534,7 +535,7 @@ function MessageBubble({
     <div className={cn("flex gap-3", isAssistant ? "justify-start" : "justify-end")}>
       {isAssistant && (
         <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-          <Bot className="w-3.5 h-3.5 text-primary" />
+          <AiIcon size={14} className="text-primary" />
         </div>
       )}
       <div className={cn("max-w-[85%] space-y-2", isAssistant ? "" : "items-end flex flex-col")}>
@@ -620,7 +621,7 @@ function AgentStepsTimeline({
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-        <Bot className="w-3.5 h-3.5 text-primary" />
+        <AiIcon size={14} working className="text-primary" />
       </div>
       <div className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-1.5 min-w-[220px]">
         <div className="relative before:absolute before:left-[5px] before:top-3 before:bottom-3 before:w-px before:bg-border">
@@ -680,7 +681,7 @@ function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] 
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-        <Bot className="w-3.5 h-3.5 text-primary" />
+        <AiIcon size={14} working className="text-primary" />
       </div>
       <div className="flex-1 rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 space-y-3">
         {text ? (
@@ -719,7 +720,7 @@ function AgentWorkingBanner({ currentStep }: { currentStep: string | null }) {
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-        <Bot className="w-3.5 h-3.5 text-primary" />
+        <AiIcon size={14} working className="text-primary" />
       </div>
       <div className="flex-1 rounded-2xl rounded-tl-sm border-l-4 border-primary bg-primary/5 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -984,7 +985,7 @@ function BackQuestionForm({
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-        <Bot className="w-3.5 h-3.5 text-primary" />
+        <AiIcon size={14} className="text-primary" />
       </div>
       <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-3 max-w-[90%]">
         {questions.map((q, i) => (
@@ -1213,8 +1214,8 @@ function StarterQuestions({
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
-      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4">
-        <Bot className="w-6 h-6 text-primary" />
+      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4 glow-sm">
+        <AiIcon size={28} className="text-primary" />
       </div>
       <h3 className="text-lg font-semibold mb-1">Womit kann ich helfen?</h3>
       <p className="text-sm text-muted-foreground mb-6">
@@ -1529,7 +1530,7 @@ function AnalysisResultsPanel({
         ) : (
         <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-            <Bot className="w-3.5 h-3.5 text-primary" />
+            <AiIcon size={14} working className="text-primary" />
           </div>
           <div className="flex-1 rounded-2xl rounded-tl-sm border-l-4 border-primary bg-primary/5 px-4 py-3">
             <div className="flex items-center gap-3">

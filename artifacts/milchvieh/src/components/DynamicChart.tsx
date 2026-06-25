@@ -6,11 +6,11 @@ import {
 import type { Chart as ChartType } from '@workspace/api-client-react';
 
 const COLORS = [
-  'hsl(155 40% 35%)',
-  'hsl(35 60% 50%)',
-  'hsl(195 40% 45%)',
-  'hsl(10 50% 55%)',
-  'hsl(280 20% 50%)'
+  'hsl(152 68% 54%)',
+  'hsl(191 88% 62%)',
+  'hsl(44 95% 62%)',
+  'hsl(266 72% 72%)',
+  'hsl(4 80% 68%)',
 ];
 
 interface DynamicChartProps {
@@ -247,12 +247,12 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
       case 'table':
         return (
           <div className="w-full h-full overflow-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground bg-secondary/50 sticky top-0">
+            <table className="w-full text-sm text-left table-aurora">
+              <thead className="text-xs sticky top-0">
                 <tr>
-                  <th className="px-4 py-3 font-medium">{xKey || 'Kategorie'}</th>
+                  <th className="px-4 py-3 font-semibold">{xKey || 'Kategorie'}</th>
                   {series?.map((s) => (
-                    <th key={s.key} className="px-4 py-3 font-medium text-right">
+                    <th key={s.key} className="px-4 py-3 font-semibold text-right">
                       {s.label}{s.unit ? ` (${s.unit})` : unit ? ` (${unit})` : ''}
                     </th>
                   ))}
@@ -260,10 +260,10 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
               </thead>
               <tbody>
                 {data.map((row, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                  <tr key={i} className="border-b border-border/40 hover:bg-primary/5 transition-colors">
                     <td className="px-4 py-3 font-medium">{String(row[xKey || 'name'])}</td>
                     {series?.map((s) => (
-                      <td key={s.key} className="px-4 py-3 text-right">
+                      <td key={s.key} className="px-4 py-3 text-right tabular-nums">
                         {row[s.key] !== undefined ? String(row[s.key]) : '-'}
                       </td>
                     ))}

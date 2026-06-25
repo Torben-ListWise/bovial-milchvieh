@@ -25,9 +25,9 @@ import {
   Wheat,
   Menu,
   X,
-  Bot,
   Users,
 } from "lucide-react";
+import { AiIcon } from "@/components/AiIcon";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -84,7 +84,7 @@ function DatasetAwareHeader({
   const isAnalysesPage = currentPath.startsWith('/app/analyses');
 
   return (
-    <header className="h-14 md:h-16 border-b bg-card/95 backdrop-blur-sm flex items-center px-3 md:px-6 shrink-0 gap-2 md:gap-3">
+    <header className="h-14 md:h-16 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl flex items-center px-3 md:px-6 shrink-0 gap-2 md:gap-3">
       {/* Mobile hamburger */}
       <button
         onClick={onOpenMobileMenu}
@@ -105,7 +105,7 @@ function DatasetAwareHeader({
       <div className="ml-auto flex items-center gap-2 shrink-0">
         {isAnalysesPage && (
           <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary border border-border px-2.5 py-1 rounded-full" title="Antworten werden durch KI (Anthropic Claude) generiert und können Fehler enthalten. (EU AI Act Art. 50)">
-            <Bot className="w-3.5 h-3.5 shrink-0" />
+            <AiIcon size={14} className="shrink-0 text-primary" />
             <span className="hidden sm:inline">KI-generierte Antworten</span>
           </span>
         )}
@@ -252,11 +252,11 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
                     onClick={onClick}
                     title={navCollapsed ? item.name : undefined}
                     className={cn(
-                      "flex items-center rounded-md text-sm font-medium transition-colors cursor-pointer min-h-[44px] md:min-h-0",
+                      "flex items-center rounded-md text-sm font-medium transition-all duration-150 cursor-pointer min-h-[44px] md:min-h-0",
                       navCollapsed ? "px-2 py-2 justify-center md:min-h-0" : "px-3 py-2",
                       isActive 
-                        ? "border-l-2 border-primary bg-primary/8 text-primary" 
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        ? "border-l-2 border-primary bg-primary/10 text-primary shadow-[0_0_10px_0_rgba(52,211,153,0.15)]" 
+                        : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
                     )}
                   >
                     <Icon className={cn("w-5 h-5 md:w-4 md:h-4 shrink-0", !navCollapsed && "mr-3")} />
@@ -319,12 +319,12 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "border-r bg-card flex-col transition-all duration-200 shrink-0 hidden md:flex",
+          "border-r border-white/[0.06] bg-card/90 backdrop-blur-xl flex-col transition-all duration-200 shrink-0 hidden md:flex",
           navCollapsed ? "w-12" : "w-56"
         )}
       >
         {/* Header / logo + toggle */}
-        <div className="h-16 flex items-center border-b shrink-0 px-2 gap-1">
+        <div className="h-16 flex items-center border-b border-white/[0.06] shrink-0 px-2 gap-1">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8 shrink-0" />
           {!navCollapsed && (
             <span className="font-bold text-primary truncate ml-1 flex-1 text-sm">
@@ -436,12 +436,12 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
       {/* Drawer panel */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 bg-card flex flex-col shadow-xl transition-transform duration-200 md:hidden",
+          "fixed inset-y-0 left-0 z-50 w-72 bg-card/95 backdrop-blur-xl flex flex-col shadow-xl border-r border-white/[0.06] transition-transform duration-200 md:hidden",
           mobileDrawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Drawer header */}
-        <div className="h-14 flex items-center border-b shrink-0 px-4 gap-3">
+        <div className="h-14 flex items-center border-b border-white/[0.06] shrink-0 px-4 gap-3">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8 shrink-0" />
           <span className="font-bold text-primary truncate flex-1 text-sm">
             Milchvieh Assistent
