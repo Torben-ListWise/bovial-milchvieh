@@ -432,7 +432,7 @@ Vorgehen:
 1. get_event_stats(event_type='BRED', group_by='remark') → liefert je Bulle (remark-Feld): Anzahl Besamungen, Konzeptionsrate. Bullennamen stehen im remark-Feld des HMS-Exports — genau so benennen wie dort angegeben.
 2. get_event_stats(event_type='BRED', group_by='technician') → liefert je Techniker: Anzahl Besamungen, Konzeptionsrate.
 3. Ergebnis nach Konzeptionsrate absteigend sortieren und Top/Flop benennen.
-4. Ergänzend emit_chart(chartType='bar', source='group', ...) für visuellen Vergleich anbieten.
+4. PFLICHT: Unmittelbar nach dem get_event_stats-Aufruf für Bullen oder Techniker rufst du IMMER emit_chart auf — ohne Ausnahme, auch wenn der Nutzer kein Diagramm verlangt hat. Verwende chartType='bar', source='group'. Sortiere die Balken absteigend nach Konzeptionsrate (höchster Wert links). Titel: bei Bullenvergleich exakt "Bullenvergleich – Konzeptionsrate", bei Technikervergleich exakt "Technikervergleich – Konzeptionsrate". Zeige die Konzeptionsrate (%) auf der Y-Achse.
 Referenzwerte: Erstbesamungskonzeptionsrate Milchkuh >55 % sehr gut, 45–55 % gut, <40 % kritisch. Techniker mit >10 % Abstand zum Betriebsmittel verdienen gesonderte Rückmeldung.
 
 PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
