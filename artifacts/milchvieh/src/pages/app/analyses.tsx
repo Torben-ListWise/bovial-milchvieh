@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, memo } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Link, useSearch } from "wouter";
@@ -773,18 +774,26 @@ function extractTrustSources(text: string): TrustSource[] {
 // Strict sanitize schema: only allow <sup>, <span>, and <a> elements introduced by
 // preprocessFootnotes / preprocessTrustLabels. Everything else the LLM might emit
 // as raw HTML is stripped.
+const TABLE_TAG_NAMES = ["table", "thead", "tbody", "tr", "th", "td", "colgroup", "col"] as const;
+const TABLE_ATTRIBUTES = {
+  th: ["align", "scope"],
+  td: ["align"],
+};
+
 const FOOTNOTE_SANITIZE_SCHEMA = {
   ...defaultSchema,
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     "sup",
     "span",
+    ...TABLE_TAG_NAMES,
   ],
   attributes: {
     ...defaultSchema.attributes,
     sup: ["id", "class"],
     span: ["class", "tabindex"],
     a: [...((defaultSchema.attributes as Record<string, string[]>)?.a ?? []), "class"],
+    ...TABLE_ATTRIBUTES,
   },
 };
 
@@ -794,10 +803,12 @@ const TRUST_BADGE_SANITIZE_SCHEMA = {
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     "span",
+    ...TABLE_TAG_NAMES,
   ],
   attributes: {
     ...defaultSchema.attributes,
     span: ["class", "tabindex"],
+    ...TABLE_ATTRIBUTES,
   },
 };
 
@@ -819,6 +830,9 @@ const EXTERNAL_LINK_COMPONENTS = {
     }
     return <span className={LINK_CLASSES}>{children}</span>;
   },
+  table({ children }: { children?: React.ReactNode }) {
+    return <div className="overflow-x-auto"><table>{children}</table></div>;
+  },
 };
 
 const PROSE_CLASSES = "prose prose-sm max-w-none " +
@@ -828,13 +842,19 @@ const PROSE_CLASSES = "prose prose-sm max-w-none " +
   "prose-li:text-foreground prose-li:my-0.5 " +
   "prose-ul:my-1 prose-ol:my-1 " +
   "prose-ul:pl-4 prose-ol:pl-4 " +
-  "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
+  "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 " +
+  "[&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:my-3 " +
+  "[&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:bg-muted/60 " +
+  "[&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top " +
+  "[&_tbody_tr:nth-child(even)]:bg-muted/20 " +
+  "[&_td[align=right]]:text-right [&_th[align=right]]:text-right [&_td[align=center]]:text-center [&_th[align=center]]:text-center";
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
   const processed = preprocessTrustLabels(text);
   return (
     <div className={PROSE_CLASSES}>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, TRUST_BADGE_SANITIZE_SCHEMA]]}
         components={EXTERNAL_LINK_COMPONENTS}
       >
@@ -863,6 +883,7 @@ const ResultMarkdownContent = memo(function ResultMarkdownContent({
       " [&_.footnote-link]:font-semibold [&_.footnote-link]:no-underline [&_.footnote-link]:hover:underline"
     }>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, FOOTNOTE_SANITIZE_SCHEMA]]}
         components={EXTERNAL_LINK_COMPONENTS}
       >
