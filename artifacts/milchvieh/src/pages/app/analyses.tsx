@@ -934,7 +934,12 @@ function isBackQuestion(content: string | null | undefined): boolean {
   const trimmed = content.trim();
   if (trimmed.length >= 400) return false;
   const lastChar = trimmed[trimmed.length - 1];
-  return lastChar === "?";
+  if (lastChar !== "?") return false;
+  // Suppress markdown-structured messages (headings, lists, tables) — they are results, not questions
+  if (/^#{1,6}\s/m.test(trimmed)) return false;
+  if (/^[-*]\s/m.test(trimmed)) return false;
+  if (/^\|/m.test(trimmed)) return false;
+  return true;
 }
 
 // ── Extract individual questions from agent messages ──────────────────────────
@@ -1099,7 +1104,6 @@ function BackQuestionForm({
           type="button"
           size="sm"
           onClick={handleSend}
-          disabled={allSkipped}
           className="w-full mt-1"
         >
           Senden
@@ -1704,6 +1708,7 @@ export function AnalysesPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const askIsPendingRef = useRef(false);
   const pendingQuestionRef = useRef("");
+  const answeredMsgIdsRef = useRef<Set<string>>(new Set());
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);
   const chatWidthRef = useRef(chatWidth);
@@ -2512,11 +2517,15 @@ export function AnalysesPage() {
       return qs ? lastAssistantMsg.id : null;
     })();
 
-    // For Fall B: embedded questions in a long result message (not a back-question bubble)
+    // For Fall B: embedded questions in a long result message (not a back-question bubble).
+    // Only show if the very last message overall is still the assistant message — i.e. the user
+    // hasn't replied yet (guards against re-appearing after page reload when there's already an answer).
     const embeddedFormQuestions = (() => {
       if (isAgentWorking) return null;
       if (!lastAssistantMsg) return null;
       if (msgIsBackQuestion(lastAssistantMsg)) return null;
+      if (msgs[msgs.length - 1]?.id !== lastAssistantMsg.id) return null;
+      if (answeredMsgIdsRef.current.has(lastAssistantMsg.id + "-embedded")) return null;
       return getMsgBackQuestions(lastAssistantMsg);
     })();
 
@@ -2551,21 +2560,32 @@ export function AnalysesPage() {
                 if (msg.role === "assistant" && !msg.error && !msgIsBackQuestion(msg)) {
                   return null;
                 }
-                // Fall A: last back-question bubble → replace with interactive form
+                // Fall A: last back-question bubble → replace with interactive form.
+                // Guard with answeredMsgIdsRef so the form can't re-appear during the race window
+                // between ask.mutate settling and the next agentProgress poll.
                 if (
                   msg.role === "assistant" &&
                   !msg.error &&
                   isLast &&
-                  msg.id === lastBackQuestionMsgId
+                  msg.id === lastBackQuestionMsgId &&
+                  !answeredMsgIdsRef.current.has(msg.id)
                 ) {
                   const qs = getMsgBackQuestions(msg)!;
                   return (
                     <BackQuestionForm
                       key={msg.id}
                       questions={qs}
-                      onSubmit={(answer) => handleSubmit(answer)}
+                      onSubmit={(answer) => {
+                        answeredMsgIdsRef.current.add(msg.id);
+                        handleSubmit(answer);
+                      }}
                     />
                   );
+                }
+                // Bug 3: suppress old back-question messages in history — they rendered as a plain
+                // chat bubble showing raw question text; the user's answer below provides context.
+                if (msg.role === "assistant" && !msg.error && msgIsBackQuestion(msg)) {
+                  return null;
                 }
                 return (
                   <div key={msg.id}>
@@ -2584,7 +2604,10 @@ export function AnalysesPage() {
                 <BackQuestionForm
                   key={lastAssistantMsg!.id + "-embedded"}
                   questions={embeddedFormQuestions}
-                  onSubmit={(answer) => handleSubmit(answer)}
+                  onSubmit={(answer) => {
+                    answeredMsgIdsRef.current.add(lastAssistantMsg!.id + "-embedded");
+                    handleSubmit(answer);
+                  }}
                 />
               )}
               </>
