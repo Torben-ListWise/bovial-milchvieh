@@ -1416,17 +1416,16 @@ function AnalysisResultsPanel({
   pendingQuestion,
   streamingText,
   streamingCharts,
-  scrollToTopKey,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
   pendingQuestion?: string;
   streamingText?: string;
   streamingCharts?: Chart[];
-  scrollToTopKey?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
+  const streamingCardRef = useRef<HTMLDivElement>(null);
 
   const msgs = analysis?.messages ?? [];
 
@@ -1440,10 +1439,12 @@ function AnalysisResultsPanel({
     }
   }
 
-  // Scroll to top when a new question is submitted (key increments immediately on submit)
+  // Scroll to the streaming card when the agent starts working on a follow-up question.
+  // For first questions resultPairs is empty so there's nothing above the card — no scroll needed.
   useEffect(() => {
-    if (scrollToTopKey) scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
-  }, [scrollToTopKey]);
+    if (!isWorking || resultPairs.length === 0) return;
+    streamingCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [isWorking]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to top when switching to a different analysis
   useEffect(() => {
@@ -1522,7 +1523,8 @@ function AnalysisResultsPanel({
       ))}
 
       {isWorking && (
-        (streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
+        <div ref={streamingCardRef}>
+        {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
           <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
         ) : (
         <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1546,6 +1548,8 @@ function AnalysisResultsPanel({
           </div>
         </div>
         )
+        }
+        </div>
       )}
 
       <div className="h-2" />
@@ -1614,7 +1618,6 @@ export function AnalysesPage() {
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
   const [pinnedChips, setPinnedChips] = useState<string[]>([]);
   const [chipsExiting, setChipsExiting] = useState(false);
-  const [resultsScrollKey, setResultsScrollKey] = useState(0);
   const lastChipsRef = useRef<string[]>([]);
   const chipsExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatWidth, setChatWidth] = useState<number>(() => {
@@ -2100,7 +2103,6 @@ export function AnalysesPage() {
     if (!text) return;
 
     pendingQuestionRef.current = text;
-    if (activeAnalysisId) setResultsScrollKey((k) => k + 1);
 
     if (!activeAnalysisId) {
       createAnalysis.mutate({
@@ -2735,7 +2737,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} scrollToTopKey={resultsScrollKey} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
           </div>
         </div>
       </div>
@@ -2757,7 +2759,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} scrollToTopKey={resultsScrollKey} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
             </div>
           )}
         </div>

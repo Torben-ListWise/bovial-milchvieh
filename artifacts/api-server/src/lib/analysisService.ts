@@ -17,6 +17,15 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+const FALLBACK_CHIPS = [
+  "Wie entwickelt sich das über die Zeit?",
+  "Was sind meine besten und schwächsten Werte?",
+  "Welche Maßnahmen empfiehlst du konkret?",
+  "Vergleiche das mit dem Vorjahreszeitraum",
+  "Zeig mir das als Diagramm",
+  "Wo ist das größte Verbesserungspotenzial?",
+];
+
 export async function generateFollowUps(question: string, answer: string): Promise<string[]> {
   try {
     const resp = await anthropicClient.messages.create({
@@ -196,8 +205,15 @@ export async function processQuestion(
     let followUpQuestions: string[] = [];
     if (agentResultText) {
       followUpQuestions = await generateFollowUps(question, agentResultText);
-      if (followUpQuestions.length === 0) {
-        followUpQuestions = await generateFollowUps(question, agentResultText);
+      if (followUpQuestions.length < 3) {
+        const retry = await generateFollowUps(question, agentResultText);
+        if (retry.length > followUpQuestions.length) followUpQuestions = retry;
+      }
+      // Pad to exactly 3 using fallbacks so chips are always shown
+      const used = new Set(followUpQuestions);
+      for (const fb of FALLBACK_CHIPS) {
+        if (followUpQuestions.length >= 3) break;
+        if (!used.has(fb)) { followUpQuestions.push(fb); used.add(fb); }
       }
     }
 
