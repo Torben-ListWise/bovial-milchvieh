@@ -14,6 +14,24 @@ function sendWsMsg(ws: WebSocket, event: string, data: Record<string, unknown>):
   }
 }
 
+const DEV_BYPASS_USER_ID = process.env.DEV_BYPASS_USER_ID ?? "";
+
+/** Returns the userId from the token, or throws on auth failure. */
+async function resolveUserId(token: string): Promise<string> {
+  // Dev bypass: only active when NODE_ENV=development and the env var is set.
+  if (
+    process.env.NODE_ENV === "development" &&
+    DEV_BYPASS_USER_ID &&
+    token === `dev-bypass-${DEV_BYPASS_USER_ID}`
+  ) {
+    return DEV_BYPASS_USER_ID;
+  }
+
+  const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY! });
+  if (!payload?.sub) throw new Error("No sub in token payload");
+  return payload.sub;
+}
+
 export function attachWebSocketServer(server: Server): void {
   const wss = new WebSocketServer({ server, path: "/api/ws/stream" });
 
@@ -37,26 +55,23 @@ export function attachWebSocketServer(server: Server): void {
 
     const id = analysisId;
 
-    // Verify the Clerk JWT asynchronously
     (async () => {
       try {
-        const payload = await verifyToken(token!, { secretKey: process.env.CLERK_SECRET_KEY! });
-        if (!payload?.sub) throw new Error("No sub in token payload");
+        await resolveUserId(token!);
 
-        // Register as an SSE writer (same interface as before)
         const writer: SseWriter = {
           sendDelta: (text) => sendWsMsg(ws, "delta", { text }),
           sendSources: (sources) => sendWsMsg(ws, "sources", { sources }),
           sendProgress: (step) => sendWsMsg(ws, "progress", { step }),
-          sendChart: (chart) => sendWsMsg(ws, "chart", { chart: chart }),
+          sendChart: (chart) => sendWsMsg(ws, "chart", { chart }),
           sendDone: () => {
             sendWsMsg(ws, "done", {});
-            sseWriters.delete(id);
+            removeWriter(id);
             ws.close(1000, "done");
           },
           sendError: (message) => {
             sendWsMsg(ws, "error", { message });
-            sseWriters.delete(id);
+            removeWriter(id);
             ws.close(1000, "error");
           },
         };
