@@ -289,7 +289,15 @@ const TOOLS: Tool[] = [
     description:
       "Berechnet Aggregatstatistiken für Kuh-Events aus importierten Herdenmanagementsystem-Daten. " +
       "Aufrufen für Fragen zu Besamungen, Abkalbungen, Trockenstellungen, Abgängen, Lahmheit o.ä. " +
-      "Nur verwenden wenn get_schema events-Daten zeigt.",
+      "Nur verwenden wenn get_schema events-Daten zeigt.\n\n" +
+      "BEISPIELE FÜR HÄUFIGE ANWENDUNGSFÄLLE:\n" +
+      "- Bullenvergleich (Konzeptionsrate je Bulle): event_type='BRED', group_by='remark'\n" +
+      "  → Jede Zeile enthält den Bullennamen (remark-Feld), Gesamtbesamungen, Trächtigkeiten (PREG) und Konzeptionsrate\n" +
+      "  → Für Erstbesamungserfolg: Besamungen mit remark-Wert gefiltert auf Tiere mit genau 1 BRED-Event\n" +
+      "- Technikervergleich (Erfolgsrate je Besamungstechniker): event_type='BRED', group_by='technician'\n" +
+      "  → Jede Zeile enthält den Technikernamen, Besamungszahl und Konzeptionsrate\n" +
+      "- Lahmheitstrend je Monat: event_type='LAME', group_by='month'\n" +
+      "- Abgänge nach Ursache: event_type=['SOLD','DIED'], group_by='result'",
     input_schema: {
       type: "object",
       properties: {
@@ -305,7 +313,7 @@ const TOOLS: Tool[] = [
         group_by: {
           type: "string",
           enum: ["month", "quarter", "year", "remark", "result", "technician"],
-          description: "Gruppierung: month/quarter/year = zeitlich; remark = Bulle/Diagnose; result = Ergebnis-Code; technician = Besamungstechniker",
+          description: "Gruppierung: month/quarter/year = zeitlich; remark = Bullname/Diagnose (Freitext aus dem HMS); result = Ergebnis-Code; technician = Besamungstechniker",
         },
       },
       required: ["event_type"],
@@ -418,12 +426,23 @@ BRED=Besamung | FRESH=Abkalbung | DRY=Trockenstellen | LAME=Lahmheit
 SOLD=Abgang Verkauf | DIED=Verendung | PREG=TU positiv | OPEN=Offen (nicht trächtig)
 ABORT=Abort | MOVE=Stallwechsel | TREAT=Behandlung
 
+BULLENVERGLEICH & TECHNIKERBEWERTUNG:
+Typische Fragen: "Welcher Bulle hat die höchste Erstbesamungserfolgsrate?", "Wie vergleichen sich meine Besamungstechniker?", "Welcher Bulle soll zuerst aussortiert werden?"
+Vorgehen:
+1. get_event_stats(event_type='BRED', group_by='remark') → liefert je Bulle (remark-Feld): Anzahl Besamungen, Konzeptionsrate. Bullennamen stehen im remark-Feld des HMS-Exports — genau so benennen wie dort angegeben.
+2. get_event_stats(event_type='BRED', group_by='technician') → liefert je Techniker: Anzahl Besamungen, Konzeptionsrate.
+3. Ergebnis nach Konzeptionsrate absteigend sortieren und Top/Flop benennen.
+4. Ergänzend emit_chart(chartType='bar', source='group', ...) für visuellen Vergleich anbieten.
+Referenzwerte: Erstbesamungskonzeptionsrate Milchkuh >55 % sehr gut, 45–55 % gut, <40 % kritisch. Techniker mit >10 % Abstand zum Betriebsmittel verdienen gesonderte Rückmeldung.
+
 PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
 - Nach Pregnancy Rate / Fruchtbarkeitsmanagement: "Pregnancy Rate 21-Tage-Trächtigkeitsrate Milchkuh Brunsterkennung Konzeptionsrate wirtschaftlich"
 - Nach Zellzahl-Auswertung: "Zellzahlgrenzwert wirtschaftlicher Schaden Eutergesundheit Qualitätsmilch"
 - Nach Milchleistung/Laktationskurve: "Persistenz Laktationskurve wirtschaftlich optimale Laktationslänge"
 - Nach Remontierungsrate/Abgängen: "Abgangsursachen wirtschaftlich optimale Nutzungsdauer Kuh"
-- Nach offenen Tagen / Besamungszeitpunkt: "freiwillige Wartezeit offene Tage Kosten Besamungszeitpunkt wirtschaftlich"`,
+- Nach offenen Tagen / Besamungszeitpunkt: "freiwillige Wartezeit offene Tage Kosten Besamungszeitpunkt wirtschaftlich"
+- Nach Bullenvergleich / Besamungserfolg: "Erstbesamungskonzeptionsrate Bulle Referenzwert Milchkuh Besamungserfolg"
+- Nach Technikerbewertung: "Besamungstechniker Konzeptionsrate Qualitätskontrolle Unterschiede"`,
 
   biogas: `BETRIEBSTYP: Biogasanlage
 Du analysierst Daten einer Biogasanlage. Relevante Kennzahlen: Gasproduktion (m³/h), Methangehalt (%), Substrat-Input (t/d, FM), organische Trockensubstanz (oTS, %), spezifische Gasausbeute (m³/t oTS), elektrische Leistung (kWel), Betriebsstunden, Wirkungsgrad. Typische Zielwerte: Methangehalt >52%, spezifische Gasausbeute >300 m³/t oTS.
