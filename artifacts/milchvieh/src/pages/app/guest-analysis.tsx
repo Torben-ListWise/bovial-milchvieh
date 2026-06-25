@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import { ArrowRight, Bot, ChevronRight, Lock, User } from "lucide-react";
+import { ArrowRight, Bot, ChevronRight, Download, Lock, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -11,6 +11,98 @@ import { DynamicChart } from "@/components/DynamicChart";
 import type { Chart } from "@workspace/api-client-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// ── Chart PNG download ────────────────────────────────────────────────────────
+
+function resolveCssVars(str: string): string {
+  const rootStyle = getComputedStyle(document.documentElement);
+  return str.replace(/var\(--([^)]+)\)/g, (_, name) => {
+    const value = rootStyle.getPropertyValue(`--${name.trim()}`).trim();
+    return value || "currentColor";
+  });
+}
+
+async function downloadChartAsPng(containerEl: HTMLDivElement, title: string) {
+  const svg = containerEl.querySelector("svg");
+  if (!svg) return;
+
+  const { width, height } = svg.getBoundingClientRect();
+  const w = width || 600;
+  const h = height || 300;
+  const scale = 2;
+
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(w));
+  clone.setAttribute("height", String(h));
+
+  let svgStr = new XMLSerializer().serializeToString(clone);
+  svgStr = resolveCssVars(svgStr);
+
+  const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  await new Promise<void>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      const a = document.createElement("a");
+      a.download = `${title || "diagramm"}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      resolve();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    img.src = url;
+  });
+}
+
+// ── Chart card with download button ──────────────────────────────────────────
+
+function ChartCard({ chart, index }: { chart: Chart; index: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(async () => {
+    if (!containerRef.current || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadChartAsPng(containerRef.current, (chart as any).title || `diagramm-${index + 1}`);
+    } finally {
+      setDownloading(false);
+    }
+  }, [chart, index, downloading]);
+
+  return (
+    <div className="group relative">
+      {(chart as any).title && (
+        <p className="text-xs font-medium text-muted-foreground mb-1.5">
+          {(chart as any).title}
+        </p>
+      )}
+      <div ref={containerRef} className="h-64">
+        <DynamicChart chart={chart} fillContainer />
+      </div>
+      <button
+        onClick={handleDownload}
+        disabled={downloading}
+        title="Als PNG herunterladen"
+        className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-background/80 backdrop-blur-sm border border-border rounded-md px-2 py-1 shadow-sm disabled:opacity-50"
+      >
+        <Download className="w-3 h-3" />
+        {downloading ? "…" : "PNG"}
+      </button>
+    </div>
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -159,16 +251,7 @@ function MessageBubble({ msg }: { msg: PublicMessage }) {
               {hasCharts && (
                 <div className="space-y-4 pt-1">
                   {msg.charts.map((chart, i) => (
-                    <div key={(chart as any).id ?? i}>
-                      {chart.title && (
-                        <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                          {chart.title}
-                        </p>
-                      )}
-                      <div className="h-64">
-                        <DynamicChart chart={chart} fillContainer />
-                      </div>
-                    </div>
+                    <ChartCard key={(chart as any).id ?? i} chart={chart} index={i} />
                   ))}
                 </div>
               )}
