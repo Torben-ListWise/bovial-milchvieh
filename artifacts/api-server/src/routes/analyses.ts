@@ -238,7 +238,12 @@ router.get("/analyses/:analysisId", requireAuth, async (req: Request, res: Respo
   const msgs = await db
     .select()
     .from(messagesTable)
-    .where(eq(messagesTable.analysisId, analysisId))
+    .where(
+      and(
+        eq(messagesTable.analysisId, analysisId),
+        eq(messagesTable.hidden, false),
+      ),
+    )
     .orderBy(asc(messagesTable.createdAt));
   res.json(
     GetAnalysisResponse.parse({

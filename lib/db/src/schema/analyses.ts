@@ -45,6 +45,7 @@ export const messagesTable = pgTable(
     error: text("error"),
     followUpQuestions: jsonb("follow_up_questions"),
     backQuestions: jsonb("back_questions"),
+    hidden: boolean("hidden").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

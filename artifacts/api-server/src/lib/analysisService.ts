@@ -65,12 +65,17 @@ export type SseCallbacks = {
   onDone?: () => void;
 };
 
+export type ProcessQuestionOptions = {
+  hidden?: boolean;
+};
+
 // Insert the user message, run the agent grounded on deterministic compute,
 // persist the assistant answer, and log activity (metadata only).
 export async function processQuestion(
   analysis: Analysis,
   question: string,
   sse?: SseCallbacks,
+  opts?: ProcessQuestionOptions,
 ): Promise<Message> {
   // Outer try/finally ensures agentProgress is always cleared, even when an
   // early DB operation (user-message insert, history fetch, rules load) throws
@@ -80,7 +85,8 @@ export async function processQuestion(
       analysisId: analysis.id,
       role: "user",
       content: question,
-    });
+      ...(opts?.hidden ? { hidden: true } : {}),
+    } as any);
 
     const history = await db
       .select()

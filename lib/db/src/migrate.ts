@@ -56,6 +56,31 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS back_questions JSONB"
   );
+  // Migration: hidden column on messages (internal trigger prompts hidden from chat UI)
+  await pool.query(
+    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"
+  );
+  // Backfill: mark existing auto-trigger prompt messages as hidden.
+  // Targets user messages in analyses with source='auto' and template_ref='auto_erstanalyse'
+  // where the content contains recognizable internal agent instructions.
+  await pool.query(`
+    UPDATE messages
+    SET hidden = TRUE
+    WHERE hidden = FALSE
+      AND role = 'user'
+      AND analysis_id IN (
+        SELECT id FROM analyses
+        WHERE source = 'auto'
+          AND template_ref = 'auto_erstanalyse'
+      )
+      AND (
+        content LIKE '%get_schema%'
+        OR content LIKE '%get_kpis%'
+        OR content LIKE '%get_timeseries%'
+        OR content LIKE '%Betriebsspiegel%'
+        OR content LIKE '%read_document%'
+      )
+  `);
   // Migration: source_url column on knowledge_documents (for URL-ingested entries)
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_url TEXT"

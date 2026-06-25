@@ -567,7 +567,7 @@ Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete 
               logger.info({ userId: autoUserId }, "Automatische Erstanalyse übersprungen: Kontingent erschöpft");
               return;
             }
-            const msg = await processQuestion(analysis, betriebsspiegelPrompt);
+            const msg = await processQuestion(analysis, betriebsspiegelPrompt, undefined, { hidden: true });
             if (!msg.error) {
               await incrementQuota(autoUserId)
                 .then(() => maybeSendQuotaWarning(autoUserId))
