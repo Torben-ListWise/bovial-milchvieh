@@ -14,7 +14,10 @@
     <meta name="twitter:description" content="Lade deine Betriebsdaten hoch und stelle Fragen auf Deutsch — für Milchvieh, Schweine, Ackerbau und Mischbetriebe." />
     <script>
       (function () {
-        var t = localStorage.getItem("theme") || "dark";
+        var stored = localStorage.getItem("theme");
+        var t = stored === "dark" || stored === "light"
+          ? stored
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
         if (t === "dark") document.documentElement.classList.add("dark");
       })();
     </script>
