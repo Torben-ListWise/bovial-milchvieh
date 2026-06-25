@@ -535,9 +535,10 @@ RÜCKFRAGEN-VERHALTEN:
 WISSENSBIBLIOTHEK — PROAKTIVE NUTZUNG (gilt für ALLE Betriebstypen):
 Die Wissensbibliothek enthält Fachliteratur, Beratungsberichte und wissenschaftliche Publikationen des Betriebs. Nutze sie PROAKTIV — unabhängig davon ob es sich um einen Milchvieh-, Schweine-, Geflügel-, Ackerbau-, Gemüsebau-, Weinbau-, Obstbau-, Schaf-, Pferde- oder Biogasbetrieb handelt.
 
-PFLICHTSCHRITT nach jeder Berechnung mit Empfehlungscharakter:
-- Sobald du ein statistisches Optimum, einen Bestwert oder eine Rangliste aus den Betriebsdaten berechnest, rufe search_knowledge auf.
-- Leite die Suchbegriffe direkt aus der berechneten Kennzahl ab: Kombiniere den Kennzahlennamen mit Begriffen wie "wirtschaftlich", "Kosten", "Praxis", "Optimum", "Empfehlung", "Grenzwert". Beispiel: für "Tageszunahmen Mastschwein" → suche "Tageszunahmen Schwein wirtschaftlich Futterkosten optimale Schlachtreife".
+PFLICHTSCHRITT FÜR JEDE NUTZERFRAGE (obligatorisch, nicht nur bei Berechnungen):
+- Rufe search_knowledge IMMER auf — spätestens nach dem ersten Compute-Tool-Aufruf und BEVOR du inhaltliche Schlussfolgerungen oder Empfehlungen formulierst. Dies gilt für jede Frage, unabhängig davon ob sie eine Berechnung, eine Erklärung, eine Kennzahlabfrage oder allgemeine Betriebsberatung betrifft.
+- Einzige Ausnahme: Wenn die Wissensbibliothek komplett leer ist (keine Dokumente, keine Einträge in der Titelliste im System-Prompt), darfst du den Schritt überspringen.
+- Leite die Suchbegriffe direkt aus der Nutzerfrage und der Kennzahl ab: Kombiniere den Kernbegriff der Frage mit Begriffen wie "wirtschaftlich", "Kosten", "Praxis", "Optimum", "Empfehlung", "Grenzwert". Beispiel: für "Tageszunahmen Mastschwein" → suche "Tageszunahmen Schwein wirtschaftlich Futterkosten optimale Schlachtreife".
 - Ziel: Stelle das statistische Optimum IMMER der wirtschaftlichen Realität gegenüber. Ein Bestwert in den Daten ist nicht automatisch die beste Handlungsempfehlung — es kann wirtschaftliche, praktische oder biologische Gründe geben, warum ein etwas schlechterer Wert besser ist (z.B. frühere Ernte trotz niedrigerer Qualität spart Lagerkosten, frühere Besamung trotz niedrigerer Konzeptionsrate spart offene Tage, geringere Besatzdichte trotz niedrigerer Flächenproduktivität verbessert Tiergesundheit).
 - Wenn die Wissensbibliothek wirtschaftliche oder praktische Gegengründe liefert: NENNE SIE EXPLIZIT. Strukturiere deine Antwort klar: (1) Was sagen die Betriebsdaten, (2) Was sagt die Fachliteratur/Forschung, (3) Konkrete Empfehlung unter Berücksichtigung beider Perspektiven.
 - Wenn search_knowledge keine relevanten Treffer liefert (leere results oder nur sehr allgemeine Textstellen ohne Bezug zur Frage): rufe als nächstes search_web auf. Formuliere die Suchanfrage auf Deutsch, spezifisch für den Betriebstyp und die berechnete Kennzahl. Beispiel: statt "Konzeptionsrate" besser "freiwillige Wartezeit Milchkuh offene Tage wirtschaftlich Empfehlung".
@@ -970,6 +971,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         };
       }
       case "search_knowledge": {
+        searchKnowledgeCalled = true;
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
         const SIMILARITY_THRESHOLD = 0.55;
@@ -996,7 +998,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               query,
               topScore: topScore ?? null,
               customerId: opts.userId ?? null,
-            }).catch((err) => logger.warn({ err }, "Fehler beim Speichern der missed query"));
+            }).catch((err) => logger.error({ err, query }, "Fehler beim Speichern der missed query"));
             return { results: [], noRelevantResults: true };
           }
           const results = relevantRows.map(
@@ -1381,6 +1383,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
   let finalText = "";
   let toolWasCalled = false;
+  let searchKnowledgeCalled = false;
   let firstTextDeltaFired = false;
   const backQuestions: FarmerQuestion[] = [];
   const maxTurns = 20;
@@ -1514,6 +1517,25 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       continue;
     }
     break;
+  }
+
+  // Post-agent fallback: if the agent produced a real answer but never called
+  // search_knowledge (despite the mandatory instruction), record the original
+  // user question as a missed query with topScore=null so the knowledge-gaps
+  // panel is populated even when the agent skips the step.
+  if (!searchKnowledgeCalled && finalText && knowledgeDocsExist) {
+    const lastUserMsg = [...opts.conversation].reverse().find((m) => m.role === "user");
+    const userQuery = typeof lastUserMsg?.content === "string"
+      ? lastUserMsg.content.trim()
+      : "";
+    if (userQuery) {
+      logger.debug({ query: userQuery }, "search_knowledge nie aufgerufen — trage missed query ein");
+      db.insert(knowledgeMissedQueriesTable).values({
+        query: userQuery,
+        topScore: null,
+        customerId: opts.userId ?? null,
+      }).catch((err) => logger.error({ err, query: userQuery }, "Fehler beim Speichern der missed query (Fallback)"));
+    }
   }
 
   // Grounding enforcement: if the model returned text without calling any

@@ -235,7 +235,6 @@ function RuleDialog({
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
-
 export function RulesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
