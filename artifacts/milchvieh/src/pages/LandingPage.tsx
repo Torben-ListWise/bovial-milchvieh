@@ -13,7 +13,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 
 interface LandingPageProps {
   basePath: string;
@@ -379,6 +382,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 
 export function LandingPage({ basePath }: LandingPageProps) {
   const [demoOpen, setDemoOpen] = useState(false);
+  const { isDark, toggle } = useTheme();
 
   const pricingPlans = [
     {
@@ -481,6 +485,14 @@ export function LandingPage({ basePath }: LandingPageProps) {
           <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
         </nav>
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggle}
+            aria-label={isDark ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
+            title={isDark ? "Helles Design" : "Dunkles Design"}
+            className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
           <a href={`${basePath}/sign-in`} className="hidden sm:inline text-sm font-medium hover:underline text-foreground">
             Anmelden
           </a>

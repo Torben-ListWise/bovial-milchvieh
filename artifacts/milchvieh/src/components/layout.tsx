@@ -26,8 +26,11 @@ import {
   Menu,
   X,
   Users,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
+import { useTheme } from "@/hooks/useTheme";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -78,6 +81,7 @@ function DatasetAwareHeader({
   const { data: dataset } = useGetDataset(datasetId!, {
     query: { enabled: !!datasetId && viewMode === 'customer' },
   });
+  const { isDark, toggle } = useTheme();
 
   const sectorMeta = dataset ? (SECTOR_META[(dataset as any).sector ?? "dairy"] ?? SECTOR_META.dairy) : null;
 
@@ -115,6 +119,14 @@ function DatasetAwareHeader({
             <span className="hidden sm:inline">{sectorMeta.label}</span>
           </span>
         )}
+        <button
+          onClick={toggle}
+          aria-label={isDark ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
+          title={isDark ? "Helles Design" : "Dunkles Design"}
+          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
       </div>
     </header>
   );
