@@ -74,6 +74,22 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  // Dev-only bypass: Bearer dev-bypass-<userId> skips Clerk JWT verification.
+  // Only active when NODE_ENV=development AND DEV_BYPASS_USER_ID is set.
+  if (process.env.NODE_ENV === "development") {
+    const devBypassUserId = process.env.DEV_BYPASS_USER_ID;
+    if (devBypassUserId) {
+      const authHeader = req.headers["authorization"];
+      if (authHeader === `Bearer dev-bypass-${devBypassUserId}`) {
+        const user = await provisionUser(devBypassUserId);
+        req.userId = user.id;
+        req.appUser = user;
+        next();
+        return;
+      }
+    }
+  }
+
   const auth = getAuth(req);
   const clerkUserId = auth?.userId;
   if (!clerkUserId) {

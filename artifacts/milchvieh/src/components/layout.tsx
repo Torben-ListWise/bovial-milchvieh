@@ -40,12 +40,15 @@ type HostEntry = { hostUserId: string; hostName: string; hostEmail: string | nul
 function useMyHosts() {
   const { getToken } = useAuth();
   const [hosts, setHosts] = useState<HostEntry[]>([]);
+  const devBypassUserId = import.meta.env.VITE_DEV_BYPASS_USER_ID as string | undefined;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const token = await getToken();
+        const token = (import.meta.env.DEV && devBypassUserId)
+          ? `dev-bypass-${devBypassUserId}`
+          : await getToken();
         const res = await fetch(`${API_BASE}/api/team/my-hosts`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });

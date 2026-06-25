@@ -45,3 +45,7 @@ OPERATOR_EMAILS = "t_richelsen@hotmail.de"
 
 [userenv.production]
 ALLOWED_ORIGINS = "https://bovial.com"
+
+[userenv.development]
+DEV_BYPASS_USER_ID = "user_3FImtrvB1mMzaktCtIqNoKBCmZI"
+VITE_DEV_BYPASS_USER_ID = "user_3FImtrvB1mMzaktCtIqNoKBCmZI"

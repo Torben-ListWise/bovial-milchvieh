@@ -330,6 +330,10 @@ function AppPortal() {
 }
 
 function HomeRedirect() {
+  const devBypassUserId = import.meta.env.VITE_DEV_BYPASS_USER_ID as string | undefined;
+  if (import.meta.env.DEV && devBypassUserId) {
+    return <Redirect to="/app" />;
+  }
   return (
     <>
       <Show when="signed-in">
@@ -403,22 +407,14 @@ function ProtectedApp() {
   const { isSignedIn, isLoaded } = useAuth();
   const search = useSearch();
   const [location] = useLocation();
+  const devBypassUserId = import.meta.env.VITE_DEV_BYPASS_USER_ID as string | undefined;
 
-  // In dev mode with auto-login, wait until DevAutoLogin has finished
-  // (either successfully signed in or given up) before evaluating isSignedIn.
-  // Without this, ProtectedApp redirects to "/" before the Clerk session is active.
-  const [devReady, setDevReady] = useState(devAutoLoginDone);
-  useEffect(() => {
-    if (devAutoLoginDone) { setDevReady(true); return; }
-    const listener = () => setDevReady(true);
-    devAutoLoginListeners.push(listener);
-    return () => {
-      const i = devAutoLoginListeners.indexOf(listener);
-      if (i !== -1) devAutoLoginListeners.splice(i, 1);
-    };
-  }, []);
+  // Dev bypass: skip Clerk entirely, render app directly.
+  if (import.meta.env.DEV && devBypassUserId) {
+    return <AppPortal />;
+  }
 
-  if (!isLoaded || !devReady) {
+  if (!isLoaded) {
     return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
   }
 
@@ -436,23 +432,31 @@ function ProtectedApp() {
 }
 
 // Wires Clerk's getToken into the API client so every request carries a Bearer token.
+// In dev bypass mode, returns a static dev-bypass token instead of a Clerk JWT.
 // Also invalidates all cached queries once the token is ready so they refetch
 // instead of staying stuck in error state from the pre-auth 401 responses.
 function ClerkAuthTokenSetup() {
   const { getToken, isSignedIn } = useAuth();
   const queryClient = useQueryClient();
+  const devBypassUserId = import.meta.env.VITE_DEV_BYPASS_USER_ID as string | undefined;
 
   useEffect(() => {
-    setAuthTokenGetter(() => getToken());
+    if (import.meta.env.DEV && devBypassUserId) {
+      const token = `dev-bypass-${devBypassUserId}`;
+      setAuthTokenGetter(() => Promise.resolve(token));
+      queryClient.invalidateQueries();
+    } else {
+      setAuthTokenGetter(() => getToken());
+    }
     return () => setAuthTokenGetter(null);
-  }, [getToken]);
+  }, [getToken, devBypassUserId, queryClient]);
 
-  // Once signed in, flush any stale 401-error queries so they refetch with the token.
+  // In normal Clerk mode: flush stale queries once signed in.
   useEffect(() => {
-    if (isSignedIn) {
+    if (!devBypassUserId && isSignedIn) {
       queryClient.invalidateQueries();
     }
-  }, [isSignedIn, queryClient]);
+  }, [isSignedIn, queryClient, devBypassUserId]);
 
   return null;
 }
