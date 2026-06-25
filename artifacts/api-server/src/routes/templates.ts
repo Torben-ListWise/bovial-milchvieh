@@ -11,7 +11,7 @@ import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { processQuestion } from "../lib/analysisService";
 import { normalizeSector } from "../lib/serializers";
-import { sseWriters } from "../lib/sseRegistry";
+import { getOrBufferWriter } from "../lib/sseRegistry";
 import { checkQuota, incrementQuota, maybeSendQuotaWarning } from "../lib/quota";
 import { canReadDataset } from "../lib/teamAccess";
 
@@ -158,10 +158,11 @@ router.post(
     const id = analysis.id;
     const userId = req.userId!;
     setImmediate(() => {
+      const w = getOrBufferWriter(id);
       processQuestion(analysis, template.promptText, {
-        onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
-        onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
-        onDone: () => sseWriters.get(id)?.sendDone(),
+        onTextDelta: (delta) => w.sendDelta(delta),
+        onSourceSearched: (sources) => w.sendSources(sources),
+        onDone: () => w.sendDone(),
       })
         .then((msg) => {
           // Increment quota only on success (no Anthropic 500/529 error)
@@ -174,7 +175,7 @@ router.post(
           }
         })
         .catch((err) => {
-          sseWriters.get(id)?.sendError("Verarbeitungsfehler");
+          getOrBufferWriter(id).sendError("Verarbeitungsfehler");
           logger.error({ err }, "Background template processQuestion failed");
         });
     });

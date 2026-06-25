@@ -252,7 +252,7 @@ const TOOLS: Tool[] = [
   {
     name: "ask_farmer",
     description:
-      "Stelle dem Landwirt eine oder mehrere strukturierte Rückfragen, wenn Parameter fehlen oder unklar sind. Verwende dieses Werkzeug IMMER wenn du Rückfragen stellen möchtest — niemals Fragen als Freitext in der Antwort formulieren. Nach dem Aufruf schreibe einen kurzen einleitenden Satz (ohne Fragezeichen), der erklärt warum du diese Informationen benötigst.",
+      "Stelle dem Landwirt strukturierte Rückfragen, wenn Parameter fehlen oder unklar sind. Verwende dieses Werkzeug IMMER wenn du Rückfragen stellen möchtest — niemals Fragen als Freitext in der Antwort formulieren. Nach dem Aufruf schreibe einen kurzen einleitenden Satz (ohne Fragezeichen), der erklärt warum du diese Informationen benötigst.",
     input_schema: {
       type: "object",
       properties: {
@@ -260,7 +260,7 @@ const TOOLS: Tool[] = [
           type: "array",
           items: { type: "string" },
           maxItems: 3,
-          description: "Liste der konkreten Rückfragen an den Landwirt. MAXIMAL 3 Fragen — wähle nur die wichtigsten. Formuliere jede Frage als einfachen deutschen Satz ohne Emoji, ohne Fett-Formatierung und ohne Kategorielabel-Präfix (kein '**Label:** Frage', sondern direkt 'Welche Investitionssumme planst du?').",
+          description: "Liste der konkreten Rückfragen an den Landwirt. MAXIMAL 3 Fragen — wähle nur die wirklich entscheidenden. Formuliere jede Frage als kurzen, einfachen deutschen Satz (maximal 12 Wörter). Keine Klammern, keine Beispiele, keine Aufzählungen von Optionen, keine Firmen- oder Organisationsnamen, keine Abkürzungen in Klammern — nur die offene Frage selbst. Kein Emoji, keine Fett-Formatierung, kein Kategorielabel-Präfix.",
         },
       },
       required: ["questions"],
@@ -398,7 +398,7 @@ RÜCKFRAGEN-VERHALTEN:
 - Wenn du Rückfragen an den Landwirt stellen musst, verwende IMMER das Werkzeug ask_farmer({questions:[...]}).
   Formuliere Rückfragen NIEMALS als Freitext in deiner Antwort — nur über das Werkzeug.
 - MAXIMAL 3 Rückfragen pro ask_farmer-Aufruf — wähle nur die wirklich entscheidenden Parameter.
-- FORMAT der Fragen: Jede Frage ist ein einfacher klarer deutscher Satz. Kein Emoji am Anfang. Kein Kategorielabel in Fett (kein „**Kompatibilität:** Funktioniert…"). Direkt die Frage stellen: „Welche Investitionssumme planst du?" statt „**Investitionssumme:** Wie viel willst du investieren?".
+- FORMAT der Fragen: Jede Frage ist ein kurzer, einfacher deutscher Satz (maximal 12 Wörter). Keine Klammern, keine Aufzählungen von Optionen, keine Firmen- oder Organisationsnamen, keine Beispiele in Klammern. Kein Emoji. Kein Kategorielabel in Fett. Direkt die offene Frage: „Welche Investitionssumme planst du?" statt „Welche Investitionssumme (z.B. 50.000–200.000 €) planst du?"
 - Bei Investitions-, Wirtschaftlichkeits- oder Planungsfragen: Rufe ZUERST get_schema und get_kpis auf.
   Fasse die relevanten Betriebsdaten kurz zusammen. Rufe dann ask_farmer mit maximal 3 konkreten
   Fragen auf (Investitionssumme, Laufzeit, Zinssatz, erwarteter Jahresnutzen). Rechne erst

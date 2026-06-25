@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
 import type { IncomingMessage } from "http";
 import { verifyToken } from "@clerk/express";
-import { sseWriters, type SseWriter } from "./sseRegistry";
+import { registerWriter, removeWriter, type SseWriter } from "./sseRegistry";
 import { logger } from "./logger";
 
 function sendWsMsg(ws: WebSocket, event: string, data: Record<string, unknown>): void {
@@ -61,16 +61,16 @@ export function attachWebSocketServer(server: Server): void {
           },
         };
 
-        sseWriters.set(id, writer);
+        registerWriter(id, writer);
         sendWsMsg(ws, "connected", {});
 
         ws.on("close", () => {
-          sseWriters.delete(id);
+          removeWriter(id);
         });
 
         ws.on("error", (err) => {
           logger.warn({ err, analysisId: id }, "WebSocket error");
-          sseWriters.delete(id);
+          removeWriter(id);
         });
       } catch (err) {
         logger.warn({ err }, "WebSocket auth failed");

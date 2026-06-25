@@ -28,7 +28,7 @@ import { type Chart, type Citation } from "../lib/agent";
 import { logger } from "../lib/logger";
 import { categorizeQuestion } from "../lib/categorize";
 import { processQuestion } from "../lib/analysisService";
-import { sseWriters, type SseWriter } from "../lib/sseRegistry";
+import { getOrBufferWriter, registerWriter, removeWriter, type SseWriter } from "../lib/sseRegistry";
 import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
@@ -203,14 +203,15 @@ router.post(
     if (question) {
       const id = analysis.id;
       setImmediate(() => {
+        const w = getOrBufferWriter(id);
         processQuestion(analysis, question, {
-          onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
-          onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
-          onProgress: (step) => sseWriters.get(id)?.sendProgress(step),
-          onChart: (chart) => sseWriters.get(id)?.sendChart(chart),
-          onDone: () => sseWriters.get(id)?.sendDone(),
+          onTextDelta: (delta) => w.sendDelta(delta),
+          onSourceSearched: (sources) => w.sendSources(sources),
+          onProgress: (step) => w.sendProgress(step),
+          onChart: (chart) => w.sendChart(chart),
+          onDone: () => w.sendDone(),
         }).catch((err) => {
-          sseWriters.get(id)?.sendError("Verarbeitungsfehler");
+          w.sendError("Verarbeitungsfehler");
           logger.error({ err }, "Background processQuestion failed");
         });
       });
@@ -314,16 +315,16 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
     sendDone: () => {
       sendEvent("done", {});
       res.end();
-      sseWriters.delete(analysisId);
+      removeWriter(analysisId);
     },
     sendError: (msg) => {
       sendEvent("error", { message: msg });
       res.end();
-      sseWriters.delete(analysisId);
+      removeWriter(analysisId);
     },
   };
 
-  sseWriters.set(analysisId, writer);
+  registerWriter(analysisId, writer);
 
   // Heartbeat every 10 s to keep the connection alive through proxies
   const heartbeat = setInterval(() => {
@@ -335,7 +336,7 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
 
   req.on("close", () => {
     clearInterval(heartbeat);
-    sseWriters.delete(analysisId);
+    removeWriter(analysisId);
   });
 });
 
@@ -385,14 +386,15 @@ router.post(
       // time (not now). By the time any text delta fires, the client has had
       // ample time (≥1 tool-call round trip) to open the SSE connection.
       const id = a.id;
+      const w = getOrBufferWriter(id);
       processQuestion(a, parsed.data.question, {
-        onTextDelta: (delta) => sseWriters.get(id)?.sendDelta(delta),
-        onSourceSearched: (sources) => sseWriters.get(id)?.sendSources(sources),
-        onProgress: (step) => sseWriters.get(id)?.sendProgress(step),
-        onChart: (chart) => sseWriters.get(id)?.sendChart(chart),
-        onDone: () => sseWriters.get(id)?.sendDone(),
+        onTextDelta: (delta) => w.sendDelta(delta),
+        onSourceSearched: (sources) => w.sendSources(sources),
+        onProgress: (step) => w.sendProgress(step),
+        onChart: (chart) => w.sendChart(chart),
+        onDone: () => w.sendDone(),
       }).catch((err) => {
-        sseWriters.get(id)?.sendError("Verarbeitungsfehler");
+        w.sendError("Verarbeitungsfehler");
         logger.error({ err }, "Background ask processQuestion failed");
       });
     });
