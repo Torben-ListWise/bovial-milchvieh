@@ -26,14 +26,16 @@ export const GetCurrentUserResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['customer', 'operator']),
   "focusAreas": zod.array(zod.string()).nullish(),
-  "onboardingCompletedAt": zod.string().nullish()
+  "onboardingCompletedAt": zod.string().nullish(),
+  "themePreference": zod.enum(['light', 'dark']).nullish()
 })
 
 /**
  * @summary Update current user's profile
  */
 export const UpdateMeBody = zod.object({
-  "focusAreas": zod.array(zod.string()).nullish()
+  "focusAreas": zod.array(zod.string()).nullish(),
+  "themePreference": zod.enum(['light', 'dark']).nullish()
 })
 
 export const UpdateMeResponse = GetCurrentUserResponse

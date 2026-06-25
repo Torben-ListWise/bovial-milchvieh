@@ -334,4 +334,8 @@ export async function ensureExtensions(): Promise<void> {
       END IF;
     END $$
   `);
+  // Migration: theme_preference column on users (syncs light/dark across devices)
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference TEXT"
+  );
 }

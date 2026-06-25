@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { useUser, useClerk, useAuth } from "@clerk/react";
-import { useGetDataset } from "@workspace/api-client-react";
+import { useGetDataset, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   Home, 
   BarChart2, 
@@ -81,7 +82,30 @@ function DatasetAwareHeader({
   const { data: dataset } = useGetDataset(datasetId!, {
     query: { enabled: !!datasetId && viewMode === 'customer' },
   });
-  const { isDark, toggle } = useTheme();
+  const { isDark, setTheme, toggle } = useTheme();
+  const { data: dbUser } = useGetCurrentUser();
+  const queryClient = useQueryClient();
+  const updateMe = useUpdateMe();
+  const serverSyncedRef = useRef(false);
+
+  useEffect(() => {
+    if (!serverSyncedRef.current && dbUser?.themePreference) {
+      serverSyncedRef.current = true;
+      setTheme(dbUser.themePreference as "light" | "dark");
+    } else if (!serverSyncedRef.current && dbUser !== undefined) {
+      serverSyncedRef.current = true;
+    }
+  }, [dbUser, setTheme]);
+
+  const handleToggle = useCallback(() => {
+    toggle();
+    const next = isDark ? "light" : "dark";
+    updateMe.mutate({ themePreference: next }, {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), data);
+      },
+    });
+  }, [isDark, toggle, updateMe, queryClient]);
 
   const sectorMeta = dataset ? (SECTOR_META[(dataset as any).sector ?? "dairy"] ?? SECTOR_META.dairy) : null;
 
@@ -120,7 +144,7 @@ function DatasetAwareHeader({
           </span>
         )}
         <button
-          onClick={toggle}
+          onClick={handleToggle}
           aria-label={isDark ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
           title={isDark ? "Helles Design" : "Dunkles Design"}
           className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"

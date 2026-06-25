@@ -1037,6 +1037,10 @@ components:
           items:
             type: string
           nullable: true
+        themePreference:
+          type: string
+          enum: [light, dark]
+          nullable: true
 
     UpdateMeBody:
       type: object
@@ -1045,6 +1049,10 @@ components:
           type: array
           items:
             type: string
+          nullable: true
+        themePreference:
+          type: string
+          enum: [light, dark]
           nullable: true
 
     UploadUrlRequest:

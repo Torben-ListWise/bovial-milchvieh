@@ -2,7 +2,8 @@ import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGe
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock } from "lucide-react";
+import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
@@ -681,6 +682,69 @@ function TeamSectionWrapper() {
   return <TeamSection billingPlan={status?.plan ?? null} />;
 }
 
+function ThemeSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { isDark, setTheme } = useTheme();
+  const updateMe = useUpdateMe({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), data);
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Design konnte nicht gespeichert werden." });
+      },
+    },
+  });
+
+  function handleSelect(value: "light" | "dark") {
+    setTheme(value);
+    updateMe.mutate({ themePreference: value });
+  }
+
+  const current = isDark ? "dark" : "light";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Monitor className="w-5 h-5 text-primary" />
+          Erscheinungsbild
+        </CardTitle>
+        <CardDescription>
+          Wähle zwischen hellem und dunklem Design. Die Einstellung wird geräteübergreifend gespeichert.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-3">
+          <button
+            onClick={() => handleSelect("light")}
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm transition-all ${
+              current === "light"
+                ? "border-primary bg-primary/5 ring-1 ring-primary font-medium"
+                : "border-border hover:border-primary/40 hover:bg-muted/50"
+            }`}
+          >
+            <Sun className="w-4 h-4" />
+            Hell
+          </button>
+          <button
+            onClick={() => handleSelect("dark")}
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm transition-all ${
+              current === "dark"
+                ? "border-primary bg-primary/5 ring-1 ring-primary font-medium"
+                : "border-border hover:border-primary/40 hover:bg-muted/50"
+            }`}
+          >
+            <Moon className="w-4 h-4" />
+            Dunkel
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const { toast } = useToast();
   const { signOut } = useClerk();
@@ -757,6 +821,8 @@ export function SettingsPage() {
       </Card>
 
       <FocusAreasSection />
+
+      <ThemeSection />
 
       <BillingSection />
 

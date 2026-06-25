@@ -8,6 +8,7 @@ import { z } from "zod";
 const router: IRouter = Router();
 
 function serializeUser(u: typeof usersTable.$inferSelect) {
+  const tp = (u as any).themePreference;
   return GetCurrentUserResponse.parse({
     id: u.id,
     email: u.email ?? null,
@@ -17,6 +18,7 @@ function serializeUser(u: typeof usersTable.$inferSelect) {
     onboardingCompletedAt: (u as any).onboardingCompletedAt
       ? new Date((u as any).onboardingCompletedAt).toISOString()
       : null,
+    themePreference: tp === "light" || tp === "dark" ? tp : null,
   });
 }
 
@@ -39,6 +41,7 @@ const UpdateMeBodySchema = z.object({
     .array(z.enum(ALLOWED_FOCUS_AREAS))
     .nullable()
     .optional(),
+  themePreference: z.enum(["light", "dark"]).nullable().optional(),
 });
 
 router.patch("/me", requireAuth, async (req: Request, res: Response) => {
@@ -48,11 +51,15 @@ router.patch("/me", requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  const { focusAreas } = parsed.data;
+  const { focusAreas, themePreference } = parsed.data;
+
+  const updateFields: Record<string, unknown> = {};
+  if (focusAreas !== undefined) updateFields.focusAreas = focusAreas ?? null;
+  if (themePreference !== undefined) updateFields.themePreference = themePreference ?? null;
 
   const [updated] = await db
     .update(usersTable)
-    .set({ focusAreas: focusAreas ?? null } as any)
+    .set(updateFields as any)
     .where(eq(usersTable.id, req.userId!))
     .returning();
 

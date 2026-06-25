@@ -21,6 +21,13 @@ export const CurrentUserRole = {
   operator: 'operator',
 } as const;
 
+export type ThemePreference = typeof ThemePreference[keyof typeof ThemePreference];
+
+export const ThemePreference = {
+  light: 'light',
+  dark: 'dark',
+} as const;
+
 export interface CurrentUser {
   id: string;
   /** @nullable */
@@ -32,11 +39,15 @@ export interface CurrentUser {
   focusAreas?: string[] | null;
   /** @nullable */
   onboardingCompletedAt?: string | null;
+  /** @nullable */
+  themePreference?: 'light' | 'dark' | null;
 }
 
 export interface UpdateMeBody {
   /** @nullable */
   focusAreas?: string[] | null;
+  /** @nullable */
+  themePreference?: 'light' | 'dark' | null;
 }
 
 export interface UploadUrlRequest {

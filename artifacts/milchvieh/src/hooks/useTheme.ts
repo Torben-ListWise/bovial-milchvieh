@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "theme";
-type Theme = "dark" | "light";
+export type Theme = "dark" | "light";
 
 function getInitialTheme(): Theme {
   try {
@@ -25,14 +25,21 @@ function applyTheme(theme: Theme) {
 }
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
+  const setTheme = useCallback((next: Theme) => {
+    setThemeState(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {}
+  }, []);
+
   const toggle = useCallback(() => {
-    setTheme((prev) => {
+    setThemeState((prev) => {
       const next: Theme = prev === "dark" ? "light" : "dark";
       try {
         localStorage.setItem(STORAGE_KEY, next);
@@ -41,5 +48,5 @@ export function useTheme() {
     });
   }, []);
 
-  return { theme, toggle, isDark: theme === "dark" };
+  return { theme, setTheme, toggle, isDark: theme === "dark" };
 }

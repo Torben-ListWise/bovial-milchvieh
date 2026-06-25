@@ -11,6 +11,7 @@ export const usersTable = pgTable("users", {
     .defaultNow(),
   onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
   digestOptOut: boolean("digest_opt_out").notNull().default(false),
+  themePreference: text("theme_preference"),
 });
 
 export type User = typeof usersTable.$inferSelect;
