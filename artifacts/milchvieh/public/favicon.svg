@@ -1,25 +1,23 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
   <rect width="32" height="32" rx="7" fill="#080f1a"/>
-  <rect width="32" height="32" rx="7" fill="url(#bg-grad)" opacity="0.6"/>
-  <!-- Spark star -->
-  <path d="M16 6 L18.2 12.8 L25 15 L18.2 17.2 L16 24 L13.8 17.2 L7 15 L13.8 12.8 Z"
-        fill="url(#fav-spark)" opacity="0.95"/>
-  <!-- Center highlight -->
-  <circle cx="16" cy="15" r="2.5" fill="#f0fdf4" opacity="0.85"/>
-  <!-- Corner dots -->
-  <circle cx="16" cy="4" r="1.2" fill="#34d399" opacity="0.6"/>
-  <circle cx="27" cy="15" r="1" fill="#22d3ee" opacity="0.5"/>
-  <circle cx="16" cy="27" r="1.2" fill="#34d399" opacity="0.5"/>
-  <circle cx="5" cy="15" r="1" fill="#a78bfa" opacity="0.5"/>
-  <defs>
-    <radialGradient id="fav-spark" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#6ee7b7"/>
-      <stop offset="60%" stop-color="#34d399"/>
-      <stop offset="100%" stop-color="#059669"/>
-    </radialGradient>
-    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0a2414"/>
-      <stop offset="100%" stop-color="#0d1a2e"/>
-    </linearGradient>
-  </defs>
+
+  <!-- Compass ring -->
+  <circle cx="16" cy="16" r="11.5" stroke="#1f5c35" stroke-width="1.2"/>
+
+  <!-- Cardinal ticks: N green, E/S/W subtle -->
+  <line x1="16" y1="4.2" x2="16" y2="6.6" stroke="#34d399" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="27.8" y1="16" x2="25.4" y2="16" stroke="#374151" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="16" y1="27.8" x2="16" y2="25.4" stroke="#374151" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="4.2" y1="16" x2="6.6" y2="16" stroke="#374151" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- North needle (bright green kite) -->
+  <path d="M16 7 L18.8 15.2 L16 14 L13.2 15.2 Z" fill="#34d399"/>
+
+  <!-- South needle (muted dark kite) -->
+  <path d="M16 25 L13.2 16.8 L16 18 L18.8 16.8 Z" fill="#374151"/>
+
+  <!-- Center pin -->
+  <circle cx="16" cy="16" r="2.2" fill="#e6faf2"/>
+  <circle cx="16" cy="16" r="1.1" fill="#080f1a"/>
 </svg>
