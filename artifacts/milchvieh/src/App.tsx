@@ -343,12 +343,82 @@ function HomeRedirect() {
   );
 }
 
+// Shared signal: DevAutoLogin sets this to true once the session is active,
+// so ProtectedApp knows it's safe to evaluate isSignedIn without racing.
+let devAutoLoginDone = !import.meta.env.DEV ||
+  !import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL ||
+  !import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD;
+const devAutoLoginListeners: Array<() => void> = [];
+function notifyDevAutoLoginDone() {
+  devAutoLoginDone = true;
+  devAutoLoginListeners.forEach((fn) => fn());
+  devAutoLoginListeners.length = 0;
+}
+
+/**
+ * Dev-only auto-login. Set two secrets in the Replit Secrets panel:
+ *   VITE_DEV_AUTO_LOGIN_EMAIL    → your dev account email
+ *   VITE_DEV_AUTO_LOGIN_PASSWORD → your dev account password
+ * Only active when import.meta.env.DEV is true (local dev server).
+ * Remove these secrets before publishing to production.
+ */
+function DevAutoLogin() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { signIn } = useSignIn();
+  const { setActive } = useClerk();
+  const attemptedRef = useRef(false);
+
+  const devEmail = import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL as string | undefined;
+  const devPassword = import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD as string | undefined;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!devEmail || !devPassword) { notifyDevAutoLoginDone(); return; }
+    if (!isLoaded) return;
+    if (isSignedIn) { notifyDevAutoLoginDone(); return; }
+    if (attemptedRef.current) return;
+    if (!signIn || !setActive) return;
+
+    attemptedRef.current = true;
+
+    signIn
+      .create({ strategy: "password", identifier: devEmail, password: devPassword } as Parameters<typeof signIn.create>[0])
+      .then((result: any) => {
+        if (result.status === "complete") {
+          return setActive({ session: result.createdSessionId });
+        }
+      })
+      .then(() => notifyDevAutoLoginDone())
+      .catch(() => {
+        // Credentials wrong or login failed — unblock and show normal login
+        notifyDevAutoLoginDone();
+        attemptedRef.current = false;
+      });
+  }, [isLoaded, isSignedIn, signIn, setActive, devEmail, devPassword]);
+
+  return null;
+}
+
 function ProtectedApp() {
   const { isSignedIn, isLoaded } = useAuth();
   const search = useSearch();
   const [location] = useLocation();
 
-  if (!isLoaded) {
+  // In dev mode with auto-login, wait until DevAutoLogin has finished
+  // (either successfully signed in or given up) before evaluating isSignedIn.
+  // Without this, ProtectedApp redirects to "/" before the Clerk session is active.
+  const [devReady, setDevReady] = useState(devAutoLoginDone);
+  useEffect(() => {
+    if (devAutoLoginDone) { setDevReady(true); return; }
+    const listener = () => setDevReady(true);
+    devAutoLoginListeners.push(listener);
+    return () => {
+      const i = devAutoLoginListeners.indexOf(listener);
+      if (i !== -1) devAutoLoginListeners.splice(i, 1);
+    };
+  }, []);
+
+  if (!isLoaded || !devReady) {
     return <div className="h-screen w-full flex items-center justify-center">Laden...</div>;
   }
 
@@ -363,46 +433,6 @@ function ProtectedApp() {
   }
 
   return <Redirect to="/" />;
-}
-
-/**
- * Dev-only auto-login. Set two env vars in the Replit Secrets panel:
- *   VITE_DEV_AUTO_LOGIN_EMAIL    → your dev account email
- *   VITE_DEV_AUTO_LOGIN_PASSWORD → your dev account password
- * Only active when import.meta.env.DEV is true (local dev server).
- * Remove these secrets before publishing to production.
- */
-function DevAutoLogin() {
-  const { isLoaded, isSignedIn } = useAuth();
-  const { signIn, setActive } = useSignIn();
-  const attemptedRef = useRef(false);
-
-  const devEmail = import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL as string | undefined;
-  const devPassword = import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD as string | undefined;
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    if (!devEmail || !devPassword) return;
-    if (!isLoaded || isSignedIn) return;
-    if (attemptedRef.current) return;
-    if (!signIn || !setActive) return;
-
-    attemptedRef.current = true;
-
-    signIn
-      .create({ strategy: "password", identifier: devEmail, password: devPassword })
-      .then((result) => {
-        if (result.status === "complete") {
-          return setActive({ session: result.createdSessionId });
-        }
-      })
-      .catch(() => {
-        // Credentials wrong or login failed — fail silently, show normal login screen
-        attemptedRef.current = false;
-      });
-  }, [isLoaded, isSignedIn, signIn, setActive, devEmail, devPassword]);
-
-  return null;
 }
 
 // Wires Clerk's getToken into the API client so every request carries a Bearer token.
