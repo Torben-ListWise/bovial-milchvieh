@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
   MessageParam,
+  TextBlockParam,
   Tool,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
@@ -448,7 +449,66 @@ Bekannte Beispiele (andere Betriebstypen):
 - Biogasanlage: Nur Gasvolumen ohne spezifische Gasausbeute (m³/t oTS) zu berichten ist unvollständig — Substratqualität geht verloren.
 - Ackerbau: Rohertrag (dt/ha) ohne Deckungsbeitrag (€/ha) sagt wenig über Wirtschaftlichkeit aus.
 
-Dieser Grundsatz gilt für alle Betriebstypen. Wenn du unsicher bist, rufe search_knowledge oder search_web auf, um den aktuellen Beratungsstand zu prüfen, bevor du eine Kennzahl als modern oder veraltet einordnest.`;
+Dieser Grundsatz gilt für alle Betriebstypen. Wenn du unsicher bist, rufe search_knowledge oder search_web auf, um den aktuellen Beratungsstand zu prüfen, bevor du eine Kennzahl als modern oder veraltet einordnest.
+
+ERGÄNZUNGEN ZUM BESTEHENDEN REGELWERK (Patch-Block — ändert keine bestehende Regel)
+
+SCHEMA-CACHING (Patch A — Absichtserklärung; Enforcement erfordert Code-Änderung)
+- get_schema nur erneut aufrufen bei: (a) erster Aufruf der Session,
+  (b) anderer Betrieb/Datensatz referenziert, (c) >5 Turns seit letztem Aufruf.
+
+FALLBACK OHNE DATENQUELLE (Patch B)
+- Wenn get_schema 0 Felder UND dokumentAvailable: false:
+  keine DB-/Dokument-Tools nutzen, Datenlücke transparent benennen,
+  search_web als einzige Quelle mit Kennzeichnung *[Web]*.
+
+TRANSPARENZ BEI PARTIELLER DATENGRUNDLAGE (Patch K)
+- Wenn dokumentAvailable: false UND fields.length > 0: Antwort enthält
+  verbindlich einen kurzen Abschnitt "Hinweis zur Datengrundlage" —
+  Analyse basiert nur auf Betriebsdaten + Wissensbibliothek, kein
+  eigenes Dokument vorhanden, Upload-Vorschlag. Nicht optional/heuristisch.
+
+KOMPLEXITÄTS-HEURISTIK (Patch C)
+- Einfache Frage = 1 Kennzahl/1 Maßnahme, keine Tabelle nötig → max. 5 Abschnitte.
+- Komplexe Analyse = ≥2 Variablen im Vergleich, Zeitreihe, oder
+  Investitionsentscheidung → darf über 5 Abschnitte gehen, aber jeder
+  Abschnitt braucht eigenen Informationswert.
+
+TRENNUNG DER ZITIERSYSTEME (Patch D, revidiert)
+- [n] gilt für jeden quantitativen Wert aus jedem Tool — inklusive
+  search_knowledge und search_web (alle Tool-Quellen werden nummeriert).
+- *[Bibliothek]*/*[Web]*/*[Allgemeinwissen]* markiert die gesamte
+  Einschätzung/Empfehlung am Satz- oder Absatzende, nicht einzelne Zahlen.
+- Trennlinie: Quelle-für-Zahl ([n]) vs. Vertrauen-für-Aussage (kursiver Tag).
+
+KONFLIKTDARSTELLUNG DATEN VS. BIBLIOTHEK (Patch E)
+- Bei Abweichung zwischen statistischem Bestwert und Bibliotheksempfehlung:
+  beide Werte explizit nennen, 1–2 Sätze Begründung, klare Empfehlung
+  mit Quellen-Tag.
+
+ESKALATIONSTRIGGER (Patch F, präzisiert durch Patch M)
+1. WERKZEUGKONFLIKT: Wenn basis.rowCount bei beiden Tools identisch ist
+   UND Abweichung > 10 % — keinen der Werte als "richtig" ausgeben,
+   Konflikt benennen, Betreiber informieren.
+   Wenn rowCount unterschiedlich ist: kein Trigger, aber Pflicht, den
+   unterschiedlichen Datenumfang als wahrscheinliche (nicht bestätigte)
+   Ursache zu nennen.
+2. INVESTITIONSSCHWELLE: calculate_investment-Ergebnis (effectiveCost) >
+   10.000 € UND kein search_knowledge-Treffer ≥ 0,55. Trigger prüft das
+   Berechnungsergebnis, nicht die vom Nutzer genannte Zahl.
+3. MARKENWIEDERHOLUNG: Nutzer verlangt trotz Erklärung erneut Marken-/
+   Produktempfehlung — einmalig kurze Begründung, dann Thema nicht weiter
+   führen.
+4. SICHERHEITSRELEVANTE FRAGE OHNE QUELLEN: Tierwohl, Düngeverordnung,
+   Gülleverordnung — weder Bibliotheks- noch Web-Treffer → keine Antwort
+   aus *[Allgemeinwissen]*, Betreiber informieren, Fachberatung empfehlen.
+
+EPISTEMISCHE VORSICHT BEI ERKLÄRUNGEN (Patch N)
+- Erklärungen für Diskrepanzen zwischen Werkzeug-Ergebnissen dürfen nur
+  Mechanismen benennen, die aus den zurückgegebenen Tool-Daten ableitbar
+  sind (z. B. basis.rowCount). Nicht sichtbare Filterlogik nicht als
+  Tatsache behaupten — als Vermutung kennzeichnen:
+  "möglicherweise", "ich kann das nicht bestätigen".`;
 
 interface RunOptions {
   datasetId: string;
@@ -555,11 +615,32 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const sectorCtx = SECTOR_CONTEXT[opts.sector ?? "dairy"] ?? SECTOR_CONTEXT.dairy;
   const SYSTEM_PROMPT = `${sectorCtx}\n\n${SYSTEM_PROMPT_BASE}`;
 
-  function buildSystemString(docCtx: string, extra?: string): string {
-    let sys = SYSTEM_PROMPT;
-    if (docCtx) sys += "\n\n" + docCtx;
-    if (extra) sys += "\n\n" + extra;
-    return sys;
+  function buildSystemBlocks(
+    docCtx: string,
+    extra?: string,
+  ): TextBlockParam[] {
+    const blocks: TextBlockParam[] = [];
+
+    blocks.push({
+      type: "text",
+      text: SYSTEM_PROMPT,
+      cache_control: { type: "ephemeral" },
+    });
+
+    if (docCtx) {
+      blocks.push({
+        type: "text",
+        text: docCtx,
+        cache_control: { type: "ephemeral" },
+      });
+    }
+
+    const dynamic = (extra ?? "") || undefined;
+    if (dynamic) {
+      blocks.push({ type: "text", text: dynamic });
+    }
+
+    return blocks;
   }
 
   async function execTool(block: ToolUseBlock): Promise<unknown> {
@@ -587,24 +668,27 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         }
         return stats ?? { error: "Keine Daten für diese Kennzahl" };
       }
-      case "get_timeseries":
-        return (
-          (await computeTimeseries(
-            datasetId,
-            metric!,
-            (input.interval as "day" | "week" | "month") ?? "month",
-            (input.aggregation as "avg" | "sum") ?? "avg",
-          )) ?? { error: "Keine Daten" }
-        );
-      case "get_group_aggregate":
-        return (
-          (await computeGroupAggregate(
-            datasetId,
-            metric!,
-            input.groupBy as string,
-            (input.aggregation as "avg" | "sum" | "count") ?? "avg",
-          )) ?? { error: "Keine Daten" }
-        );
+      case "get_timeseries": {
+        const tsInterval = (input.interval as "day" | "week" | "month") ?? "month";
+        const tsAgg = (input.aggregation as "avg" | "sum") ?? "avg";
+        const tsKey = `ts:${metric}:${tsInterval}:${tsAgg}`;
+        const cachedTs = (turnResultCache.get(tsKey) as Awaited<ReturnType<typeof computeTimeseries>> | undefined);
+        const tsResult = cachedTs !== undefined
+          ? cachedTs
+          : await computeTimeseries(datasetId, metric!, tsInterval, tsAgg);
+        if (cachedTs === undefined) turnResultCache.set(tsKey, tsResult);
+        return tsResult ?? { error: "Keine Daten" };
+      }
+      case "get_group_aggregate": {
+        const gaAgg = (input.aggregation as "avg" | "sum" | "count") ?? "avg";
+        const gaKey = `ga:${metric}:${input.groupBy as string}:${gaAgg}`;
+        const cachedGa = (turnResultCache.get(gaKey) as Awaited<ReturnType<typeof computeGroupAggregate>> | undefined);
+        const gaResult = cachedGa !== undefined
+          ? cachedGa
+          : await computeGroupAggregate(datasetId, metric!, input.groupBy as string, gaAgg);
+        if (cachedGa === undefined) turnResultCache.set(gaKey, gaResult);
+        return gaResult ?? { error: "Keine Daten" };
+      }
       case "get_animal_ranking":
         return (
           (await computeAnimalRanking(
@@ -915,12 +999,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const chartType = (input.chartType as Chart["type"]) ?? "bar";
         const source = input.source as string;
         if (source === "timeseries") {
-          const ts = await computeTimeseries(
-            datasetId,
-            metric!,
-            (input.interval as "day" | "week" | "month") ?? "month",
-            (input.aggregation as "avg" | "sum") ?? "avg",
-          );
+          const emitTsInterval = (input.interval as "day" | "week" | "month") ?? "month";
+          const emitTsAgg = (input.aggregation as "avg" | "sum") ?? "avg";
+          const emitTsKey = `ts:${metric}:${emitTsInterval}:${emitTsAgg}`;
+          const cachedTs = turnResultCache.get(emitTsKey) as TimeseriesResult | null | undefined;
+          const ts = cachedTs !== undefined
+            ? cachedTs
+            : await computeTimeseries(datasetId, metric!, emitTsInterval, emitTsAgg);
+          if (cachedTs === undefined) turnResultCache.set(emitTsKey, ts);
           if (!ts) return { error: "Keine Daten für Diagramm" };
           const chart = chartFromTimeseries(ts, title, chartType);
           charts.push(chart);
@@ -928,12 +1014,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           return { ok: true, points: ts.points.length, basis: basisText(ts.basis) };
         }
         if (source === "group") {
-          const g = await computeGroupAggregate(
-            datasetId,
-            metric!,
-            input.groupBy as string,
-            (input.aggregation as "avg" | "sum" | "count") ?? "avg",
-          );
+          const emitGaAgg = (input.aggregation as "avg" | "sum" | "count") ?? "avg";
+          const emitGaKey = `ga:${metric}:${input.groupBy as string}:${emitGaAgg}`;
+          const cachedGa = turnResultCache.get(emitGaKey) as GroupAggregateResult | null | undefined;
+          const g = cachedGa !== undefined
+            ? cachedGa
+            : await computeGroupAggregate(datasetId, metric!, input.groupBy as string, emitGaAgg);
+          if (cachedGa === undefined) turnResultCache.set(emitGaKey, g);
           if (!g) return { error: "Keine Daten für Diagramm" };
           const chart = chartFromGroup(g, title, chartType);
           charts.push(chart);
@@ -1020,6 +1107,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     }
   }
 
+  // Per-invocation cache: avoids redundant DB queries when emit_chart reuses
+  // the same metric/groupBy/interval that was already fetched in the same turn.
+  const turnResultCache = new Map<string, unknown>();
+
   let finalText = "";
   let toolWasCalled = false;
   let firstTextDeltaFired = false;
@@ -1045,14 +1136,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       const stream = client.messages.stream({
         model: MODEL,
         max_tokens: 8192,
-        system: buildSystemString(
+        system: buildSystemBlocks(
           docContext,
           ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
         ),
         tools: TOOLS,
-        tool_choice: (turn === 0 && opts.conversation.length === 1)
-          ? { type: "tool" as const, name: "get_schema" }
-          : { type: "auto" as const },
+        tool_choice: { type: "auto" as const },
         messages,
       });
       if (opts.onTextDelta) {
