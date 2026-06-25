@@ -663,10 +663,10 @@ function LiveSourcesActivity({ sources }: { sources: string[] }) {
           Wissensquellen werden durchsucht…
         </p>
         <ul className="space-y-0.5">
-          {sources.map((title) => (
-            <li key={title} className="flex items-center gap-1.5 text-xs text-amber-800/80 dark:text-amber-300/70">
+          {sources.map((_title, index) => (
+            <li key={index} className="flex items-center gap-1.5 text-xs text-amber-800/80 dark:text-amber-300/70">
               <span className="w-1 h-1 rounded-full bg-amber-400 shrink-0" />
-              {title}
+              Quelle {index + 1}
             </li>
           ))}
         </ul>
