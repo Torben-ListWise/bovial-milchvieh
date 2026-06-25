@@ -285,6 +285,47 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "get_event_stats",
+    description:
+      "Berechnet Aggregatstatistiken für Kuh-Events aus importierten Herdenmanagementsystem-Daten. " +
+      "Aufrufen für Fragen zu Besamungen, Abkalbungen, Trockenstellungen, Abgängen, Lahmheit o.ä. " +
+      "Nur verwenden wenn get_schema events-Daten zeigt.",
+    input_schema: {
+      type: "object",
+      properties: {
+        event_type: {
+          description: "Einzelner Event-Typ (z.B. 'BRED') oder Array (z.B. ['SOLD','DIED']). Gängige Typen: BRED=Besamung, FRESH=Abkalbung, DRY=Trockenstellen, LAME=Lahmheit, SOLD=Abgang Verkauf, DIED=Verendung, PREG=TU positiv, OPEN=Offen, ABORT=Abort",
+          oneOf: [
+            { type: "string" },
+            { type: "array", items: { type: "string" } },
+          ],
+        },
+        date_from: { type: "string", description: "ISO-Datum YYYY-MM-DD (optional)" },
+        date_to: { type: "string", description: "ISO-Datum YYYY-MM-DD (optional)" },
+        group_by: {
+          type: "string",
+          enum: ["month", "quarter", "year", "remark", "result", "technician"],
+          description: "Gruppierung: month/quarter/year = zeitlich; remark = Bulle/Diagnose; result = Ergebnis-Code; technician = Besamungstechniker",
+        },
+      },
+      required: ["event_type"],
+    },
+  },
+  {
+    name: "get_repro_kpis",
+    description:
+      "Berechnet Fruchtbarkeits- und Herdenkennzahlen direkt in SQL aus den Event-Daten. " +
+      "Berechnet: Konzeptionsrate, Erstbesamungskonzeptionsrate, Besamungsindex, 21-Tage-Trächtigkeitsrate (approximiert), Abgangsrate, Abortrate. " +
+      "Nur verwenden wenn get_schema events-Daten zeigt.",
+    input_schema: {
+      type: "object",
+      properties: {
+        date_from: { type: "string", description: "ISO-Datum YYYY-MM-DD (optional)" },
+        date_to: { type: "string", description: "ISO-Datum YYYY-MM-DD (optional)" },
+      },
+    },
+  },
+  {
     name: "ask_farmer",
     description:
       "Stelle dem Landwirt strukturierte Rückfragen, wenn Parameter fehlen oder unklar sind. Verwende dieses Werkzeug IMMER wenn du Rückfragen stellen möchtest — niemals Fragen als Freitext in der Antwort formulieren. Nach dem Aufruf schreibe einen kurzen einleitenden Satz (ohne Fragezeichen), der erklärt warum du diese Informationen benötigst.",
@@ -362,6 +403,20 @@ const SECTOR_CONTEXT: Record<string, string> = {
   dairy: `BETRIEBSTYP: Milchviehbetrieb
 Du analysierst Daten eines Milchviehbetriebs. Moderne Kernkennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Pregnancy Rate / 21-Tage-Trächtigkeitsrate (= Brunsterkennungsrate × Konzeptionsrate / 100), Heat Detection Rate, Remontierung, Laktationsnummer, Abgänge.
 Hinweis Fruchtbarkeit: Die Zwischenkalbezeit (ZKZ) gilt heute als veralteter Indikator — sie ist zu träge und nur rückblickend. Moderner Standard ist die Pregnancy Rate, da sie aktives Fruchtbarkeitsmanagement in Echtzeit abbildet.
+
+EVENT-DATEN (Herdenmanagementsystem-Import):
+Wenn get_schema ein "events"-Objekt zurückgibt (z.B. { total: 51772, types: [...], dateRange: {...}, animals: 6913 }), sind Kuh-Event-Daten aus einem Herdenmanagementsystem vorhanden.
+
+WERKZEUGWAHL BEI EVENT-DATEN:
+- Event-basierte Fruchtbarkeitskennzahlen (Konzeptionsrate, Besamungsindex, Abgangsrate, Abortrate) → get_repro_kpis
+- Zählung/Trend eines bestimmten Event-Typs (z.B. wie viele Lahmheiten pro Monat?) → get_event_stats(event_type, group_by)
+- Bullenvergleich nach Konzeptionsrate → get_event_stats(event_type='BRED', group_by='remark')
+- Produktionskennzahlen (Milch, SCC, Fett) → get_kpis / get_timeseries (aus den strukturierten data_rows)
+
+EVENT-TYP-SCHLÜSSEL (systemübergreifend gültig):
+BRED=Besamung | FRESH=Abkalbung | DRY=Trockenstellen | LAME=Lahmheit
+SOLD=Abgang Verkauf | DIED=Verendung | PREG=TU positiv | OPEN=Offen (nicht trächtig)
+ABORT=Abort | MOVE=Stallwechsel | TREAT=Behandlung
 
 PROAKTIVE WISSENSSUCHE — typische Suchanfragen nach Berechnungen in diesem Betriebstyp:
 - Nach Pregnancy Rate / Fruchtbarkeitsmanagement: "Pregnancy Rate 21-Tage-Trächtigkeitsrate Milchkuh Brunsterkennung Konzeptionsrate wirtschaftlich"
@@ -1136,6 +1191,143 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         }
         return { error: "Unbekannte Diagrammquelle" };
       }
+      case "get_event_stats": {
+        const rawEventType = input.event_type as string | string[] | undefined;
+        if (!rawEventType) return { error: "event_type erforderlich" };
+        const eventTypes = Array.isArray(rawEventType)
+          ? rawEventType.map((t) => t.toUpperCase())
+          : [rawEventType.toUpperCase()];
+        const dateFrom = input.date_from as string | undefined;
+        const dateTo = input.date_to as string | undefined;
+        const groupBy = input.group_by as string | undefined;
+
+        const typesParam = `{${eventTypes.map((t) => `"${t}"`).join(",")}}`;
+
+        let groupExpr: string;
+        switch (groupBy) {
+          case "month":    groupExpr = "TO_CHAR(event_date, 'YYYY-MM')"; break;
+          case "quarter":  groupExpr = "TO_CHAR(event_date, 'YYYY-\"Q\"Q')"; break;
+          case "year":     groupExpr = "EXTRACT(YEAR FROM event_date)::text"; break;
+          case "remark":   groupExpr = "COALESCE(remark, '(kein)')"; break;
+          case "result":   groupExpr = "COALESCE(result, '(kein)')"; break;
+          case "technician": groupExpr = "COALESCE(technician, '(kein)')"; break;
+          default:         groupExpr = "'total'"; break;
+        }
+
+        try {
+          let q = `SELECT ${groupExpr} as grp, COUNT(*)::int as cnt
+                   FROM cow_events
+                   WHERE dataset_id = '${datasetId}'
+                     AND event_type = ANY($1::text[])`;
+          const params: unknown[] = [typesParam];
+          if (dateFrom) { params.push(dateFrom); q += ` AND event_date >= $${params.length}::date`; }
+          if (dateTo)   { params.push(dateTo);   q += ` AND event_date <= $${params.length}::date`; }
+          q += " GROUP BY 1 ORDER BY 1";
+
+          const result = await db.execute(sql.raw(q));
+          const rows = result.rows as { grp: string; cnt: number }[];
+
+          const totalCount = rows.reduce((s, r) => s + r.cnt, 0);
+          const breakdown = rows.map((r) => ({ [r.grp]: r.cnt }));
+
+          return {
+            event_types: eventTypes,
+            total: totalCount,
+            group_by: groupBy ?? "total",
+            breakdown,
+            date_from: dateFrom ?? null,
+            date_to: dateTo ?? null,
+          };
+        } catch (err) {
+          logger.error({ err }, "get_event_stats fehlgeschlagen");
+          return { error: "Berechnung fehlgeschlagen" };
+        }
+      }
+      case "get_repro_kpis": {
+        const dateFrom = input.date_from as string | undefined;
+        const dateTo = input.date_to as string | undefined;
+
+        let dateFilter = `dataset_id = '${datasetId}'`;
+        if (dateFrom) dateFilter += ` AND event_date >= '${dateFrom}'::date`;
+        if (dateTo)   dateFilter += ` AND event_date <= '${dateTo}'::date`;
+
+        try {
+          // Conception Rate & First-Service Conception Rate
+          const bredResult = await db.execute(sql.raw(`
+            WITH bred AS (
+              SELECT animal_id, dim, result,
+                     ROW_NUMBER() OVER (PARTITION BY animal_id ORDER BY event_date, dim NULLS LAST) as svc_num
+              FROM cow_events
+              WHERE ${dateFilter} AND event_type = 'BRED'
+            ),
+            totals AS (
+              SELECT
+                COUNT(*) FILTER (WHERE result IN ('P','O','A','C','R')) as eligible,
+                COUNT(*) FILTER (WHERE result = 'P') as pregnant,
+                COUNT(*) FILTER (WHERE svc_num = 1 AND result IN ('P','O','A','C','R')) as first_svc_eligible,
+                COUNT(*) FILTER (WHERE svc_num = 1 AND result = 'P') as first_svc_pregnant
+              FROM bred
+            )
+            SELECT * FROM totals
+          `));
+          const bred = (bredResult.rows[0] ?? {}) as { eligible: number; pregnant: number; first_svc_eligible: number; first_svc_pregnant: number };
+
+          // Services per Conception
+          const totalBredResult = await db.execute(sql.raw(`
+            SELECT COUNT(*)::int as total FROM cow_events WHERE ${dateFilter} AND event_type = 'BRED'
+          `));
+          const totalBred = (totalBredResult.rows[0] as { total: number } | undefined)?.total ?? 0;
+
+          // Abortion Rate
+          const abortResult = await db.execute(sql.raw(`
+            SELECT COUNT(*)::int as cnt FROM cow_events WHERE ${dateFilter} AND event_type IN ('ABORT','ABORTION')
+          `));
+          const abortCount = (abortResult.rows[0] as { cnt: number } | undefined)?.cnt ?? 0;
+
+          // Culling Rate (distinct animals sold/died vs total distinct animals)
+          const cullingResult = await db.execute(sql.raw(`
+            SELECT
+              COUNT(DISTINCT animal_id) FILTER (WHERE event_type IN ('SOLD','DIED')) as culled,
+              COUNT(DISTINCT animal_id) as total_animals
+            FROM cow_events WHERE ${dateFilter}
+          `));
+          const culling = (cullingResult.rows[0] ?? {}) as { culled: number; total_animals: number };
+
+          const conceptionRate = bred.eligible > 0
+            ? Math.round((bred.pregnant / bred.eligible) * 1000) / 10
+            : null;
+          const firstSvcConceptionRate = bred.first_svc_eligible > 0
+            ? Math.round((bred.first_svc_pregnant / bred.first_svc_eligible) * 1000) / 10
+            : null;
+          const servicesPerConception = bred.pregnant > 0
+            ? Math.round((totalBred / bred.pregnant) * 100) / 100
+            : null;
+          const cullingRate = culling.total_animals > 0
+            ? Math.round((culling.culled / culling.total_animals) * 1000) / 10
+            : null;
+          const abortionRate = bred.pregnant > 0
+            ? Math.round((abortCount / bred.pregnant) * 1000) / 10
+            : null;
+
+          return {
+            conception_rate_pct: conceptionRate,
+            conception_rate_basis: { numerator: bred.pregnant, denominator: bred.eligible },
+            first_service_conception_rate_pct: firstSvcConceptionRate,
+            first_service_basis: { numerator: bred.first_svc_pregnant, denominator: bred.first_svc_eligible },
+            services_per_conception: servicesPerConception,
+            services_per_conception_basis: { total_services: totalBred, conceptions: bred.pregnant },
+            culling_rate_pct: cullingRate,
+            culling_basis: { culled: culling.culled, total_animals: culling.total_animals },
+            abortion_rate_pct: abortionRate,
+            abortion_basis: { abortions: abortCount, confirmed_pregnancies: bred.pregnant },
+            date_from: dateFrom ?? null,
+            date_to: dateTo ?? null,
+          };
+        } catch (err) {
+          logger.error({ err }, "get_repro_kpis fehlgeschlagen");
+          return { error: "Berechnung fehlgeschlagen" };
+        }
+      }
       default:
         return { error: `Unbekanntes Werkzeug: ${block.name}` };
     }
@@ -1158,6 +1350,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
       case "emit_chart": return `Erstelle Diagramm`;
       case "ask_farmer": return "Formuliere Rückfragen";
+      case "get_event_stats": return `Berechne Event-Statistik${metric ? ` für ${metric}` : ""}`;
+      case "get_repro_kpis": return "Berechne Fruchtbarkeitskennzahlen";
       default: return "Verarbeite Daten";
     }
   }
@@ -1181,6 +1375,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "search_knowledge",
     "calculate_investment",
     "ask_farmer",
+    "get_event_stats",
+    "get_repro_kpis",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {

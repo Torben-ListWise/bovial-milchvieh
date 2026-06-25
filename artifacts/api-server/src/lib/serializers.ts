@@ -82,6 +82,7 @@ interface StoredColumn {
 }
 
 export function serializeFile(f: SourceFile, includeDetail = false) {
+  const storedKind = (f as any).kind as string | null | undefined;
   const base = {
     id: f.id,
     datasetId: f.datasetId,
@@ -89,10 +90,11 @@ export function serializeFile(f: SourceFile, includeDetail = false) {
     contentType: f.contentType ?? null,
     size: f.size ?? null,
     status: mapFileStatus(f.status),
-    kind: deriveFileKind(f.name),
+    kind: storedKind ?? deriveFileKind(f.name),
     rowCount: f.rowCount ?? null,
     errorMessage: f.errorMessage ?? null,
     createdAt: f.createdAt,
+    previewRows: (f.previewRows as Record<string, unknown>[] | null) ?? [],
   };
   if (!includeDetail) return base;
 
@@ -107,7 +109,6 @@ export function serializeFile(f: SourceFile, includeDetail = false) {
   return {
     ...base,
     columns,
-    previewRows: (f.previewRows as Record<string, unknown>[] | null) ?? [],
   };
 }
 

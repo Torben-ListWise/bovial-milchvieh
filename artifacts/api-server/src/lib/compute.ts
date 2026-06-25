@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { db, dataRowsTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
+import { db, dataRowsTable, cowEventsTable } from "@workspace/db";
 import { CANONICAL_FIELD_MAP, CANONICAL_FIELDS } from "./canonical";
 
 export interface LoadedRow {
@@ -22,11 +22,24 @@ export interface FieldSummary {
   count: number;
 }
 
+export interface EventTypeSummary {
+  type: string;
+  count: number;
+}
+
+export interface EventsSchemaSummary {
+  total: number;
+  types: EventTypeSummary[];
+  dateRange: { from: string; to: string } | null;
+  animals: number;
+}
+
 export interface DatasetSchema {
   fields: FieldSummary[];
   totalRows: number;
   dateFrom: string | null;
   dateTo: string | null;
+  events?: EventsSchemaSummary;
 }
 
 export interface SeriesPoint {
@@ -92,6 +105,35 @@ function median(v: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+export async function getEventsSchemaSummary(datasetId: string): Promise<EventsSchemaSummary | null> {
+  const countRow = await db.execute(
+    sql`SELECT COUNT(*)::int as total,
+               COUNT(DISTINCT animal_id)::int as animals,
+               MIN(event_date)::text as date_from,
+               MAX(event_date)::text as date_to
+        FROM cow_events WHERE dataset_id = ${datasetId}`
+  );
+  const row = countRow.rows[0] as { total: number; animals: number; date_from: string | null; date_to: string | null } | undefined;
+  if (!row || row.total === 0) return null;
+
+  const typeRows = await db.execute(
+    sql`SELECT event_type, COUNT(*)::int as cnt
+        FROM cow_events WHERE dataset_id = ${datasetId}
+        GROUP BY event_type ORDER BY cnt DESC LIMIT 20`
+  );
+  const types = (typeRows.rows as { event_type: string; cnt: number }[]).map((r) => ({
+    type: r.event_type,
+    count: r.cnt,
+  }));
+
+  return {
+    total: row.total,
+    types,
+    dateRange: row.date_from && row.date_to ? { from: row.date_from, to: row.date_to } : null,
+    animals: row.animals,
+  };
+}
+
 export async function getDatasetSchema(datasetId: string): Promise<DatasetSchema> {
   const rows = await loadRows(datasetId);
   const { from, to } = dateRange(rows);
@@ -111,7 +153,11 @@ export async function getDatasetSchema(datasetId: string): Promise<DatasetSchema
       });
     }
   }
-  return { fields, totalRows: rows.length, dateFrom: from, dateTo: to };
+
+  const events = await getEventsSchemaSummary(datasetId);
+  const schema: DatasetSchema = { fields, totalRows: rows.length, dateFrom: from, dateTo: to };
+  if (events) schema.events = events;
+  return schema;
 }
 
 export interface MetricStats {

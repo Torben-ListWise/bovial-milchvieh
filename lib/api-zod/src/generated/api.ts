@@ -258,10 +258,11 @@ export const ListFilesResponseItem = zod.object({
   "contentType": zod.string().nullish(),
   "size": zod.number().nullish(),
   "status": zod.enum(['uploaded', 'parsing', 'mapping', 'ready', 'error']),
-  "kind": zod.union([zod.literal('excel'),zod.literal('csv'),zod.literal('herd_export'),zod.literal('pdf'),zod.literal('ppt'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "kind": zod.union([zod.literal('excel'),zod.literal('csv'),zod.literal('herd_export'),zod.literal('pdf'),zod.literal('ppt'),zod.literal('other'),zod.literal('livestock_events'),zod.literal(null)]).nullish(),
   "rowCount": zod.number().nullish(),
   "errorMessage": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "previewRows": zod.array(zod.record(zod.string(), zod.unknown())).optional()
 })
 export const ListFilesResponse = zod.array(ListFilesResponseItem)
 

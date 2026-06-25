@@ -30,8 +30,11 @@ import {
   datasetsTable,
   knowledgeDocumentsTable,
   knowledgeChunksTable,
+  cowEventsTable,
   type SourceFile,
+  type EventImportSummary,
 } from "@workspace/db";
+import { detectEventColumns, parseEventRows } from "./parseEvents";
 import { chunkText, embedTexts, LOCAL_MODEL_NAME } from "./embeddings";
 import {
   ObjectStorageService,
@@ -344,6 +347,99 @@ export async function analyzeFile(file: SourceFile): Promise<AnalyzeResult> {
   };
 }
 
+// Detect if a CSV is a livestock event file and ingest events into cow_events table.
+// Returns an EventImportSummary if it was a livestock event file, or null otherwise.
+export async function tryIngestLivestockEvents(
+  file: SourceFile,
+  rows2d: string[][],
+): Promise<EventImportSummary | null> {
+  if (rows2d.length < 2) return null;
+
+  // Find the best header row (same logic as detectHeaderRow but for event columns)
+  const MAX_SCAN = 10;
+  const limit = Math.min(rows2d.length, MAX_SCAN);
+  let bestHeaderIdx = 0;
+  let bestMapping = detectEventColumns(rows2d[0] ?? []);
+
+  for (let i = 1; i < limit; i++) {
+    const m = detectEventColumns(rows2d[i]);
+    if (m && !bestMapping) {
+      bestMapping = m;
+      bestHeaderIdx = i;
+    }
+  }
+
+  if (!bestMapping) return null;
+
+  const { events, skippedInvalid } = parseEventRows(rows2d, bestHeaderIdx, bestMapping, file.datasetId);
+
+  if (events.length === 0) return null;
+
+  // Batch insert with ON CONFLICT DO NOTHING (deduplication)
+  const BATCH = 500;
+  let inserted = 0;
+  let skippedDuplicates = 0;
+
+  for (let i = 0; i < events.length; i += BATCH) {
+    const batch = events.slice(i, i + BATCH);
+    const rows = batch.map((e) => ({
+      datasetId: file.datasetId,
+      fileId: file.id,
+      animalId: e.animalId,
+      eventDate: e.eventDate,
+      eventType: e.eventType,
+      dim: e.dim,
+      remark: e.remark,
+      result: e.result,
+      technician: e.technician,
+      rawExtra: e.rawExtra,
+      rowHash: e.rowHash,
+    }));
+
+    const result = await db
+      .insert(cowEventsTable)
+      .values(rows)
+      .onConflictDoNothing()
+      .returning({ id: cowEventsTable.id });
+    inserted += result.length;
+    skippedDuplicates += batch.length - result.length;
+  }
+
+  // Compute summary stats
+  const typeCounts = new Map<string, number>();
+  const animals = new Set<string>();
+  let minDate: string | null = null;
+  let maxDate: string | null = null;
+
+  for (const e of events) {
+    typeCounts.set(e.eventType, (typeCounts.get(e.eventType) ?? 0) + 1);
+    animals.add(e.animalId);
+    if (!minDate || e.eventDate < minDate) minDate = e.eventDate;
+    if (!maxDate || e.eventDate > maxDate) maxDate = e.eventDate;
+  }
+
+  const topEvents = [...typeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([type, count]) => ({ type, count }));
+
+  const summary: EventImportSummary = {
+    inserted,
+    skippedDuplicates,
+    skippedInvalid,
+    topEvents,
+    dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
+    animals: animals.size,
+  };
+
+  logger.info(
+    { datasetId: file.datasetId, inserted, skippedDuplicates, skippedInvalid, animals: animals.size },
+    "Livestock-Events importiert",
+  );
+
+  return summary;
+}
+
 // Convert raw spreadsheet rows into canonical data_rows using a header->canonical map.
 export async function materializeRows(
   file: SourceFile,
@@ -427,22 +523,30 @@ export async function ingestFile(fileId: string): Promise<void> {
         })
         .where(eq(sourceFilesTable.id, fileId));
     } else {
+      // Try livestock event detection first before normal materialization
+      const eventSummary = await tryIngestLivestockEvents(file, result.rows2d ?? []).catch((err) => {
+        logger.warn({ err, fileId }, "Livestock-Event-Ingestion fehlgeschlagen — fahre mit normalem Pfad fort");
+        return null;
+      });
+
       const rowCount = await materializeRows(
         file,
         result.suggestedMapping,
         result.rows2d ?? [],
       );
       const needsMapping =
-        Object.keys(result.suggestedMapping).length === 0 && rowCount === 0;
+        Object.keys(result.suggestedMapping).length === 0 && rowCount === 0 && !eventSummary;
       await db
         .update(sourceFilesTable)
         .set({
           status: needsMapping ? "needs_mapping" : "ready",
-          kind: "spreadsheet",
-          rowCount,
+          kind: eventSummary ? "livestock_events" : "spreadsheet",
+          rowCount: eventSummary ? eventSummary.inserted : rowCount,
           columns: result.columns,
           mapping: result.suggestedMapping,
-          previewRows: result.previewRows,
+          previewRows: eventSummary
+            ? [{ eventSummary }]
+            : result.previewRows,
         })
         .where(eq(sourceFilesTable.id, fileId));
     }

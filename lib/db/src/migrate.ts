@@ -390,4 +390,35 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "CREATE INDEX IF NOT EXISTS api_usage_log_created_idx ON api_usage_log (created_at)"
   );
+
+  // Migration: cow_events table for livestock event CSV imports
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cow_events (
+      id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      dataset_id   UUID        NOT NULL,
+      file_id      UUID        NOT NULL,
+      animal_id    TEXT        NOT NULL,
+      event_date   DATE        NOT NULL,
+      event_type   TEXT        NOT NULL,
+      dim          INTEGER,
+      remark       TEXT,
+      result       VARCHAR(4),
+      technician   TEXT,
+      raw_extra    JSONB,
+      row_hash     TEXT        NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS cow_events_dataset_type_idx ON cow_events (dataset_id, event_type)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS cow_events_dataset_date_idx ON cow_events (dataset_id, event_date)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS cow_events_dataset_animal_idx ON cow_events (dataset_id, animal_id)"
+  );
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS cow_events_dataset_hash_unique ON cow_events (dataset_id, row_hash)"
+  );
 }

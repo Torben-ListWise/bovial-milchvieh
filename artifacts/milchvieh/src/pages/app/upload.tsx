@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   UploadCloud, AlertCircle, CheckCircle, Clock, Trash2,
-  FileText, FileSpreadsheet, Sheet, Plus, RefreshCw, X, Info,
+  FileText, FileSpreadsheet, Sheet, Plus, RefreshCw, X, Info, Activity,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -41,7 +41,8 @@ function isInProgress(status: string): status is InProgressStatus {
   return (IN_PROGRESS_STATUSES as readonly string[]).includes(status);
 }
 
-function fileKindIcon(contentType?: string | null, name?: string) {
+function fileKindIcon(contentType?: string | null, name?: string, kind?: string | null) {
+  if (kind === "livestock_events") return <Activity className="w-8 h-8 text-violet-500" />;
   const lower = (name ?? "").toLowerCase();
   if (lower.endsWith(".pdf")) return <FileText className="w-8 h-8 text-red-400" />;
   if (lower.endsWith(".csv")) return <FileSpreadsheet className="w-8 h-8 text-green-500" />;
@@ -51,6 +52,58 @@ function fileKindIcon(contentType?: string | null, name?: string) {
   if (contentType?.includes("csv") || contentType?.includes("excel") || contentType?.includes("spreadsheet"))
     return <FileSpreadsheet className="w-8 h-8 text-emerald-600" />;
   return <Sheet className="w-8 h-8 text-primary/60" />;
+}
+
+interface EventSummary {
+  inserted: number;
+  skippedDuplicates: number;
+  skippedInvalid: number;
+  topEvents: { type: string; count: number }[];
+  dateRange: { from: string; to: string } | null;
+  animals: number;
+}
+
+function EventSummaryCard({ summary }: { summary: EventSummary }) {
+  return (
+    <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-800">
+        <Activity className="w-3.5 h-3.5" />
+        Herdenereignisse importiert
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="bg-white rounded-md border border-violet-100 px-2 py-1.5 text-center">
+          <div className="font-bold text-violet-900 text-base leading-tight">{summary.inserted.toLocaleString("de-DE")}</div>
+          <div className="text-violet-600 text-[10px] mt-0.5">Events</div>
+        </div>
+        <div className="bg-white rounded-md border border-violet-100 px-2 py-1.5 text-center">
+          <div className="font-bold text-violet-900 text-base leading-tight">{summary.animals.toLocaleString("de-DE")}</div>
+          <div className="text-violet-600 text-[10px] mt-0.5">Tiere</div>
+        </div>
+        <div className="bg-white rounded-md border border-violet-100 px-2 py-1.5 text-center">
+          <div className="font-bold text-violet-900 text-base leading-tight">{summary.topEvents.length}</div>
+          <div className="text-violet-600 text-[10px] mt-0.5">Typen</div>
+        </div>
+      </div>
+      {summary.dateRange && (
+        <p className="text-[10px] text-violet-600">
+          Zeitraum: {summary.dateRange.from} – {summary.dateRange.to}
+        </p>
+      )}
+      {summary.topEvents.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {summary.topEvents.slice(0, 6).map((e) => (
+            <span key={e.type} className="inline-flex items-center gap-1 text-[10px] bg-violet-100 text-violet-800 px-1.5 py-0.5 rounded">
+              <span className="font-semibold">{e.type}</span>
+              <span className="text-violet-500">{e.count.toLocaleString("de-DE")}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {summary.skippedDuplicates > 0 && (
+        <p className="text-[10px] text-violet-500">{summary.skippedDuplicates.toLocaleString("de-DE")} Duplikate übersprungen</p>
+      )}
+    </div>
+  );
 }
 
 const BETRIEBSSPIEGEL_QUESTION =
@@ -388,16 +441,23 @@ export function UploadPage() {
                 <span>Dateien werden verarbeitet — die Liste aktualisiert sich automatisch.</span>
               </div>
             )}
-            {files.map(f => (
+            {files.map(f => {
+              const fileKind = (f as any).kind as string | null;
+              const previewRows = ((f as any).previewRows ?? []) as { eventSummary?: EventSummary }[];
+              const eventSummary = fileKind === "livestock_events" ? previewRows[0]?.eventSummary : undefined;
+              return (
               <Card key={f.id} className="hover:border-primary/50 transition-colors group">
-                <CardContent className="p-3 md:p-4 flex items-center gap-3 md:gap-4">
-                  <div className="shrink-0">{fileKindIcon(f.contentType, f.name)}</div>
+                <CardContent className="p-3 md:p-4 flex flex-col gap-1">
+                  <div className="flex items-center gap-3 md:gap-4">
+                  <div className="shrink-0">{fileKindIcon(f.contentType, f.name, fileKind)}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate text-sm md:text-base">{f.name}</p>
                     <div className="flex flex-wrap gap-2 md:gap-4 text-xs text-muted-foreground mt-0.5">
                       <span>{format(new Date(f.createdAt), "dd.MM.yyyy HH:mm", { locale: de })}</span>
                       {f.size ? <span>{(f.size / 1024 / 1024).toFixed(2)} MB</span> : null}
-                      {f.rowCount ? <span>{f.rowCount.toLocaleString("de-DE")} Zeilen</span> : null}
+                      {fileKind === "livestock_events"
+                        ? <span className="text-violet-600 font-medium">Event-CSV</span>
+                        : f.rowCount ? <span>{f.rowCount.toLocaleString("de-DE")} Zeilen</span> : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 md:gap-3 shrink-0">
@@ -437,9 +497,12 @@ export function UploadPage() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+                  </div>
+                  {eventSummary && <EventSummaryCard summary={eventSummary} />}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

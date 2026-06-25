@@ -9,3 +9,4 @@
 - [Milchvieh local embeddings](milchvieh-local-embeddings.md) — use Xenova/multilingual-e5-base via @huggingface/transformers (NOT nomic-embed-text-v1.5 — gated/401)
 - [Milchvieh SSE auth](milchvieh-sse-auth.md) — SSE fetch needs Bearer token (not cookies); every processQuestion background call needs SSE callbacks wired
 - [Milchvieh agent streaming](milchvieh-agent-streaming.md) — use messages.stream() + stream.on("text") for real-time deltas; no verification step (adds 15-30s with no UX benefit)
+- [Milchvieh DB migration idempotency](milchvieh-migration-idempotency.md) — use CREATE INDEX IF NOT EXISTS not ADD CONSTRAINT for unique indexes; ADD CONSTRAINT has no IF NOT EXISTS in PG
