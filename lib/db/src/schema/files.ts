@@ -44,13 +44,15 @@ export const dataRowsTable = pgTable(
   (table) => [
     index("data_rows_dataset_idx").on(table.datasetId),
     index("data_rows_file_idx").on(table.fileId),
-    // RLS policy: dataset-level row isolation for the analyst sandbox.
-    // Defined here so Drizzle generates a correct CREATE POLICY (with full
-    // USING clause) in the production migration before this file is deployed.
-    // Also maintained as a DO-block fallback in setupAnalystSandbox()
-    // (lib/db/src/migrate.ts) which additionally handles GRANT statements
-    // that Drizzle cannot manage. If the `using` expression changes, update
-    // BOTH this file and setupAnalystSandbox() in migrate.ts.
+    // IMPORTANT — NOT used by the current Replit deployment system.
+    //
+    // The Replit Provision step diffs the Development DB directly against
+    // Production; it does NOT read this TypeScript schema. The actual source
+    // of truth for this policy is setupAnalystSandbox() in migrate.ts (runs
+    // production-only to prevent the Dev DB diff from generating broken SQL).
+    // This pgPolicy definition is forward-compatibility only — kept here in
+    // case Replit switches to schema-based migrations. If the `using` expression
+    // changes, update setupAnalystSandbox() in migrate.ts as the primary place.
     pgPolicy("analyst_data_rows_isolation", {
       as: "permissive",
       for: "select",

@@ -538,31 +538,46 @@ export async function setupAnalystSandbox(): Promise<void> {
     END $$
   `);
 
-  // 5. Enable RLS on both tables.
-  //    Table owners and superusers bypass RLS by default (FORCE not set),
-  //    so existing app queries remain completely unaffected.
-  await pool.query(`ALTER TABLE public.cow_events ENABLE ROW LEVEL SECURITY`);
-  await pool.query(`ALTER TABLE public.data_rows ENABLE ROW LEVEL SECURITY`);
+  // 5 + 6. RLS and dataset-isolation policies — PRODUCTION ONLY.
+  //
+  // The Replit deployment system diffs the Development DB directly against
+  // Production (it does NOT read the TypeScript schema / drizzle-kit generate).
+  // Drizzle's introspection of pg_policies loses the USING clause for
+  // current_setting() expressions, producing broken migrations. Keeping RLS
+  // and policies out of the Dev DB prevents any diff from being generated.
+  //
+  // In Development the analyst role still enforces SELECT-only access via
+  // GRANTs above. Cross-tenant row isolation (dataset_id filter) is absent
+  // in Dev — acceptable because Dev contains only single-developer test data.
+  //
+  // The same definitions also exist in the Drizzle TypeScript schema
+  // (schema/analystRole.ts, schema/events.ts, schema/files.ts) as forward-
+  // compatibility for if Replit ever switches to schema-based migrations.
+  if (process.env.NODE_ENV === "production") {
+    // Enable RLS — table owners bypass by default, so app queries are unaffected.
+    await pool.query(`ALTER TABLE public.cow_events ENABLE ROW LEVEL SECURITY`);
+    await pool.query(`ALTER TABLE public.data_rows ENABLE ROW LEVEL SECURITY`);
 
-  // 6. Create dataset-isolation policies for milchvieh_analyst.
-  //    current_setting(..., true) returns NULL if not set → zero rows returned (safe default).
-  await pool.query(`
-    DO $$ BEGIN
-      CREATE POLICY analyst_cow_events_isolation ON public.cow_events
-        FOR SELECT
-        TO milchvieh_analyst
-        USING (dataset_id::text = current_setting('app.current_dataset_id', true));
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END $$
-  `);
+    // Dataset-isolation policies: current_setting() returns NULL when not set
+    // → zero rows returned by default (safe for un-sandboxed connections).
+    await pool.query(`
+      DO $$ BEGIN
+        CREATE POLICY analyst_cow_events_isolation ON public.cow_events
+          FOR SELECT
+          TO milchvieh_analyst
+          USING (dataset_id::text = current_setting('app.current_dataset_id', true));
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
+    `);
 
-  await pool.query(`
-    DO $$ BEGIN
-      CREATE POLICY analyst_data_rows_isolation ON public.data_rows
-        FOR SELECT
-        TO milchvieh_analyst
-        USING (dataset_id::text = current_setting('app.current_dataset_id', true));
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END $$
-  `);
+    await pool.query(`
+      DO $$ BEGIN
+        CREATE POLICY analyst_data_rows_isolation ON public.data_rows
+          FOR SELECT
+          TO milchvieh_analyst
+          USING (dataset_id::text = current_setting('app.current_dataset_id', true));
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
+    `);
+  }
 }
