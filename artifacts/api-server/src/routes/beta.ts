@@ -74,7 +74,7 @@ router.get(
   requireAuth,
   requireOperator,
   async (req: Request, res: Response) => {
-    const { analysisId } = req.params;
+    const analysisId = req.params["analysisId"] as string;
     try {
       // Verify the analysis belongs to a beta user
       const [analysis] = await db.execute(sql`
@@ -94,13 +94,13 @@ router.get(
       const messages = await db
         .select()
         .from(messagesTable)
-        .where(eq(messagesTable.analysisId, analysisId))
+        .where(sql`${messagesTable.analysisId} = ${analysisId}`)
         .orderBy(messagesTable.createdAt);
 
       const toolLogs = await db
         .select()
         .from(betaToolLogsTable)
-        .where(eq(betaToolLogsTable.analysisId, analysisId))
+        .where(sql`${betaToolLogsTable.analysisId} = ${analysisId}`)
         .orderBy(betaToolLogsTable.createdAt);
 
       const feedback = await db

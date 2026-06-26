@@ -25,7 +25,7 @@ router.post(
   "/messages/:messageId/feedback",
   requireAuth,
   async (req: Request, res: Response) => {
-    const { messageId } = req.params;
+    const messageId = req.params["messageId"] as string;
     const userId = req.userId!;
 
     try {
@@ -33,7 +33,7 @@ router.post(
       const [msg] = await db
         .select({ id: messagesTable.id, analysisId: messagesTable.analysisId })
         .from(messagesTable)
-        .where(eq(messagesTable.id, messageId))
+        .where(sql`${messagesTable.id} = ${messageId}`)
         .limit(1);
 
       if (!msg) {
@@ -94,7 +94,7 @@ router.get(
   "/messages/:messageId/feedback",
   requireAuth,
   async (req: Request, res: Response) => {
-    const { messageId } = req.params;
+    const messageId = req.params["messageId"] as string;
     const userId = req.userId!;
 
     try {

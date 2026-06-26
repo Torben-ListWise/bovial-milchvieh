@@ -9,7 +9,7 @@ export function DatenschutzPage() {
       <header className="flex items-center justify-between px-6 py-4 border-b bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8" />
-          <span className="font-bold text-lg text-primary">Milchvieh Assistent</span>
+          <span className="font-bold text-lg text-primary">Bovial</span>
         </div>
         <Link href="/" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -20,7 +20,7 @@ export function DatenschutzPage() {
       <main className="max-w-3xl mx-auto px-6 py-12 space-y-10">
         <div>
           <h1 className="text-4xl font-bold text-foreground">Datenschutzerklärung</h1>
-          <p className="text-sm text-muted-foreground mt-2">Stand: [DATUM DES INKRAFTTRETENS]</p>
+          <p className="text-sm text-muted-foreground mt-2">Stand: 26. Juni 2026</p>
         </div>
 
         <section className="space-y-4">
@@ -30,11 +30,13 @@ export function DatenschutzPage() {
             Datenschutzgesetze sowie sonstiger datenschutzrechtlicher Bestimmungen ist:
           </p>
           <div className="bg-muted/30 rounded-lg p-4 text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">[IHR NAME / FIRMENNAME]</p>
-            <p>[IHRE STRASSE UND HAUSNUMMER]</p>
-            <p>[IHR PLZ UND ORT]</p>
+            <p className="font-medium text-foreground">Torben Richelsen</p>
+            <p>Bovial</p>
+            <p>Hörpeler Weg 14a</p>
+            <p>21272 Egestorf</p>
             <p>Deutschland</p>
-            <p>E-Mail: <a href="mailto:[IHRE-EMAIL@DOMAIN.DE]" className="text-primary hover:underline">[IHRE-EMAIL@DOMAIN.DE]</a></p>
+            <p>Telefon: 0175 4319623</p>
+            <p>E-Mail: <a href="mailto:t_richelsen@hotmail.de" className="text-primary hover:underline">t_richelsen@hotmail.de</a></p>
           </div>
         </section>
 
@@ -114,11 +116,11 @@ export function DatenschutzPage() {
             <div className="border border-border rounded-lg p-4 space-y-2">
               <h3 className="font-semibold text-foreground">b) Anthropic (KI-Analyse)</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Anthropic, PBC, 548 Market St PMB 61220, San Francisco, CA 94104, USA. Verarbeitung:
-                Hochgeladene Betriebsdaten und Gesprächsinhalte werden zur KI-Analyse an Anthropic übermittelt.
-                Übermittlung in die USA auf Basis von Standardvertragsklauseln (Art. 46 Abs. 2 lit. c DSGVO).
-                Anthropic gibt an, Kundendaten nicht für das Training von Modellen zu verwenden (vorbehaltlich
-                der gültigen Nutzungsbedingungen).
+                Anthropic, PBC, 548 Market St PMB 61220, San Francisco, CA 94104, USA. Zur KI-gestützten
+                Analyse werden Betriebsdaten, Gesprächsverläufe und geparste Datensatzzeilen an Anthropic
+                übermittelt. Übermittlung in die USA auf Basis von Standardvertragsklauseln
+                (Art. 46 Abs. 2 lit. c DSGVO). Anthropic gibt an, Kundendaten nicht für das Training
+                von Modellen zu verwenden (vorbehaltlich der gültigen Nutzungsbedingungen).
               </p>
               <a href="https://privacy.anthropic.com/en/data-processing-addendum" target="_blank"
                 rel="noopener noreferrer" className="text-primary hover:underline text-sm">
@@ -127,16 +129,16 @@ export function DatenschutzPage() {
             </div>
 
             <div className="border border-border rounded-lg p-4 space-y-2">
-              <h3 className="font-semibold text-foreground">c) Replit / Hetzner (Hosting &amp; Speicherung)</h3>
+              <h3 className="font-semibold text-foreground">c) Replit (Hosting &amp; Speicherung)</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
                 Die Anwendung wird auf der Plattform Replit (Replit, Inc., 855 El Camino Real Ste 13A-199,
-                Palo Alto, CA 94301, USA) gehostet. Datenbankdienste und Objektspeicherung können über
-                Hetzner Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Deutschland oder andere
-                Infrastrukturanbieter betrieben werden.
+                Palo Alto, CA 94301, USA) gehostet. Datenbank und Objektspeicherung werden ebenfalls über
+                Replit-Infrastruktur in Nordamerika betrieben. Übermittlung in die USA auf Basis von
+                Standardvertragsklauseln (Art. 46 Abs. 2 lit. c DSGVO).
               </p>
-              <a href="https://hetzner.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer"
+              <a href="https://replit.com/site/dpa" target="_blank" rel="noopener noreferrer"
                 className="text-primary hover:underline text-sm">
-                Hetzner Datenschutz / AVV →
+                Replit DPA (Auftragsverarbeitungsvertrag) →
               </a>
             </div>
 
@@ -171,7 +173,7 @@ export function DatenschutzPage() {
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-foreground">5. Grenzüberschreitende Datenübermittlung</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Mehrere der genannten Drittanbieter (insbesondere Anthropic, Clerk, Stripe, Resend) haben ihren
+            Mehrere der genannten Drittanbieter (insbesondere Anthropic, Clerk, Stripe, Resend, Replit) haben ihren
             Sitz in den USA. Die Übermittlung personenbezogener Daten in die USA erfolgt auf Basis der
             Standardvertragsklauseln der Europäischen Kommission gemäß Art. 46 Abs. 2 lit. c DSGVO, da
             die USA kein der EU vergleichbares Datenschutzniveau gesetzlich garantieren.
@@ -185,9 +187,11 @@ export function DatenschutzPage() {
           <h2 className="text-2xl font-semibold text-foreground">6. Cookies</h2>
           <p className="text-muted-foreground leading-relaxed">
             Diese Website verwendet ausschließlich technisch notwendige Cookies, die für den Betrieb
-            des Dienstes erforderlich sind (z. B. Sitzungs-Cookies für die Anmeldung). Es werden
-            keine Tracking-Cookies, Werbe-Cookies oder Cookies von Drittanbietern zu Analysezwecken
-            eingesetzt.
+            des Dienstes erforderlich sind. Konkret werden von Clerk (Nutzerauthentifizierung) ein
+            Session-Cookie (Sitzungs-Token) sowie ein Cookie zur Synchronisation des Anmeldestatus
+            zwischen Browser-Tabs gesetzt. Es werden keine Tracking-Cookies, Werbe-Cookies oder Cookies
+            von Drittanbietern zu Analyse- oder Marketingzwecken eingesetzt. Eine Einwilligung ist
+            für technisch notwendige Cookies nicht erforderlich.
           </p>
           <p className="text-muted-foreground leading-relaxed">
             Technisch notwendige Cookies können in Ihrem Browser nicht deaktiviert werden, ohne die
@@ -196,15 +200,26 @@ export function DatenschutzPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-2xl font-semibold text-foreground">7. Speicherdauer</h2>
+          <h2 className="text-2xl font-semibold text-foreground">7. Speicherdauer und Löschung</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Personenbezogene Daten werden gelöscht, sobald der Zweck der Verarbeitung entfällt und
-            keine gesetzlichen Aufbewahrungspflichten entgegenstehen. Für Rechnungen und
-            Zahlungsbelege gilt eine Aufbewahrungspflicht von 10 Jahren (§ 147 AO).
+            Es gibt keine automatische zeitbasierte Löschung von Betriebsdaten. Hochgeladene Dateien,
+            geparste Datensatzzeilen, Analysen, Chatverläufe, Warnungen, Berichte, Regeln und der
+            Aktivitätslog werden so lange gespeichert, wie das Nutzerkonto besteht.
           </p>
           <p className="text-muted-foreground leading-relaxed">
-            Nach Konto-Löschung werden alle hochgeladenen Dateien und Analysedaten innerhalb von
-            30 Tagen unwiderruflich gelöscht.
+            Nutzer können jederzeit über die Funktion „Alle Daten löschen" in den Kontoeinstellungen
+            die vollständige und sofortige Löschung aller eigener Daten veranlassen. Die Löschung
+            umfasst alle oben genannten Datenkategorien und erfolgt unmittelbar und unwiderruflich.
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            Vollständige Zahlungsdaten werden nicht in unserer Datenbank gespeichert — lediglich eine
+            Kundenreferenz und der Abo-Status. Zahlungsbelege und Rechnungsdaten liegen ausschließlich
+            bei Stripe und unterliegen dort den gesetzlichen Aufbewahrungsfristen (steuerrechtlich
+            in der Regel 10 Jahre).
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            Für Rechnungen und Zahlungsbelege, soweit sie in unserem System referenziert sind, gilt
+            eine gesetzliche Aufbewahrungspflicht von 10 Jahren (§ 147 AO).
           </p>
         </section>
 
@@ -216,18 +231,18 @@ export function DatenschutzPage() {
           <ul className="text-muted-foreground space-y-2 list-disc list-inside leading-relaxed">
             <li><strong className="text-foreground">Auskunftsrecht</strong> (Art. 15 DSGVO): Sie können Auskunft über die über Sie gespeicherten Daten verlangen.</li>
             <li><strong className="text-foreground">Berichtigung</strong> (Art. 16 DSGVO): Sie können die Berichtigung unrichtiger Daten verlangen.</li>
-            <li><strong className="text-foreground">Löschung</strong> (Art. 17 DSGVO): Sie können die Löschung Ihrer Daten verlangen. Die Löschung ist direkt über die Kontoeinstellungen möglich.</li>
+            <li><strong className="text-foreground">Löschung</strong> (Art. 17 DSGVO): Sie können die Löschung Ihrer Daten verlangen. Die vollständige und sofortige Löschung aller Betriebsdaten ist direkt über die Kontoeinstellungen möglich.</li>
             <li><strong className="text-foreground">Einschränkung</strong> (Art. 18 DSGVO): Sie können die Einschränkung der Verarbeitung verlangen.</li>
-            <li><strong className="text-foreground">Datenportabilität</strong> (Art. 20 DSGVO): Sie können Ihre Daten in maschinenlesbarem Format exportieren. Der Datenexport ist direkt über die Kontoeinstellungen möglich.</li>
+            <li><strong className="text-foreground">Datenportabilität</strong> (Art. 20 DSGVO): Sie können Ihre Daten in maschinenlesbarem Format (JSON) exportieren. Der vollständige Datenexport ist direkt über die Kontoeinstellungen möglich.</li>
             <li><strong className="text-foreground">Widerspruch</strong> (Art. 21 DSGVO): Sie können der Verarbeitung widersprechen.</li>
           </ul>
           <p className="text-muted-foreground leading-relaxed">
-            Den Datenexport und die Konto-Löschung können Sie direkt in den{" "}
+            Den Datenexport und die Datenlöschung können Sie direkt in den{" "}
             <strong>Einstellungen</strong> Ihres Kontos unter „Einstellungen &amp; DSGVO" vornehmen.
           </p>
           <p className="text-muted-foreground leading-relaxed">
             Zur Ausübung Ihrer Rechte wenden Sie sich an:{" "}
-            <a href="mailto:[IHRE-EMAIL@DOMAIN.DE]" className="text-primary hover:underline">[IHRE-EMAIL@DOMAIN.DE]</a>
+            <a href="mailto:t_richelsen@hotmail.de" className="text-primary hover:underline">t_richelsen@hotmail.de</a>
           </p>
         </section>
 
@@ -263,7 +278,7 @@ export function DatenschutzPage() {
         </section>
 
         <div className="pt-8 border-t border-border text-sm text-muted-foreground">
-          Stand: [DATUM DES INKRAFTTRETENS]
+          Stand: 26. Juni 2026
         </div>
       </main>
 
