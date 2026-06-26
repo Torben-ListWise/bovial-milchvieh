@@ -32,6 +32,8 @@ import { AiIcon } from "@/components/AiIcon";
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
+import { PageLayout } from "@/components/PageLayout";
+import { useListFiles, getListFilesQueryKey } from "@workspace/api-client-react";
 
 function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; datasetId: string }) {
   const [dismissed, setDismissed] = useState<boolean>(() => {
@@ -150,6 +152,9 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
 export function DatasetOverview() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const { data: currentUser } = useGetCurrentUser();
+  const { data: files } = useListFiles(datasetId!, {
+    query: { enabled: !!datasetId, queryKey: getListFilesQueryKey(datasetId!) },
+  });
 
   const { data: overview, isLoading } = useGetDatasetOverview(datasetId!, {
     query: { enabled: !!datasetId, queryKey: getGetDatasetOverviewQueryKey(datasetId!) }
@@ -186,11 +191,11 @@ export function DatasetOverview() {
   if (!overview) return <div>Keine Daten verfügbar.</div>;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <PageLayout size="wide">
       {(currentUser as any)?.onboardingCompletedAt == null && (
         <WelcomeBanner datasetId={datasetId} />
       )}
-      {autoAnalysis && (
+      {autoAnalysis && files && files.length > 0 && (
         <AutoAnalysisBanner analysisId={autoAnalysis.id} datasetId={datasetId} />
       )}
 
@@ -258,6 +263,6 @@ export function DatasetOverview() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageLayout>
   );
 }

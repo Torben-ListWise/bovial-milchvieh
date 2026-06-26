@@ -261,6 +261,8 @@ function TranscriptDetail({ analysisId, onBack }: { analysisId: string; onBack: 
   );
 }
 
+import { PageLayout } from "@/components/PageLayout";
+
 export default function BetaTranscriptsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [userFilter, setUserFilter] = useState("");
@@ -284,7 +286,7 @@ export default function BetaTranscriptsPage() {
   }
 
   return (
-    <div className="p-6 space-y-4 max-w-4xl mx-auto">
+    <PageLayout size="narrow">
       <div>
         <h1 className="text-xl font-semibold">Beta-Transkripte</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -369,6 +371,6 @@ export default function BetaTranscriptsPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

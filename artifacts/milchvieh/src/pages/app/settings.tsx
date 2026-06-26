@@ -745,6 +745,8 @@ function ThemeSection() {
   );
 }
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function SettingsPage() {
   const { toast } = useToast();
   const { signOut } = useClerk();
@@ -786,7 +788,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <PageLayout size="narrow">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Einstellungen & DSGVO</h1>
         <p className="text-muted-foreground mt-1">Verwalte deine Daten und Privatsphäre.</p>
@@ -881,6 +883,6 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageLayout>
   );
 }

@@ -540,6 +540,8 @@ function BenchmarkFactorSection() {
   );
 }
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function KnowledgePage() {
   const { toast } = useToast();
   const { getToken } = useAuth();
@@ -800,7 +802,7 @@ export function KnowledgePage() {
       : docs.filter((d) => d.category === activeCategory);
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <PageLayout size="narrow">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
@@ -1207,6 +1209,6 @@ export function KnowledgePage() {
         <BenchmarkFactorSection />
         <FarmNotesSection />
       </div>
-    </div>
+    </PageLayout>
   );
 }

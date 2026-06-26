@@ -235,6 +235,8 @@ function RuleDialog({
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function RulesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -328,7 +330,7 @@ export function RulesPage() {
     : defaultForm;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <PageLayout size="standard">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Regeln & Schwellenwerte</h1>
@@ -435,6 +437,6 @@ export function RulesPage() {
         isPending={isMutating}
       />
 
-    </div>
+    </PageLayout>
   );
 }

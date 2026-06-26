@@ -109,6 +109,8 @@ function EventSummaryCard({ summary }: { summary: EventSummary }) {
 const BETRIEBSSPIEGEL_QUESTION =
   "Erstelle einen vollständigen Betriebsspiegel: Milchleistung, Zellzahl-Trend, Fruchtbarkeit, Fütterungseffizienz, Ausreißer und Top-3 Handlungsempfehlungen.";
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function UploadPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const [, navigate] = useLocation();
@@ -322,7 +324,7 @@ export function UploadPage() {
   const hasProcessingFiles = !!(files?.some((f) => isInProgress(f.status)));
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <PageLayout size="standard">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dateien & Upload</h1>
         <p className="text-muted-foreground mt-1 text-sm md:text-base">Lade deine Herdenmanagement-Exporte (Excel, CSV, PDF) hier hoch.</p>
@@ -546,6 +548,6 @@ export function UploadPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageLayout>
   );
 }

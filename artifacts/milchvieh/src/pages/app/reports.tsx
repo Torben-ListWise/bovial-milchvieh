@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function ReportsPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
@@ -76,7 +78,7 @@ export function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <PageLayout size="standard">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Berichte</h1>
@@ -153,6 +155,6 @@ export function ReportsPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

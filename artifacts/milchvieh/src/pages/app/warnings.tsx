@@ -10,6 +10,8 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function WarningsPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const queryClient = useQueryClient();
@@ -51,7 +53,7 @@ export function WarningsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <PageLayout size="standard">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Warnungen</h1>
         <p className="text-muted-foreground mt-1">Automatische Hinweise auf Anomalien in deinen Herden-Daten.</p>
@@ -121,6 +123,6 @@ export function WarningsPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

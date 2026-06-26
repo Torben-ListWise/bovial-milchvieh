@@ -3,13 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Database, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function MasterDataPage() {
   const { data: masterData, isLoading } = useListMasterData();
 
   if (isLoading) return <div className="p-8">Laden...</div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <PageLayout size="standard">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Stammdaten</h1>
@@ -29,6 +31,6 @@ export function MasterDataPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageLayout>
   );
 }

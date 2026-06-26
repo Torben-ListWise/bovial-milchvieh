@@ -226,6 +226,8 @@ function DeleteConfirm({
   );
 }
 
+import { PageLayout } from "@/components/PageLayout";
+
 export function OperatorTemplatesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -324,7 +326,7 @@ export function OperatorTemplatesPage() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <PageLayout size="standard">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Vorlagen</h1>
@@ -505,6 +507,6 @@ export function OperatorTemplatesPage() {
           isDeleting={deleteMutation.isPending}
         />
       )}
-    </div>
+    </PageLayout>
   );
 }
