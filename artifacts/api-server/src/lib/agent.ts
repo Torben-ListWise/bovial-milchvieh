@@ -91,11 +91,21 @@ export interface FarmerQuestion {
   options?: string[];
 }
 
+export interface BetaToolEntry {
+  toolName: string;
+  keyParams: Record<string, unknown>;
+  durationMs: number;
+  escalationTrigger?: string | null;
+  escalationReason?: string | null;
+}
+
 export interface AgentResult {
   text: string;
   charts: Chart[];
   citations: Citation[];
   backQuestions: FarmerQuestion[];
+  toolLog: BetaToolEntry[];
+  escalationTrigger: { type: string; reason: string } | null;
 }
 
 export class MissingApiKeyError extends Error {}
@@ -440,6 +450,25 @@ const TOOLS: Tool[] = [
       required: ["query"],
     },
   },
+  {
+    name: "signal_escalation",
+    description: "Rufe dieses Tool genau EINMAL auf, wenn einer der vier definierten Eskalationstrigger ausgelöst wird — BEVOR du die Antwort formulierst. Das Tool hat keine Auswirkung auf die Antwort, protokolliert aber den Trigger strukturiert für den Betreiber.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        trigger_type: {
+          type: "string",
+          enum: ["Werkzeugkonflikt", "Investitionsschwelle", "Markenwiederholung", "Sicherheitsrelevante Frage"],
+          description: "Typ des ausgelösten Eskalationstriggers",
+        },
+        reason: {
+          type: "string",
+          description: "Kurze Begründung (max. 200 Zeichen) warum dieser Trigger ausgelöst wurde",
+        },
+      },
+      required: ["trigger_type", "reason"],
+    },
+  },
 ];
 
 const SECTOR_CONTEXT: Record<string, string> = {
@@ -670,6 +699,10 @@ ESKALATIONSTRIGGER (Patch F, präzisiert durch Patch M)
    Gülleverordnung — weder Bibliotheks- noch Web-Treffer → keine Antwort
    aus *[Allgemeinwissen]*, Betreiber informieren, Fachberatung empfehlen.
 
+PFLICHT BEI ESKALATION: Rufe signal_escalation(trigger_type, reason) auf,
+sobald einer der obigen vier Trigger ausgelöst wird — immer BEVOR du die
+Antwort formulierst. Das Tool hat keinen Einfluss auf die Antwort.
+
 EPISTEMISCHE VORSICHT BEI ERKLÄRUNGEN (Patch N)
 - Erklärungen für Diskrepanzen zwischen Werkzeug-Ergebnissen dürfen nur
   Mechanismen benennen, die aus den zurückgegebenen Tool-Daten ableitbar
@@ -684,6 +717,10 @@ interface RunOptions {
   systemExtra?: string;
   /** Clerk user ID of the customer running this analysis — used for knowledge-gap logging. */
   userId?: string;
+  /** If true, collect structured tool call + escalation data for beta analytics. */
+  isBeta?: boolean;
+  /** Analysis ID for associating tool logs (beta logging only). */
+  betaAnalysisId?: string;
   onProgress?: (step: string | null) => Promise<void>;
   /** Called with each text token as Claude generates the answer. */
   onTextDelta?: (delta: string) => void;
@@ -1588,6 +1625,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           client.release();
         }
       }
+      case "signal_escalation": {
+        const { trigger_type, reason } = input as { trigger_type?: string; reason?: string };
+        return { ok: true, trigger_type: trigger_type ?? null, reason: reason ?? "" };
+      }
       default:
         return { error: `Unbekanntes Werkzeug: ${block.name}` };
     }
@@ -1617,6 +1658,43 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     }
   }
 
+  function summarizeBetaToolInput(
+    name: string,
+    input: Record<string, unknown>,
+    result: unknown,
+  ): Record<string, unknown> {
+    const r = result as Record<string, unknown> | null;
+    switch (name) {
+      case "run_sql":
+        return {
+          rowCount: Array.isArray((r as any)?.rows)
+            ? (r as any).rows.length
+            : ((r as any)?.rowCount ?? null),
+        };
+      case "get_kpis":
+      case "get_metric_stats":
+      case "get_timeseries":
+      case "get_group_aggregate":
+      case "get_animal_ranking":
+      case "detect_anomalies":
+      case "get_event_stats":
+      case "get_repro_kpis":
+        return { metric: input.metric ?? null };
+      case "search_knowledge":
+      case "search_web":
+        return { query: typeof input.query === "string" ? input.query.slice(0, 80) : null };
+      case "emit_chart":
+        return { chartType: input.type ?? null, metric: input.metric ?? null };
+      case "signal_escalation":
+        return {
+          trigger_type: input.trigger_type ?? null,
+          reason: String(input.reason ?? "").slice(0, 200),
+        };
+      default:
+        return {};
+    }
+  }
+
   // Per-invocation cache: avoids redundant DB queries when emit_chart reuses
   // the same metric/groupBy/interval that was already fetched in the same turn.
   const turnResultCache = new Map<string, unknown>();
@@ -1626,6 +1704,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   let searchKnowledgeCalled = false;
   let firstTextDeltaFired = false;
   const backQuestions: FarmerQuestion[] = [];
+  let capturedEscalation: { type: string; reason: string } | null = null;
+  const betaToolLog: BetaToolEntry[] = [];
   const maxTurns = 20;
 
   // Grounding: tools that prove real data was accessed
@@ -1742,12 +1822,34 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const label = progressLabel(tu.name, (tu.input ?? {}) as Record<string, unknown>);
         await opts.onProgress?.(label);
         let result: unknown;
+        const toolStartMs = Date.now();
         try {
           result = await execTool(tu);
         } catch (err) {
           logger.error({ err, tool: tu.name }, "Werkzeugausführung fehlgeschlagen");
           result = { error: "Berechnung fehlgeschlagen" };
         }
+        const toolDurationMs = Date.now() - toolStartMs;
+
+        // Capture escalation trigger from signal_escalation tool call
+        if (tu.name === "signal_escalation" && result && typeof result === "object") {
+          const r = result as Record<string, unknown>;
+          if (r.trigger_type && !capturedEscalation) {
+            capturedEscalation = { type: String(r.trigger_type), reason: String(r.reason ?? "") };
+          }
+        }
+
+        // Collect structured tool call entry for beta analytics
+        if (opts.isBeta) {
+          betaToolLog.push({
+            toolName: tu.name,
+            keyParams: summarizeBetaToolInput(tu.name, (tu.input ?? {}) as Record<string, unknown>, result),
+            durationMs: toolDurationMs,
+            escalationTrigger: tu.name === "signal_escalation" ? (capturedEscalation?.type ?? null) : null,
+            escalationReason: tu.name === "signal_escalation" ? (capturedEscalation?.reason ?? null) : null,
+          });
+        }
+
         toolResults.push({
           type: "tool_result" as const,
           tool_use_id: tu.id,
@@ -1790,8 +1892,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     finalText =
       "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
       "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
-    return { text: finalText, charts, citations, backQuestions };
+    return { text: finalText, charts, citations, backQuestions, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
   }
 
-  return { text: finalText, charts, citations, backQuestions };
+  return { text: finalText, charts, citations, backQuestions, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
 }

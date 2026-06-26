@@ -19,6 +19,8 @@ import billingRouter from "./billing";
 import teamRouter from "./team";
 import emailRouter from "./email";
 import farmNotesRouter from "./farm-notes";
+import betaRouter from "./beta";
+import feedbackRouter from "./feedback";
 
 const router: IRouter = Router();
 
@@ -42,5 +44,7 @@ router.use(billingRouter);
 router.use(teamRouter);
 router.use(emailRouter);
 router.use(farmNotesRouter);
+router.use(betaRouter);
+router.use(feedbackRouter);
 
 export default router;

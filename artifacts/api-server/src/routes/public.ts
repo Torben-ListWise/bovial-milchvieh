@@ -26,6 +26,11 @@ router.get("/public/analyses/:analysisId", async (req: Request, res: Response) =
       return;
     }
 
+    if (!(analysis as any).isShared) {
+      res.status(404).json({ error: "Analyse nicht gefunden" });
+      return;
+    }
+
     const [dataset] = await db
       .select({ name: datasetsTable.name })
       .from(datasetsTable)

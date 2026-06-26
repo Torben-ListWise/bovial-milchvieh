@@ -435,6 +435,59 @@ export async function ensureExtensions(): Promise<void> {
         AND key = 'benchmark_abweichungsfaktor'
     )
   `);
+
+  // Migration: is_shared column on analyses (explicit opt-in for public sharing)
+  await pool.query(
+    "ALTER TABLE analyses ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT false"
+  );
+
+  // Migration: beta_tool_logs table (tool call and escalation log for beta users)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS beta_tool_logs (
+      id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      message_id         UUID,
+      analysis_id        UUID        NOT NULL,
+      user_id            TEXT        NOT NULL,
+      tool_name          TEXT        NOT NULL,
+      key_params         JSONB,
+      duration_ms        INTEGER,
+      escalation_trigger TEXT,
+      escalation_reason  TEXT,
+      created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS beta_tool_logs_analysis_idx ON beta_tool_logs (analysis_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS beta_tool_logs_message_idx ON beta_tool_logs (message_id) WHERE message_id IS NOT NULL"
+  );
+
+  // Migration: message_feedback table (beta user thumbs up/down per message)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS message_feedback (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      message_id  UUID        NOT NULL,
+      user_id     TEXT        NOT NULL,
+      rating      TEXT        NOT NULL,
+      comment     TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS message_feedback_message_user_idx ON message_feedback (message_id, user_id)"
+  );
+
+  // Seed: beta quota limit in master_data (configurable via operator Stammdaten page)
+  await pool.query(`
+    INSERT INTO master_data (category, key, value, unit, notes, sector)
+    SELECT 'Systemeinstellungen', 'beta_quota_monatlich', '200', 'Analysen/Monat',
+           'Monatliches Analyse-Kontingent für Beta-Plan-Nutzer (Standard: 200)', NULL
+    WHERE NOT EXISTS (
+      SELECT 1 FROM master_data WHERE key = 'beta_quota_monatlich'
+    )
+  `);
 }
 
 /**

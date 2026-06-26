@@ -1,5 +1,5 @@
 import { sql, eq } from "drizzle-orm";
-import { db, subscriptionsTable, analysisQuotaTable, usersTable } from "@workspace/db";
+import { db, subscriptionsTable, analysisQuotaTable, usersTable, masterDataTable } from "@workspace/db";
 import { sendQuotaWarning, fireEmail } from "./emailService";
 import { logger } from "./logger";
 
@@ -7,6 +7,7 @@ export const PLAN_LIMITS: Record<string, number> = {
   free: 10,
   starter: 50,
   pro: Infinity,
+  beta: 200,
 };
 
 export function currentYearMonth(): string {
@@ -14,6 +15,23 @@ export function currentYearMonth(): string {
   const y = now.getUTCFullYear();
   const m = String(now.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+async function getBetaQuotaLimit(): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ value: masterDataTable.value })
+      .from(masterDataTable)
+      .where(eq(masterDataTable.key, "beta_quota_monatlich"))
+      .limit(1);
+    if (row?.value) {
+      const parsed = parseInt(row.value, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  } catch (err) {
+    logger.warn({ err }, "getBetaQuotaLimit: master_data lookup fehlgeschlagen, verwende Standardwert");
+  }
+  return PLAN_LIMITS.beta;
 }
 
 export async function getSubscription(userId: string) {
@@ -35,7 +53,14 @@ export async function getQuotaStatus(userId: string): Promise<{
 }> {
   const sub = await getSubscription(userId);
   const plan = sub.plan ?? "free";
-  const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+
+  let limit: number;
+  if (plan === "beta") {
+    limit = await getBetaQuotaLimit();
+  } else {
+    limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  }
+
   const yearMonth = currentYearMonth();
 
   const [quota] = await db

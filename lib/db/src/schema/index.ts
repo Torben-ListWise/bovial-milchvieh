@@ -13,3 +13,5 @@ export * from "./billing";
 export * from "./apiUsage";
 export * from "./farmNotes";
 export * from "./events";
+export * from "./betaToolLogs";
+export * from "./messageFeedback";

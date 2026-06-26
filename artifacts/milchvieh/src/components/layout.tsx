@@ -29,6 +29,7 @@ import {
   Users,
   Sun,
   Moon,
+  FlaskConical,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -254,6 +255,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
 
   const operatorNav = [
     { name: "Monitoring", href: "/app/monitoring", icon: Activity, preserveDataset: false },
+    { name: "Beta-Transkripte", href: "/app/monitoring/beta-transcripts", icon: FlaskConical, preserveDataset: false },
     { name: "Stammdaten", href: "/app/master-data", icon: Database, preserveDataset: false },
     { name: "Wissensbibliothek", href: "/app/knowledge", icon: BookOpen, preserveDataset: false },
     { name: "Auswertungsvorlagen", href: "/app/templates", icon: LayoutList, preserveDataset: false },

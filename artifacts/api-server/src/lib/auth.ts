@@ -96,7 +96,24 @@ export async function requireAuth(
     res.status(401).json({ error: "Nicht angemeldet" });
     return;
   }
-  const user = await provisionUser(clerkUserId);
+  let user = await provisionUser(clerkUserId);
+
+  // Security: sync operator role on every auth so OPERATOR_EMAILS changes
+  // take effect immediately without requiring a DB update.
+  if (user.email) {
+    const shouldBeOperator = OPERATOR_EMAILS.length > 0 && OPERATOR_EMAILS.includes(user.email.toLowerCase());
+    const isOperator = user.role === "operator";
+    if (shouldBeOperator !== isOperator) {
+      const newRole = shouldBeOperator ? "operator" : "customer";
+      const [updated] = await db
+        .update(usersTable)
+        .set({ role: newRole })
+        .where(eq(usersTable.id, user.id))
+        .returning();
+      if (updated) user = updated;
+    }
+  }
+
   req.userId = user.id;
   req.appUser = user;
   next();

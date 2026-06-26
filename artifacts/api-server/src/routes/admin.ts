@@ -12,6 +12,7 @@ import {
   messagesTable,
   knowledgeMissedQueriesTable,
   apiUsageLogTable,
+  subscriptionsTable,
 } from "@workspace/db";
 import {
   GetAdminStatsResponse,
@@ -443,6 +444,48 @@ router.get(
             : null,
       },
     });
+  },
+);
+
+// POST /api/admin/beta/assign — assign beta plan to a registered user by email
+router.post(
+  "/admin/beta/assign",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { email } = req.body as { email?: string };
+    if (!email || typeof email !== "string") {
+      res.status(400).json({ error: "E-Mail-Adresse erforderlich" });
+      return;
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [targetUser] = await db
+      .select()
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${normalizedEmail}`)
+      .limit(1);
+
+    if (!targetUser) {
+      res.status(404).json({ error: "Nutzer nicht gefunden. Der Account muss bereits registriert sein." });
+      return;
+    }
+
+    await db.execute(sql`
+      INSERT INTO subscriptions (user_id, plan, status, updated_at)
+      VALUES (${targetUser.id}, 'beta', 'active', NOW())
+      ON CONFLICT (user_id)
+      DO UPDATE SET plan = 'beta', status = 'active', updated_at = NOW()
+    `);
+
+    await db.insert(activityLogTable).values({
+      userId: req.userId!,
+      type: "beta_assign",
+      category: "Operator",
+      datasetRef: targetUser.id.slice(0, 8),
+    } as any);
+
+    res.json({ ok: true, userId: targetUser.id, email: targetUser.email, plan: "beta" });
   },
 );
 

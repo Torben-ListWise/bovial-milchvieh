@@ -371,4 +371,20 @@ async function userIdFromCustomer(customerId: string): Promise<string | null> {
   }
 }
 
+// GET /api/quota/status — lightweight plan+quota status, no Stripe dependency
+// Used by the frontend to determine plan type (e.g. to show beta-only UI).
+router.get("/quota/status", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { plan, limit, used } = await getQuotaStatus(req.userId!);
+    res.json({
+      plan,
+      analysesUsed: used,
+      analysesLimit: limit === Infinity ? null : limit,
+    });
+  } catch (err) {
+    logger.error({ err }, "quota/status failed");
+    res.status(500).json({ error: "Fehler beim Laden des Kontingent-Status" });
+  }
+});
+
 export default router;

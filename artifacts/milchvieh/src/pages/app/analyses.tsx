@@ -63,7 +63,10 @@ import {
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
   Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
   Pin, MoreHorizontal, Trash2,
+  ThumbsUp, ThumbsDown,
 } from "lucide-react";
+
+const FEEDBACK_API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -589,6 +592,82 @@ function MessageBubble({
           <User className="w-3.5 h-3.5 text-primary-foreground" />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Feedback bar (beta users only — server validates plan) ────────────────────
+
+function FeedbackBar({ messageId }: { messageId: string }) {
+  const { getToken } = useAuth();
+  const [rating, setRating] = useState<"up" | "down" | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${FEEDBACK_API_BASE}/api/messages/${messageId}/feedback`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.status === 403 || res.status === 404) { if (!cancelled) setHidden(true); return; }
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.rating) setRating(data.rating);
+      } catch { /* silently ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [messageId, getToken]);
+
+  const handleRating = async (newRating: "up" | "down") => {
+    if (isLoading || hidden) return;
+    setIsLoading(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${FEEDBACK_API_BASE}/api/messages/${messageId}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ rating: newRating }),
+      });
+      if (res.status === 403) { setHidden(true); return; }
+      if (res.ok) setRating(newRating);
+    } catch { /* silently ignore */ } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (hidden) return null;
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1 ml-10">
+      <span className="text-[10px] text-muted-foreground">Hilfreich?</span>
+      <button
+        onClick={() => handleRating("up")}
+        disabled={isLoading}
+        title="Hilfreiche Antwort"
+        className={cn(
+          "p-1 rounded hover:bg-muted/60 transition-colors disabled:opacity-50",
+          rating === "up" ? "text-green-600" : "text-muted-foreground",
+        )}
+      >
+        <ThumbsUp className="w-3.5 h-3.5" />
+      </button>
+      <button
+        onClick={() => handleRating("down")}
+        disabled={isLoading}
+        title="Nicht hilfreiche Antwort"
+        className={cn(
+          "p-1 rounded hover:bg-muted/60 transition-colors disabled:opacity-50",
+          rating === "down" ? "text-red-500" : "text-muted-foreground",
+        )}
+      >
+        <ThumbsDown className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -2607,6 +2686,13 @@ export function AnalysesPage() {
                       isLast={isLast}
                       isAgentWorking={isAgentWorking}
                     />
+                    {msg.role === "user" && (() => {
+                      const nextMsg = msgs[idx + 1];
+                      if (nextMsg?.role === "assistant" && !nextMsg.error) {
+                        return <FeedbackBar key={`fb-${nextMsg.id}`} messageId={nextMsg.id} />;
+                      }
+                      return null;
+                    })()}
                   </div>
                 );
               })}

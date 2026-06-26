@@ -23,6 +23,7 @@ export const analysesTable = pgTable(
     agentProgress: text("agent_progress"),
     agentSteps: jsonb("agent_steps").default([]),
     contextFileIds: jsonb("context_file_ids").default([]),
+    isShared: boolean("is_shared").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

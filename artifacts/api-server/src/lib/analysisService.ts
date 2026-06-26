@@ -8,13 +8,15 @@ import {
   farmNotesTable,
   usersTable,
   datasetsTable,
+  betaToolLogsTable,
   type Analysis,
   type Message,
 } from "@workspace/db";
-import { runAgent, MissingApiKeyError, type Chart, type Citation } from "./agent";
+import { runAgent, MissingApiKeyError, type Chart, type Citation, type BetaToolEntry } from "./agent";
 import { categorizeQuestion } from "./categorize";
 import { logger } from "./logger";
 import { normalizeSector } from "./serializers";
+import { getSubscription } from "./quota";
 import Anthropic from "@anthropic-ai/sdk";
 
 const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -39,7 +41,6 @@ export async function generateFollowUps(question: string, answer: string): Promi
       }],
     });
     const raw = resp.content.find(b => b.type === "text")?.text?.trim() ?? "[]";
-    // Strip optional markdown code fences (```json ... ``` or ``` ... ```)
     const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     let parsed: unknown;
     try {
@@ -79,9 +80,6 @@ export async function processQuestion(
   sse?: SseCallbacks,
   opts?: ProcessQuestionOptions,
 ): Promise<Message> {
-  // Outer try/finally ensures agentProgress is always cleared, even when an
-  // early DB operation (user-message insert, history fetch, rules load) throws
-  // before the inner try/catch/finally around runAgent is reached.
   try {
     await db.insert(messagesTable).values({
       analysisId: analysis.id,
@@ -121,6 +119,8 @@ export async function processQuestion(
     let backQuestions: import("./agent").FarmerQuestion[] = [];
     let error: string | null = null;
     let agentResultText: string | undefined;
+    let agentToolLog: BetaToolEntry[] = [];
+    let agentEscalationTrigger: { type: string; reason: string } | null = null;
 
     // Load customer-defined rules and pass them as structured context so the
     // agent can reference them in every analysis (e.g. custom thresholds).
@@ -162,6 +162,15 @@ export async function processQuestion(
       .where(eq(analysesTable.id, analysis.id))
       .catch(() => {});
 
+    // Check if user is on beta plan — enables structured tool call logging
+    let isBetaUser = false;
+    try {
+      const sub = await getSubscription(analysis.userId!);
+      isBetaUser = sub?.plan === "beta";
+    } catch {
+      // fallback: no beta logging
+    }
+
     const AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 Minuten Hard-Limit
     const agentTimeout = new Promise<never>((_, reject) =>
       setTimeout(
@@ -178,6 +187,8 @@ export async function processQuestion(
           sector,
           systemExtra: [rulesContext, farmNotesContext].filter(Boolean).join("") || undefined,
           userId: analysis.userId ?? undefined,
+          isBeta: isBetaUser,
+          betaAnalysisId: analysis.id,
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
           onChart: sse?.onChart,
@@ -200,6 +211,8 @@ export async function processQuestion(
       citations = result.citations;
       backQuestions = result.backQuestions ?? [];
       agentResultText = result.text;
+      agentToolLog = result.toolLog ?? [];
+      agentEscalationTrigger = result.escalationTrigger ?? null;
 
     } catch (err) {
       logger.error({ err, analysisId: analysis.id }, "runAgent failed");
@@ -251,6 +264,22 @@ export async function processQuestion(
         backQuestions: backQuestions.length > 0 ? backQuestions : null,
       } as any)
       .returning();
+
+    // For beta users: persist structured tool call log linked to this message (fire-and-forget)
+    if (isBetaUser && agentToolLog.length > 0 && assistant?.id) {
+      db.insert(betaToolLogsTable).values(
+        agentToolLog.map((entry) => ({
+          messageId: assistant.id,
+          analysisId: analysis.id,
+          userId: analysis.userId!,
+          toolName: entry.toolName,
+          keyParams: entry.keyParams,
+          durationMs: entry.durationMs,
+          escalationTrigger: entry.escalationTrigger ?? null,
+          escalationReason: entry.escalationReason ?? null,
+        })) as any,
+      ).catch((err) => logger.warn({ err, analysisId: analysis.id }, "beta_tool_logs insert fehlgeschlagen"));
+    }
 
     // Signal SSE listener that the final result (including citations, charts,
     // follow-up questions) is now persisted and ready to reload from DB.

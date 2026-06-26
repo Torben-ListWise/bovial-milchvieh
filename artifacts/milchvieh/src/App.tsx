@@ -124,6 +124,7 @@ import { ReportsPage } from "@/pages/app/reports";
 import { RulesPage } from "@/pages/app/rules";
 import { SettingsPage } from "@/pages/app/settings";
 import { OperatorDashboard } from "@/pages/operator/monitoring";
+import BetaTranscriptsPage from "@/pages/operator/beta-transcripts";
 import { MasterDataPage } from "@/pages/operator/master-data";
 import { KnowledgePage } from "@/pages/operator/knowledge";
 import { OperatorTemplatesPage } from "@/pages/operator/templates";
@@ -303,6 +304,7 @@ function AppPortal() {
     >
       {showWelcomeBanner && <WelcomeBanner datasetId={datasetId} />}
       <Switch>
+        <Route path="/app/monitoring/beta-transcripts" component={BetaTranscriptsPage} />
         <Route path="/app/monitoring" component={OperatorDashboard} />
         <Route path="/app/master-data" component={MasterDataPage} />
         <Route path="/app/knowledge" component={KnowledgePage} />
