@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -54,6 +55,9 @@ export const knowledgeChunksTable = pgTable(
   },
   (table) => [
     index("knowledge_chunks_doc_idx").on(table.docId, table.chunkIndex),
+    index("knowledge_chunks_embedding_hnsw_idx")
+      .using("hnsw", sql`${table.embedding} vector_cosine_ops`)
+      .with({ m: 16, ef_construction: 64 }),
   ],
 );
 

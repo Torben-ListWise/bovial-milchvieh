@@ -14,3 +14,4 @@
 - [Milchvieh conception rate linking](milchvieh-conception-rate.md) — conception rate must join BRED→PREG via animal_id+date window; result='P' on BRED is never set in German HMS exports
 - [Milchvieh run_sql security](milchvieh-run-sql-security.md) — run_sql uses milchvieh_analyst role + RLS for DB-level dataset isolation; never text-pattern matching
 - [Milchvieh benchmark report](milchvieh-benchmark-report.md) — 3-case KPI logic, documentType='benchmark_reference', kpiRows in sections JSONB, factor in master_data
+- [Drizzle HNSW index operator class](drizzle-hnsw-index.md) — use .using("hnsw", sql`col vector_cosine_ops`) not .using().on(); operator class goes in using() call
