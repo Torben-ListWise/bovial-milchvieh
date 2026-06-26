@@ -4,7 +4,7 @@ import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { startDunningScheduler } from "./lib/dunning";
 import { startDigestScheduler } from "./lib/digestScheduler";
-import { ensureExtensions, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
+import { ensureExtensions, setupAnalystSandbox, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
 import { warmupEmbeddingModel, embeddingModelReady, LOCAL_MODEL_NAME } from "./lib/embeddings";
@@ -171,6 +171,10 @@ async function clearOrphanedAnalyses() {
 
 ensureExtensions()
   .then(async () => {
+    // Set up the DB-level security sandbox for run_sql (idempotent)
+    await setupAnalystSandbox();
+    logger.info("Analyst sandbox (milchvieh_analyst role + RLS) bereit");
+
     // Warm up the embedding model BEFORE accepting traffic so the first
     // farmer upload never pays the ONNX cold-start penalty (~2-5 s).
     await warmupEmbeddingModel();

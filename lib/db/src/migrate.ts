@@ -422,3 +422,65 @@ export async function ensureExtensions(): Promise<void> {
     "CREATE UNIQUE INDEX IF NOT EXISTS cow_events_dataset_hash_unique ON cow_events (dataset_id, row_hash)"
   );
 }
+
+/**
+ * Set up the DB-level security sandbox for run_sql queries.
+ *
+ * Creates the `milchvieh_analyst` role (NOLOGIN, NOSUPERUSER, NOBYPASSRLS)
+ * with SELECT only on `cow_events` and `data_rows`, plus RLS policies that
+ * restrict every query to the dataset_id set via SET LOCAL before execution.
+ *
+ * Idempotent — safe to call on every server startup.
+ */
+export async function setupAnalystSandbox(): Promise<void> {
+  // 1. Create the restricted role — no login, no superuser, no RLS bypass
+  await pool.query(`
+    DO $$ BEGIN
+      CREATE ROLE milchvieh_analyst NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
+  // 2. Allow the role to use the public schema and connect (required in PG 15+)
+  await pool.query(`GRANT USAGE ON SCHEMA public TO milchvieh_analyst`);
+
+  // 3. Grant SELECT only on the two allowed tables — nothing else
+  await pool.query(`GRANT SELECT ON public.cow_events TO milchvieh_analyst`);
+  await pool.query(`GRANT SELECT ON public.data_rows TO milchvieh_analyst`);
+
+  // 4. Grant the role to the current app user so SET LOCAL ROLE works
+  await pool.query(`
+    DO $$ BEGIN
+      GRANT milchvieh_analyst TO CURRENT_USER;
+    EXCEPTION WHEN others THEN NULL;
+    END $$
+  `);
+
+  // 5. Enable RLS on both tables.
+  //    Table owners and superusers bypass RLS by default (FORCE not set),
+  //    so existing app queries remain completely unaffected.
+  await pool.query(`ALTER TABLE public.cow_events ENABLE ROW LEVEL SECURITY`);
+  await pool.query(`ALTER TABLE public.data_rows ENABLE ROW LEVEL SECURITY`);
+
+  // 6. Create dataset-isolation policies for milchvieh_analyst.
+  //    current_setting(..., true) returns NULL if not set → zero rows returned (safe default).
+  await pool.query(`
+    DO $$ BEGIN
+      CREATE POLICY analyst_cow_events_isolation ON public.cow_events
+        FOR SELECT
+        TO milchvieh_analyst
+        USING (dataset_id::text = current_setting('app.current_dataset_id', true));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
+  await pool.query(`
+    DO $$ BEGIN
+      CREATE POLICY analyst_data_rows_isolation ON public.data_rows
+        FOR SELECT
+        TO milchvieh_analyst
+        USING (dataset_id::text = current_setting('app.current_dataset_id', true));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+}

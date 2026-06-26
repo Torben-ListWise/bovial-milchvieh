@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
   db,
+  pool,
   masterDataTable,
   sourceFilesTable,
   knowledgeDocumentsTable,
@@ -812,6 +813,61 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     return blocks;
   }
 
+  /**
+   * Returns true if the SQL string contains a semicolon outside of single-quoted
+   * string literals. Handles escaped quotes ('') correctly.
+   * Used as a second layer to block multi-statement injections.
+   */
+  function containsSemicolonOutsideStrings(query: string): boolean {
+    let inString = false;
+    let i = 0;
+    while (i < query.length) {
+      const ch = query[i];
+      if (!inString && ch === "'") {
+        inString = true;
+        i++;
+      } else if (inString && ch === "'") {
+        if (i + 1 < query.length && query[i + 1] === "'") {
+          i += 2;
+        } else {
+          inString = false;
+          i++;
+        }
+      } else if (!inString && ch === ";") {
+        return true;
+      } else {
+        i++;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Enforces a DB-level row limit by either:
+   * - Appending / replacing the trailing LIMIT for CTEs (WITH ...) and queries that already end with LIMIT N
+   * - Wrapping plain SELECT queries in SELECT * FROM (...) _sandbox LIMIT N
+   *
+   * This ensures the database never materialises more than `limit` rows, regardless
+   * of what the agent-generated SQL says.
+   */
+  function buildLimitedQuery(rawQuery: string, limit: number): string {
+    const stripped = rawQuery.trimEnd();
+    // Check if the query ends with LIMIT <number> (possibly with trailing whitespace/semicolon)
+    const trailingLimit = stripped.match(/\blimit\s+(\d+)\s*$/i);
+    if (trailingLimit) {
+      const existing = parseInt(trailingLimit[1], 10);
+      if (existing <= limit) return stripped;
+      return stripped.replace(/\blimit\s+\d+\s*$/i, `LIMIT ${limit}`);
+    }
+    // CTEs must keep the WITH at the top level — wrap would break syntax
+    const isCte = /^\s*with\s+/i.test(stripped);
+    if (isCte) {
+      return `${stripped} LIMIT ${limit}`;
+    }
+    // Plain SELECT: wrap so that any inner ORDER BY is preserved
+    return `SELECT * FROM (${stripped}) _sandbox LIMIT ${limit}`;
+  }
+
   async function execTool(block: ToolUseBlock): Promise<unknown> {
     const input = (block.input ?? {}) as Record<string, unknown>;
     const metric = input.metric as string | undefined;
@@ -1473,7 +1529,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const rawQuery = (input.query as string | undefined)?.trim();
         if (!rawQuery) return { error: "Keine Abfrage angegeben" };
 
-        // Safety: strip SQL comments then require SELECT or WITH as first keyword
+        // Layer 1: strip comments, require SELECT or WITH as first keyword
         const normalized = rawQuery
           .replace(/--[^\n]*/g, " ")
           .replace(/\/\*[\s\S]*?\*\//g, " ")
@@ -1484,30 +1540,52 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           return { error: "Nur SELECT- oder WITH-Abfragen erlaubt. Schreiboperationen (INSERT, UPDATE, DELETE, DDL) sind nicht gestattet." };
         }
 
-        // Warn if the active dataset isn't referenced (common mistake)
-        if (!rawQuery.includes(datasetId)) {
-          logger.warn({ datasetId }, "run_sql: Abfrage referenziert keine bekannte dataset_id — prüfe Filterbedingung");
+        // Layer 2: reject semicolons outside of string literals (multi-statement guard)
+        if (containsSemicolonOutsideStrings(normalized)) {
+          return { error: "Mehrere SQL-Anweisungen (Semikolon) sind nicht erlaubt." };
         }
 
+        // Layer 3 (DB-enforced): inject DB-level LIMIT so the database never returns more than 500 rows.
+        // For CTEs (WITH ...) append LIMIT; for plain SELECT wrap in outer query.
+        const limitedQuery = buildLimitedQuery(rawQuery, 500);
+
+        // Execute inside a transaction with the restricted milchvieh_analyst role.
+        // SET LOCAL applies only within this transaction and is automatically reverted
+        // on ROLLBACK — the role switch never leaks back to the connection pool.
+        const client = await pool.connect();
         try {
-          const result = await db.execute(sql.raw(rawQuery));
-          const allRows = result.rows as Record<string, unknown>[];
-          const truncated = allRows.length > 500;
-          const rows = truncated ? allRows.slice(0, 500) : allRows;
+          await client.query("BEGIN");
+          // Switch to restricted role: no access to users/analyses/messages/...
+          await client.query("SET LOCAL ROLE milchvieh_analyst");
+          // RLS policies on cow_events and data_rows enforce this dataset_id
+          await client.query(
+            `SET LOCAL app.current_dataset_id = '${datasetId.replace(/'/g, "''")}'`
+          );
+          // Hard DB-side timeout — query aborted after 10 s
+          await client.query("SET LOCAL statement_timeout = '10000'");
+
+          const result = await client.query(limitedQuery);
+          const rows = result.rows as Record<string, unknown>[];
           const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+          const truncated = rows.length >= 500;
           return {
             columns,
             rows,
             row_count: rows.length,
             truncated,
             ...(truncated
-              ? { note: "Ergebnis auf 500 Zeilen begrenzt — füge LIMIT oder WHERE hinzu für präzisere Ergebnisse." }
+              ? { note: "Ergebnis auf 500 Zeilen begrenzt — füge WHERE-Bedingungen hinzu für präzisere Ergebnisse." }
               : {}),
           };
         } catch (err) {
           logger.error({ err, query: rawQuery }, "run_sql fehlgeschlagen");
           const msg = err instanceof Error ? err.message : String(err);
           return { error: `SQL-Fehler: ${msg.split("\n")[0]}` };
+        } finally {
+          // Always rollback — pure SELECT sandbox, rollback is safe and ensures
+          // that SET LOCAL ROLE is fully undone before the connection returns to the pool.
+          try { await client.query("ROLLBACK"); } catch (_) { /* ignore */ }
+          client.release();
         }
       }
       default:
