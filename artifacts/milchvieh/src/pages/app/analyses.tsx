@@ -1259,7 +1259,7 @@ function StarterQuestions({
           Lade zuerst deine Herdenmanagement-Exporte hoch, bevor du Analysen startest.
         </p>
         <Button asChild>
-          <Link href="/app/upload">
+          <Link href={`/app/upload?datasetId=${datasetId}`}>
             <Upload className="w-4 h-4 mr-2" />
             Zur Upload-Seite
           </Link>

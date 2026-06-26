@@ -45,6 +45,27 @@ export function deriveFileKind(
   return "other";
 }
 
+const VALID_FILE_KINDS = new Set([
+  "excel", "csv", "herd_export", "pdf", "ppt", "other", "livestock_events",
+]);
+
+const KIND_ALIAS: Record<string, string> = {
+  spreadsheet: "excel",
+  ods: "excel",
+  xls: "excel",
+  xlsx: "excel",
+};
+
+export function normalizeFileKind(
+  kind: string | null | undefined,
+): "excel" | "csv" | "herd_export" | "pdf" | "ppt" | "other" | "livestock_events" | null {
+  if (kind == null) return null;
+  const lower = kind.toLowerCase();
+  if (VALID_FILE_KINDS.has(lower)) return lower as ReturnType<typeof normalizeFileKind>;
+  if (KIND_ALIAS[lower]) return KIND_ALIAS[lower] as ReturnType<typeof normalizeFileKind>;
+  return null;
+}
+
 export function normalizeSector(
   sector: string | null | undefined,
 ): "dairy" | "biogas" | "arable" {
@@ -83,6 +104,7 @@ interface StoredColumn {
 
 export function serializeFile(f: SourceFile, includeDetail = false) {
   const storedKind = (f as any).kind as string | null | undefined;
+  const normalizedKind = normalizeFileKind(storedKind);
   const base = {
     id: f.id,
     datasetId: f.datasetId,
@@ -90,7 +112,7 @@ export function serializeFile(f: SourceFile, includeDetail = false) {
     contentType: f.contentType ?? null,
     size: f.size ?? null,
     status: mapFileStatus(f.status),
-    kind: storedKind ?? deriveFileKind(f.name),
+    kind: normalizedKind ?? deriveFileKind(f.name),
     rowCount: f.rowCount ?? null,
     errorMessage: f.errorMessage ?? null,
     createdAt: f.createdAt,

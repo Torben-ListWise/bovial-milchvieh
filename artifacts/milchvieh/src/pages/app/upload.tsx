@@ -124,6 +124,25 @@ export function UploadPage() {
 
   const prevReadyIdsRef = useRef<Set<string>>(new Set());
   const offerShownRef = useRef(false);
+  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (navigateTimerRef.current !== null) {
+        clearTimeout(navigateTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isUploading) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Upload läuft noch — Seite wirklich verlassen?";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isUploading]);
 
   const { data: files, isLoading } = useListFiles(
     datasetId ?? "",
@@ -273,7 +292,7 @@ export function UploadPage() {
         });
         queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
         // Also auto-navigate after a brief pause so the farmer sees the analysis running
-        setTimeout(() => navigate(analysesHref), 2000);
+        navigateTimerRef.current = setTimeout(() => navigate(analysesHref), 2000);
       } else {
         toast({ title: "Datei hochgeladen", description: "Die Datei wird nun verarbeitet…" });
       }
