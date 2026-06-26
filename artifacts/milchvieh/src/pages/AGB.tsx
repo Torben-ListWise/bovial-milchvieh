@@ -20,16 +20,16 @@ export function AGBPage() {
       <main className="max-w-3xl mx-auto px-6 py-12 space-y-10">
         <div>
           <h1 className="text-4xl font-bold text-foreground">Allgemeine Geschäftsbedingungen (AGB)</h1>
-          <p className="text-sm text-muted-foreground mt-2">Stand: [DATUM DES INKRAFTTRETENS]</p>
+          <p className="text-sm text-muted-foreground mt-2">Stand: 26. Juni 2026</p>
         </div>
 
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-foreground">§ 1 Geltungsbereich und Anbieter</h2>
           <p className="text-muted-foreground leading-relaxed">
             Diese Allgemeinen Geschäftsbedingungen (AGB) gelten für alle Verträge zwischen
-            <strong className="text-foreground"> [IHR NAME / FIRMENNAME], [IHRE ANSCHRIFT]</strong>
+            <strong className="text-foreground"> Torben Richelsen, Bovial, Hörpeler Weg 14a, 21272 Egestorf</strong>
             {" "}(nachfolgend „Anbieter") und den Nutzern des Dienstes „Milchvieh Assistent"
-            (nachfolgend „Dienst"), der unter <strong className="text-foreground">[IHRE DOMAIN]</strong> erreichbar ist.
+            (nachfolgend „Dienst"), der unter <strong className="text-foreground">www.bovial.com</strong> erreichbar ist.
           </p>
           <p className="text-muted-foreground leading-relaxed">
             Abweichende Bedingungen des Nutzers werden nicht anerkannt, es sei denn, der Anbieter stimmt
@@ -79,26 +79,34 @@ export function AGBPage() {
                 <tbody className="divide-y divide-border">
                   <tr>
                     <td className="px-4 py-3 text-foreground">Kostenlos (Free)</td>
-                    <td className="px-4 py-3 text-muted-foreground">[ANZAHL] Analysen</td>
+                    <td className="px-4 py-3 text-muted-foreground">10 Analysen</td>
                     <td className="px-4 py-3 text-muted-foreground">0,00 €</td>
                   </tr>
                   <tr>
-                    <td className="px-4 py-3 text-foreground">[TARIF-NAME]</td>
-                    <td className="px-4 py-3 text-muted-foreground">[ANZAHL] Analysen</td>
-                    <td className="px-4 py-3 text-muted-foreground">[PREIS] €</td>
+                    <td className="px-4 py-3 text-foreground">Starter</td>
+                    <td className="px-4 py-3 text-muted-foreground">50 Analysen</td>
+                    <td className="px-4 py-3 text-muted-foreground">19,00 €</td>
                   </tr>
                   <tr>
-                    <td className="px-4 py-3 text-foreground">[TARIF-NAME]</td>
-                    <td className="px-4 py-3 text-muted-foreground">Unbegrenzt</td>
-                    <td className="px-4 py-3 text-muted-foreground">[PREIS] €</td>
+                    <td className="px-4 py-3 text-foreground">Pro</td>
+                    <td className="px-4 py-3 text-muted-foreground">Unbegrenzt, bis zu 3 Team-Einladungen inklusive</td>
+                    <td className="px-4 py-3 text-muted-foreground">49,00 €</td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <p className="text-muted-foreground text-sm">
               Alle Preise verstehen sich inklusive der gesetzlichen Mehrwertsteuer (19 %).
+              Alle Tarife sind monatlich kündbar, es besteht keine Jahresbindung.
             </p>
           </div>
+          <p className="text-muted-foreground leading-relaxed">
+            <strong className="text-foreground">Fair-Use-Klausel (Pro-Tarif):</strong>{" "}
+            Bei deutlich überdurchschnittlicher Nutzung im Pro-Tarif, insbesondere bei durchgehend
+            komplexen, ressourcenintensiven Analysen weit über dem für diese Preisstufe kalkulierten
+            Durchschnitt, behält sich der Anbieter vor, ein angemessenes zusätzliches Nutzungsentgelt
+            zu vereinbaren oder die Nutzung in zumutbarem Rahmen zu drosseln.
+          </p>
           <p className="text-muted-foreground leading-relaxed">
             Der Anbieter behält sich vor, den Leistungsumfang angemessen zu ändern, sofern dies dem Nutzer
             mit einer Frist von mindestens 30 Tagen mitgeteilt wird.
@@ -127,14 +135,19 @@ export function AGBPage() {
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-foreground">§ 5 Widerrufsrecht für Verbraucher</h2>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+            <p className="text-amber-800 leading-relaxed text-sm">
+              Diese Widerrufsbelehrung gilt nur für Verbraucher im Sinne des § 13 BGB. Da sich das Angebot
+              an landwirtschaftliche Betriebe richtet, die in der Regel als Unternehmer im Sinne des § 14 BGB
+              handeln, besteht für diese kein gesetzliches Widerrufsrecht.
+            </p>
             <p className="font-semibold text-amber-900">Widerrufsbelehrung</p>
             <p className="text-amber-800 leading-relaxed text-sm">
               <strong>Widerrufsrecht:</strong> Sie haben das Recht, binnen 14 Tagen ohne Angabe von Gründen
               diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt 14 Tage ab dem Tag des Vertragsabschlusses.
             </p>
             <p className="text-amber-800 leading-relaxed text-sm">
-              Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (<strong>[IHR NAME / FIRMENNAME],
-              [IHRE ANSCHRIFT], E-Mail: [IHRE-EMAIL@DOMAIN.DE]</strong>) mittels einer eindeutigen Erklärung
+              Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (<strong>Torben Richelsen,
+              Hörpeler Weg 14a, 21272 Egestorf, E-Mail: t_richelsen@hotmail.de</strong>) mittels einer eindeutigen Erklärung
               (z. B. per E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
             </p>
             <p className="text-amber-800 leading-relaxed text-sm">
@@ -214,8 +227,11 @@ export function AGBPage() {
           </p>
           <p className="text-muted-foreground leading-relaxed">
             Für Kaufleute, juristische Personen des öffentlichen Rechts oder öffentlich-rechtliche
-            Sondervermögen ist ausschließlicher Gerichtsstand für alle Streitigkeiten aus diesem
-            Vertragsverhältnis <strong className="text-foreground">[IHR GESCHÄFTSSITZ / ORT]</strong>.
+            Sondervermögen ist, soweit gesetzlich zulässig, ausschließlicher Gerichtsstand für alle
+            Streitigkeiten aus diesem Vertragsverhältnis{" "}
+            <strong className="text-foreground">Egestorf</strong>.
+            Diese Gerichtsstandsvereinbarung gilt ausschließlich im Verhältnis zu Unternehmern;
+            gegenüber Verbrauchern ist sie nach § 38 ZPO grundsätzlich unwirksam.
           </p>
         </section>
 
@@ -240,7 +256,7 @@ export function AGBPage() {
         </section>
 
         <div className="pt-8 border-t border-border text-sm text-muted-foreground">
-          Stand: [DATUM DES INKRAFTTRETENS]
+          Stand: 26. Juni 2026
         </div>
       </main>
 
