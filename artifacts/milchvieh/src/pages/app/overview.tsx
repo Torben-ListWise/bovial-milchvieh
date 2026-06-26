@@ -31,6 +31,7 @@ import { AiIcon } from "@/components/AiIcon";
 
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
+import { WelcomeBanner } from "@/components/WelcomeBanner";
 
 function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; datasetId: string }) {
   const [dismissed, setDismissed] = useState<boolean>(() => {
@@ -148,6 +149,7 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
 
 export function DatasetOverview() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
+  const { data: currentUser } = useGetCurrentUser();
 
   const { data: overview, isLoading } = useGetDatasetOverview(datasetId!, {
     query: { enabled: !!datasetId, queryKey: getGetDatasetOverviewQueryKey(datasetId!) }
@@ -185,6 +187,9 @@ export function DatasetOverview() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {(currentUser as any)?.onboardingCompletedAt == null && (
+        <WelcomeBanner datasetId={datasetId} />
+      )}
       {autoAnalysis && (
         <AutoAnalysisBanner analysisId={autoAnalysis.id} datasetId={datasetId} />
       )}
