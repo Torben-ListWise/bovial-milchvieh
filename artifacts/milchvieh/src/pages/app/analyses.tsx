@@ -1699,6 +1699,7 @@ export function AnalysesPage() {
   // ── SSE streaming state via hook ──────────────────────────────────────────
   const streaming = useStreamingState();
   const [pollFallback, setPollFallback] = useState(false);
+  const [chatQuotaExceeded, setChatQuotaExceeded] = useState(false);
   const streamingAnalysisIdRef = useRef<string | null>(null);
   const sseStartedForRef = useRef(new Set<string>());
 
@@ -1791,7 +1792,13 @@ export function AnalysesPage() {
         inputRef.current?.focus();
         openSseStream(data.id);
       },
-      onError: () => {
+      onError: (err: any) => {
+        const status = err?.status ?? err?.response?.status;
+        const data = err?.data ?? err?.response?.data;
+        if (status === 402 && data?.error === "quota_exceeded") {
+          setChatQuotaExceeded(true);
+          return;
+        }
         toast({
           variant: "destructive",
           title: "Fehler",
@@ -1814,7 +1821,13 @@ export function AnalysesPage() {
         inputRef.current?.focus();
         if (activeAnalysisId) openSseStream(activeAnalysisId);
       },
-      onError: () => {
+      onError: (err: any) => {
+        const status = err?.status ?? err?.response?.status;
+        const data = err?.data ?? err?.response?.data;
+        if (status === 402 && data?.error === "quota_exceeded") {
+          setChatQuotaExceeded(true);
+          return;
+        }
         toast({
           variant: "destructive",
           title: "Fehler",
@@ -2647,6 +2660,29 @@ export function AnalysesPage() {
       className="p-3 bg-card/80 backdrop-blur-sm border-t border-border shrink-0"
       style={keyboardOffset > 0 ? { paddingBottom: `${keyboardOffset + 12}px` } : undefined}
     >
+      {chatQuotaExceeded && (
+        <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800">Analyse-Kontingent erschöpft</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Monatslimit erreicht.{" "}
+              <a href="/app/settings" className="underline font-medium hover:text-amber-900">
+                Tarif upgraden
+              </a>{" "}
+              für weitere Analysen.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setChatQuotaExceeded(false)}
+            className="shrink-0 text-amber-500 hover:text-amber-700 leading-none"
+            aria-label="Schließen"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="flex gap-2 items-center">
         <Input
           ref={inputRef}
@@ -2659,13 +2695,13 @@ export function AnalysesPage() {
               : "Stelle eine Frage zu deinen Daten…"
           }
           className="flex-1 rounded-xl border-border/60 bg-card shadow-inner focus-within:ring-2 focus-within:ring-primary/30 h-11"
-          disabled={isPending}
+          disabled={isPending || chatQuotaExceeded}
         />
         <Button
           type="submit"
           size="icon"
           className="w-11 h-11 shrink-0"
-          disabled={isPending || !question.trim()}
+          disabled={isPending || chatQuotaExceeded || !question.trim()}
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />

@@ -24,6 +24,7 @@ import {
   AskQuestionResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
+import { checkQuota, incrementQuota, maybeSendQuotaWarning } from "../lib/quota";
 import { type Chart, type Citation } from "../lib/agent";
 import { logger } from "../lib/logger";
 import { categorizeQuestion } from "../lib/categorize";
@@ -168,6 +169,18 @@ router.post(
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }
+    // ── Quota check ───────────────────────────────────────────────────────────
+    const quotaCheck = await checkQuota(userId);
+    if (!quotaCheck.allowed) {
+      res.status(402).json({
+        error: "quota_exceeded",
+        plan: quotaCheck.plan,
+        limit: quotaCheck.limit,
+        used: quotaCheck.used,
+      });
+      return;
+    }
+
     const question = parsed.data.question?.trim().slice(0, 4_000);
     const title =
       parsed.data.title?.trim().slice(0, 200) ||
@@ -219,10 +232,20 @@ router.post(
           onProgress: (step) => w.sendProgress(step),
           onChart: (chart) => w.sendChart(chart),
           onDone: () => w.sendDone(),
-        }).catch((err) => {
-          w.sendError("Verarbeitungsfehler");
-          logger.error({ err }, "Background processQuestion failed");
-        });
+        })
+          .then((msg) => {
+            if (!msg.error) {
+              incrementQuota(userId)
+                .then(() => maybeSendQuotaWarning(userId))
+                .catch((err) =>
+                  logger.error({ err, userId }, "Quota-Increment fehlgeschlagen"),
+                );
+            }
+          })
+          .catch((err) => {
+            w.sendError("Verarbeitungsfehler");
+            logger.error({ err }, "Background processQuestion failed");
+          });
       });
     }
   },
@@ -385,6 +408,18 @@ router.post(
       res.status(404).json({ error: "Analyse nicht gefunden" });
       return;
     }
+    // ── Quota check ───────────────────────────────────────────────────────────
+    const msgQuotaCheck = await checkQuota(req.userId!);
+    if (!msgQuotaCheck.allowed) {
+      res.status(402).json({
+        error: "quota_exceeded",
+        plan: msgQuotaCheck.plan,
+        limit: msgQuotaCheck.limit,
+        used: msgQuotaCheck.used,
+      });
+      return;
+    }
+
     // Signal that processing has started so the frontend polls immediately
     await db
       .update(analysesTable)
@@ -394,6 +429,7 @@ router.post(
     // Return immediately — agent runs in background
     res.status(200).json(AskQuestionResponse.parse({ accepted: true }));
 
+    const msgUserId = req.userId!;
     setImmediate(() => {
       // Pass SSE callbacks via closure over the registry — the SSE connection
       // may open slightly after this fires, so we look up the writer at call
@@ -407,10 +443,20 @@ router.post(
         onProgress: (step) => w.sendProgress(step),
         onChart: (chart) => w.sendChart(chart),
         onDone: () => w.sendDone(),
-      }).catch((err) => {
-        w.sendError("Verarbeitungsfehler");
-        logger.error({ err }, "Background ask processQuestion failed");
-      });
+      })
+        .then((msg) => {
+          if (!msg.error) {
+            incrementQuota(msgUserId)
+              .then(() => maybeSendQuotaWarning(msgUserId))
+              .catch((err) =>
+                logger.error({ err, userId: msgUserId }, "Quota-Increment fehlgeschlagen"),
+              );
+          }
+        })
+        .catch((err) => {
+          w.sendError("Verarbeitungsfehler");
+          logger.error({ err }, "Background ask processQuestion failed");
+        });
     });
   },
 );
