@@ -423,8 +423,14 @@ WERKZEUGWAHL BEI EVENT-DATEN:
 
 EVENT-TYP-SCHLÜSSEL (systemübergreifend gültig):
 BRED=Besamung | FRESH=Abkalbung | DRY=Trockenstellen | LAME=Lahmheit
-SOLD=Abgang Verkauf | DIED=Verendung | PREG=TU positiv | OPEN=Offen (nicht trächtig)
+SOLD=Abgang Verkauf | DIED=Verendung | PREG=TU positiv (Trächtigkeit bestätigt) | OPEN=TU negativ (offen)
 ABORT=Abort | MOVE=Stallwechsel | TREAT=Behandlung
+
+WICHTIG — DATENMODELL EREIGNISVERKNÜPFUNG:
+Trächtigkeitsbestätigung erfolgt in deutschen HMS-Systemen als separates PREG-Event — NICHT als result='P' im BRED-Event.
+Die Verbindung ist: BRED (animal_id=X, datum=D) → PREG (animal_id=X, datum zwischen D und D+120 Tage) = Konzeption erfolgreich.
+get_repro_kpis und get_event_stats(BRED, group_by=remark/technician) berechnen die Konzeptionsrate intern bereits korrekt über diese animal_id-Verknüpfung.
+Das result-Feld im BRED-Event ist in deutschen HMS-Exporten oft leer oder enthält Besamungsnummern, keine Trächtigkeitsergebnisse.
 
 BULLENVERGLEICH & TECHNIKERBEWERTUNG:
 Typische Fragen: "Welcher Bulle hat die höchste Erstbesamungserfolgsrate?", "Wie vergleichen sich meine Besamungstechniker?", "Welcher Bulle soll zuerst aussortiert werden?"
@@ -1222,28 +1228,86 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const dateTo = input.date_to as string | undefined;
         const groupBy = input.group_by as string | undefined;
 
-        const typesParam = `{${eventTypes.map((t) => `"${t}"`).join(",")}}`;
+        // Inline SQL literals — event type codes are controlled (uppercased enum values only)
+        const typesIn = eventTypes.map((t) => `'${t.replace(/'/g, "''")}'`).join(", ");
+        const dateFilterParts =
+          `dataset_id = '${datasetId}'` +
+          (dateFrom ? ` AND event_date >= '${dateFrom}'::date` : "") +
+          (dateTo   ? ` AND event_date <= '${dateTo}'::date`   : "");
 
         let groupExpr: string;
         switch (groupBy) {
-          case "month":    groupExpr = "TO_CHAR(event_date, 'YYYY-MM')"; break;
-          case "quarter":  groupExpr = "TO_CHAR(event_date, 'YYYY-\"Q\"Q')"; break;
-          case "year":     groupExpr = "EXTRACT(YEAR FROM event_date)::text"; break;
-          case "remark":   groupExpr = "COALESCE(remark, '(kein)')"; break;
-          case "result":   groupExpr = "COALESCE(result, '(kein)')"; break;
+          case "month":      groupExpr = "TO_CHAR(event_date, 'YYYY-MM')"; break;
+          case "quarter":    groupExpr = "TO_CHAR(event_date, 'YYYY-\"Q\"Q')"; break;
+          case "year":       groupExpr = "EXTRACT(YEAR FROM event_date)::text"; break;
+          case "remark":     groupExpr = "COALESCE(remark, '(kein)')"; break;
+          case "result":     groupExpr = "COALESCE(result, '(kein)')"; break;
           case "technician": groupExpr = "COALESCE(technician, '(kein)')"; break;
-          default:         groupExpr = "'total'"; break;
+          default:           groupExpr = "'total'"; break;
         }
 
         try {
-          let q = `SELECT ${groupExpr} as grp, COUNT(*)::int as cnt
-                   FROM cow_events
-                   WHERE dataset_id = '${datasetId}'
-                     AND event_type = ANY($1::text[])`;
-          const params: unknown[] = [typesParam];
-          if (dateFrom) { params.push(dateFrom); q += ` AND event_date >= $${params.length}::date`; }
-          if (dateTo)   { params.push(dateTo);   q += ` AND event_date <= $${params.length}::date`; }
-          q += " GROUP BY 1 ORDER BY 1";
+          // Special case: BRED grouped by bull (remark) or technician →
+          // include per-group conception rate by linking BRED→PREG via animal_id + date window.
+          // German HMS systems store pregnancy confirmation as a separate PREG event, NOT as
+          // result='P' on the BRED event itself.
+          const isBredConceptionQuery =
+            eventTypes.length === 1 &&
+            eventTypes[0] === "BRED" &&
+            (groupBy === "remark" || groupBy === "technician");
+
+          if (isBredConceptionQuery) {
+            const q = `
+              WITH bred AS (
+                SELECT ${groupExpr} as grp, animal_id, event_date
+                FROM cow_events
+                WHERE ${dateFilterParts} AND event_type = 'BRED'
+              ),
+              preg AS (
+                SELECT DISTINCT animal_id, event_date as preg_date
+                FROM cow_events
+                WHERE dataset_id = '${datasetId}' AND event_type = 'PREG'
+              ),
+              bred_with_result AS (
+                SELECT b.grp,
+                       CASE WHEN EXISTS (
+                         SELECT 1 FROM preg p
+                         WHERE p.animal_id = b.animal_id
+                           AND p.preg_date BETWEEN b.event_date AND b.event_date + INTERVAL '120 days'
+                       ) THEN 1 ELSE 0 END as conceived
+                FROM bred b
+              )
+              SELECT grp, COUNT(*)::int as cnt, SUM(conceived)::int as preg_count,
+                     CASE WHEN COUNT(*) > 0
+                          THEN ROUND(SUM(conceived)::numeric / COUNT(*) * 100, 1)
+                          ELSE 0 END as conception_rate_pct
+              FROM bred_with_result
+              GROUP BY grp ORDER BY cnt DESC
+            `;
+            const res = await db.execute(sql.raw(q));
+            const rows = res.rows as { grp: string; cnt: number; preg_count: number; conception_rate_pct: number }[];
+            const totalBred = rows.reduce((s, r) => s + r.cnt, 0);
+            const totalPreg = rows.reduce((s, r) => s + r.preg_count, 0);
+            return {
+              event_types: eventTypes,
+              total: totalBred,
+              group_by: groupBy,
+              breakdown: rows.map((r) => ({
+                [r.grp]: { bred: r.cnt, preg: r.preg_count, conception_rate_pct: Number(r.conception_rate_pct) },
+              })),
+              conception_rate_total_pct: totalBred > 0 ? Math.round((totalPreg / totalBred) * 1000) / 10 : null,
+              date_from: dateFrom ?? null,
+              date_to: dateTo ?? null,
+              note: "Konzeptionsrate: PREG-Event innerhalb 120 Tage nach BRED für dasselbe Tier (animal_id)",
+            };
+          }
+
+          // Standard count query — no dangling params, values are inlined
+          const q = `SELECT ${groupExpr} as grp, COUNT(*)::int as cnt
+                     FROM cow_events
+                     WHERE ${dateFilterParts}
+                       AND event_type IN (${typesIn})
+                     GROUP BY 1 ORDER BY 1`;
 
           const result = await db.execute(sql.raw(q));
           const rows = result.rows as { grp: string; cnt: number }[];
@@ -1268,26 +1332,44 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const dateFrom = input.date_from as string | undefined;
         const dateTo = input.date_to as string | undefined;
 
-        let dateFilter = `dataset_id = '${datasetId}'`;
-        if (dateFrom) dateFilter += ` AND event_date >= '${dateFrom}'::date`;
-        if (dateTo)   dateFilter += ` AND event_date <= '${dateTo}'::date`;
+        const dateFilter =
+          `dataset_id = '${datasetId}'` +
+          (dateFrom ? ` AND event_date >= '${dateFrom}'::date` : "") +
+          (dateTo   ? ` AND event_date <= '${dateTo}'::date`   : "");
 
         try {
-          // Conception Rate & First-Service Conception Rate
+          // Conception Rate via animal_id linking:
+          // German HMS systems confirm pregnancy via a separate PREG event (TU positiv),
+          // NOT via result='P' on the BRED event itself. We join each BRED event to any
+          // PREG event for the same animal within 120 days to determine conception.
           const bredResult = await db.execute(sql.raw(`
             WITH bred AS (
-              SELECT animal_id, dim, result,
-                     ROW_NUMBER() OVER (PARTITION BY animal_id ORDER BY event_date, dim NULLS LAST) as svc_num
+              SELECT animal_id, event_date,
+                     ROW_NUMBER() OVER (PARTITION BY animal_id ORDER BY event_date) as svc_num
               FROM cow_events
               WHERE ${dateFilter} AND event_type = 'BRED'
             ),
+            preg AS (
+              SELECT DISTINCT animal_id, event_date as preg_date
+              FROM cow_events
+              WHERE dataset_id = '${datasetId}' AND event_type = 'PREG'
+            ),
+            bred_with_result AS (
+              SELECT b.animal_id, b.svc_num,
+                     CASE WHEN EXISTS (
+                       SELECT 1 FROM preg p
+                       WHERE p.animal_id = b.animal_id
+                         AND p.preg_date BETWEEN b.event_date AND b.event_date + INTERVAL '120 days'
+                     ) THEN 1 ELSE 0 END as conceived
+              FROM bred b
+            ),
             totals AS (
               SELECT
-                COUNT(*) FILTER (WHERE result IN ('P','O','A','C','R')) as eligible,
-                COUNT(*) FILTER (WHERE result = 'P') as pregnant,
-                COUNT(*) FILTER (WHERE svc_num = 1 AND result IN ('P','O','A','C','R')) as first_svc_eligible,
-                COUNT(*) FILTER (WHERE svc_num = 1 AND result = 'P') as first_svc_pregnant
-              FROM bred
+                COUNT(*)::int as eligible,
+                SUM(conceived)::int as pregnant,
+                COUNT(*) FILTER (WHERE svc_num = 1)::int as first_svc_eligible,
+                SUM(CASE WHEN svc_num = 1 THEN conceived ELSE 0 END)::int as first_svc_pregnant
+              FROM bred_with_result
             )
             SELECT * FROM totals
           `));
