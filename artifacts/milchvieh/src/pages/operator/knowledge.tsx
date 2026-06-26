@@ -37,6 +37,8 @@ import {
   Plus,
   Pencil,
   StickyNote,
+  Star,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -230,6 +232,7 @@ interface UploadItem {
   title: string;
   status: "pending" | "uploading" | "ingesting" | "done" | "error";
   error?: string;
+  isBenchmarkRef?: boolean;
 }
 
 // ── Betriebshinweise section ────────────────────────────────────────────────
@@ -399,6 +402,144 @@ function FarmNotesSection() {
   );
 }
 
+function BenchmarkFactorSection() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [inputVal, setInputVal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const { data: masterData, refetch } = useQuery<
+    Array<{ id: string; category: string; key: string; value: string }>
+  >({
+    queryKey: ["masterdata-sys"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/masterdata`, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Fehler beim Laden");
+      return res.json();
+    },
+  });
+
+  const factorEntry = masterData?.find(
+    (e) => e.category === "Systemeinstellungen" && e.key === "benchmark_abweichungsfaktor",
+  );
+
+  async function saveFactor() {
+    if (!factorEntry) return;
+    const val = parseFloat(inputVal.replace(",", "."));
+    if (isNaN(val) || val <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Ungültiger Wert",
+        description: "Bitte eine positive Zahl eingeben.",
+      });
+      return;
+    }
+    setSaving(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/masterdata/${factorEntry.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ value: String(val) }),
+      });
+      if (!res.ok) throw new Error("Speichern fehlgeschlagen");
+      await refetch();
+      setEditing(false);
+      toast({ title: "Gespeichert" });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Wert konnte nicht gespeichert werden.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+        <Settings className="w-5 h-5 text-primary" />
+        Systemeinstellungen
+      </h2>
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <p className="font-medium text-sm">Plausibilitäts-Faktor für Benchmarkabweichung</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Schwellenwert (Max/Min-Verhältnis) ab dem eine Kennzahl im Bericht als ungewöhnlich
+                abweichend markiert wird. Standard: 5 (eigener Wert muss mehr als 5× vom Richtwert abweichen).
+              </p>
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+              {editing ? (
+                <>
+                  <Input
+                    value={inputVal}
+                    onChange={(e) => setInputVal(e.target.value)}
+                    className="h-8 w-20 text-center"
+                    type="number"
+                    min="1"
+                    step="0.5"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveFactor();
+                      if (e.key === "Escape") setEditing(false);
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => void saveFactor()}
+                    disabled={saving}
+                    className="h-8"
+                  >
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Speichern"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditing(false)}
+                    className="h-8"
+                  >
+                    Abbrechen
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg font-bold">{factorEntry?.value ?? "5"}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    onClick={() => {
+                      setInputVal(factorEntry?.value ?? "5");
+                      setEditing(true);
+                    }}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Bearbeiten
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function KnowledgePage() {
   const { toast } = useToast();
   const { getToken } = useAuth();
@@ -413,6 +554,7 @@ export function KnowledgePage() {
   const [categorizing, setCategorizing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [uploadAsBenchmarkRef, setUploadAsBenchmarkRef] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["knowledge-docs"],
@@ -509,6 +651,7 @@ export function KnowledgePage() {
           contentType: item.file.type || "application/octet-stream",
           size: item.file.size,
           title: item.title || undefined,
+          documentType: item.isBenchmarkRef ? "benchmark_reference" : undefined,
         }),
       });
 
@@ -609,6 +752,7 @@ export function KnowledgePage() {
       file: f,
       title: f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").trim(),
       status: "pending",
+      isBenchmarkRef: uploadAsBenchmarkRef,
     }));
     setUploadItems((prev) => [...prev, ...items]);
   }
@@ -820,6 +964,26 @@ export function KnowledgePage() {
                   />
                 </div>
 
+                <div className="flex items-start gap-3 p-3 rounded-md border bg-amber-50 border-amber-200">
+                  <input
+                    type="checkbox"
+                    id="benchmark-ref-toggle"
+                    checked={uploadAsBenchmarkRef}
+                    onChange={(e) => setUploadAsBenchmarkRef(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 accent-amber-600 shrink-0"
+                  />
+                  <label htmlFor="benchmark-ref-toggle" className="text-sm cursor-pointer select-none">
+                    <span className="font-medium flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-amber-600" />
+                      Als Referenz-Benchmark hochladen
+                    </span>
+                    <span className="text-xs text-muted-foreground block mt-0.5">
+                      Wird bei der Berichtserstellung für den Benchmarkvergleich herangezogen.
+                      Ersetzt automatisch den bisherigen Referenz-Benchmark.
+                    </span>
+                  </label>
+                </div>
+
                 {uploadItems.length > 0 && (
                   <div className="space-y-2">
                     {uploadItems.map((item, idx) => (
@@ -1014,6 +1178,12 @@ export function KnowledgePage() {
                     )}
                   </div>
                   <div className="shrink-0 flex items-center gap-2 mt-0.5">
+                    {(doc as any).documentType === "benchmark_reference" && (
+                      <Badge className="bg-amber-100 text-amber-800 border border-amber-200 gap-1 text-xs shrink-0">
+                        <Star className="w-2.5 h-2.5" />
+                        Referenz-Benchmark
+                      </Badge>
+                    )}
                     <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />
                     <Button
                       variant="ghost"
@@ -1033,7 +1203,8 @@ export function KnowledgePage() {
         </CardContent>
       </Card>
 
-      <div className="border-t pt-6">
+      <div className="border-t pt-6 space-y-6">
+        <BenchmarkFactorSection />
         <FarmNotesSection />
       </div>
     </div>

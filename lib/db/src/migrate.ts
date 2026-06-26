@@ -421,6 +421,20 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS cow_events_dataset_hash_unique ON cow_events (dataset_id, row_hash)"
   );
+  // Migration: document_type column on knowledge_documents (e.g. 'benchmark_reference')
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS document_type TEXT"
+  );
+  // Seed: benchmark deviation factor in master_data (Systemeinstellungen)
+  await pool.query(`
+    INSERT INTO master_data (category, key, value, unit, notes, sector)
+    SELECT 'Systemeinstellungen', 'benchmark_abweichungsfaktor', '5', '', 'Max/Min-Verhältnis-Schwellenwert für Benchmarkabweichungs-Warnung in Berichten (Standard: 5)', NULL
+    WHERE NOT EXISTS (
+      SELECT 1 FROM master_data
+      WHERE category = 'Systemeinstellungen'
+        AND key = 'benchmark_abweichungsfaktor'
+    )
+  `);
 }
 
 /**

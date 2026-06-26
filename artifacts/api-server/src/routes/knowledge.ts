@@ -18,6 +18,7 @@ interface KnowledgeUploadUrlBodyType {
   contentType: string;
   size: number;
   title?: string;
+  documentType?: string;
 }
 
 const KnowledgeUploadUrlBody = {
@@ -37,6 +38,7 @@ const KnowledgeUploadUrlBody = {
         contentType: (body as any).contentType,
         size: (body as any).size,
         title: typeof (body as any).title === "string" ? (body as any).title : undefined,
+        documentType: typeof (body as any).documentType === "string" ? (body as any).documentType : undefined,
       },
     };
   },
@@ -66,6 +68,7 @@ router.get(
         errorMessage: d.errorMessage ?? null,
         sourceUrl: d.sourceUrl ?? null,
         category: d.category ?? null,
+        documentType: d.documentType ?? null,
         createdAt: d.createdAt,
       })),
     );
@@ -82,7 +85,7 @@ router.post(
       res.status(400).json({ error: "Ungültige Eingabe" });
       return;
     }
-    const { filename, contentType, size, title } = parsed.data;
+    const { filename, contentType, size, title, documentType } = parsed.data;
     const l = filename.toLowerCase();
     const fileType = l.endsWith(".pptx") || l.endsWith(".ppt") ? "pptx"
       : l.endsWith(".docx") || l.endsWith(".doc") ? "docx"
@@ -115,6 +118,36 @@ router.post(
       objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
     }
 
+    // If uploading as benchmark_reference, replace the existing one first
+    if (documentType === "benchmark_reference") {
+      const [existingBenchmark] = await db
+        .select()
+        .from(knowledgeDocumentsTable)
+        .where(eq(knowledgeDocumentsTable.documentType, "benchmark_reference"))
+        .limit(1);
+      if (existingBenchmark) {
+        await db
+          .delete(knowledgeChunksTable)
+          .where(eq(knowledgeChunksTable.docId, existingBenchmark.id));
+        try {
+          const file = await objectStorage.getObjectEntityFile(existingBenchmark.objectPath);
+          await file.delete();
+        } catch (err) {
+          logger.warn(
+            { err, id: existingBenchmark.id },
+            "Altes Benchmark-Objekt konnte nicht gelöscht werden",
+          );
+        }
+        await db
+          .delete(knowledgeDocumentsTable)
+          .where(eq(knowledgeDocumentsTable.id, existingBenchmark.id));
+        logger.info(
+          { id: existingBenchmark.id },
+          "Altes Referenz-Benchmark-Dokument ersetzt",
+        );
+      }
+    }
+
     const [doc] = await db
       .insert(knowledgeDocumentsTable)
       .values({
@@ -125,6 +158,7 @@ router.post(
         status: "pending",
         size,
         uploadedBy: req.userId!,
+        documentType: documentType ?? null,
       })
       .returning();
 

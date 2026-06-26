@@ -36,6 +36,7 @@ export const knowledgeDocumentsTable = pgTable("knowledge_documents", {
   sourceUrl: text("source_url"),
   embeddingModel: text("embedding_model"),
   category: text("category"),
+  documentType: text("document_type"),
   uploadedBy: text("uploaded_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
