@@ -106,17 +106,24 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS category TEXT"
   );
-  // Performance: HNSW vector index for fast cosine similarity search on knowledge chunks
-  try {
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
-      ON knowledge_chunks
-      USING hnsw (embedding vector_cosine_ops)
-      WITH (m = 16, ef_construction = 64)
-    `);
-  } catch (err: any) {
-    // 23505 = duplicate key: index already exists (race condition with IF NOT EXISTS)
-    if (err?.code !== "23505") throw err;
+  // Performance: HNSW vector index — only in production.
+  // The Replit deployment system introspects the dev DB to generate production
+  // migrations. If the dev DB has this index, Drizzle regenerates the SQL without
+  // vector_cosine_ops (bug with custom types), causing "no default operator class"
+  // errors on production. Keeping the dev DB index-free prevents that diff.
+  // In production the server creates it correctly at every startup (idempotent).
+  if (process.env.NODE_ENV === "production") {
+    try {
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
+        ON knowledge_chunks
+        USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (err: any) {
+      // 23505 = duplicate key: index already exists (race condition with IF NOT EXISTS)
+      if (err?.code !== "23505") throw err;
+    }
   }
   // Seed default Milchvieh templates if table is empty
   const { rows } = await pool.query("SELECT COUNT(*)::int as c FROM analysis_templates");
