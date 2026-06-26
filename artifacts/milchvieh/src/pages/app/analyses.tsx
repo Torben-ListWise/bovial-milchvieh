@@ -1497,23 +1497,22 @@ function AnalysisResultsPanel({
     }
   }
 
-  // Scroll to the streaming card when the agent starts working on a follow-up question.
-  // For first questions resultPairs is empty so there's nothing above the card — no scroll needed.
+  // Scroll to the streaming area as soon as the agent starts — don't wait for the full response.
   useEffect(() => {
-    if (!isWorking || resultPairs.length === 0) return;
-    streamingCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!isWorking) return;
+    if (resultPairs.length === 0) {
+      // First question: the streaming card is at the very top, scroll the panel there immediately.
+      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      // Follow-up: scroll the streaming card into view right at the start.
+      streamingCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, [isWorking]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to top when switching to a different analysis
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [analysis?.id]);
-
-  // Auto-scroll to newest result card when it arrives
-  useEffect(() => {
-    if (resultPairs.length === 0) return;
-    lastCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [resultPairs.length]);
 
   // Pending question to show in loading indicators:
   // prefer the ref value (set just before submission), fall back to the last
