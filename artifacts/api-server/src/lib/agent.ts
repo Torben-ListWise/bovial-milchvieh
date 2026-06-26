@@ -280,6 +280,25 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "search_dairycomp_manual",
+    description:
+      "Durchsucht das DairyComp-Handbuch semantisch. NUR aufrufen wenn der Nutzer eine Frage zur Bedienung, Konfiguration oder Funktionen der DairyComp-Software stellt. Nicht für allgemeine Betriebsanalysen oder Milchleistungsfragen verwenden.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Suchanfrage zur DairyComp-Software, z.B. 'Wie stelle ich den Laktationsindex ein?' oder 'FRESH-Events auswerten'",
+        },
+        topK: {
+          type: "number",
+          description: "Anzahl der zurückgegebenen Textstellen (Standard: 5)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "calculate_investment",
     description:
       "Berechnet Wirtschaftlichkeit einer Investition deterministisch: Annuität, Break-even-Jahr, 10-Jahres-Cashflow. Aufrufen wenn alle Parameter vom Nutzer bestätigt wurden.",
@@ -556,7 +575,7 @@ STRIKTE REGELN:
 - Alle Zahlen stammen AUSSCHLIESSLICH aus den Werkzeug-Ergebnissen oder dem extrahierten Dokumenttext. Erfinde NIEMALS Zahlen, Mittelwerte oder Trends.
 - Wenn du eine Zahl nennst, muss sie aus einem Werkzeug oder einem Dokumenttext stammen.
 - Beginne immer mit get_schema, um zu wissen, welche Felder verfügbar sind.
-- KEINE FIRMEN- ODER PRODUKTEMPFEHLUNGEN: Nenne niemals konkrete Markennamen, Herstellernamen oder Produktnamen (z.B. SCR, DeLaval, Lely, GEA, IceQube, Boumatic, Herde, DairyComp oder ähnliche). Beschreibe Technologien und Ansätze stattdessen generisch (z.B. „Halsband-Sensor-System", „Pedometer-System", „automatisches Melksystem", „Herdenmanagement-Software"). Wenn der Nutzer nach konkreten Produkten oder Herstellern fragt, erkläre, dass du keine Produktempfehlungen gibst, und beschreibe stattdessen die relevanten Kriterien und Technologietypen neutral.
+- KEINE FIRMEN- ODER PRODUKTEMPFEHLUNGEN: Nenne niemals konkrete Markennamen, Herstellernamen oder Produktnamen (z.B. SCR, DeLaval, Lely, GEA, IceQube, Boumatic, Herde oder ähnliche). Beschreibe Technologien und Ansätze stattdessen generisch (z.B. „Halsband-Sensor-System", „Pedometer-System", „automatisches Melksystem", „Herdenmanagement-Software"). Wenn der Nutzer nach konkreten Produkten oder Herstellern fragt, erkläre, dass du keine Produktempfehlungen gibst, und beschreibe stattdessen die relevanten Kriterien und Technologietypen neutral. **Ausnahme DairyComp:** Wenn der Nutzer explizit nach DairyComp fragt oder du search_dairycomp_manual aufrufst, darfst du den Namen „DairyComp" als Softwareprodukt nennen — du gibst aber keine allgemeinen Empfehlungen für oder gegen DairyComp gegenüber anderen Produkten.
 
 QUELLENANGABEN MIT NUMMERN:
 - Jedes Mal wenn du eine Zahl oder einen Richtwert aus einem Werkzeug nennst, setze direkt danach eine Fußnoten-Zahl: [1], [2], [3] etc.
@@ -622,6 +641,17 @@ Jede inhaltliche Aussage, die nicht aus Betriebsdaten (get_kpis, get_timeseries,
 - *[Web]* — der Abschnitt basiert auf search_web-Ergebnissen
 - *[Allgemeinwissen]* — weder Bibliothek noch Web lieferten relevante Treffer; Antwort stammt aus Modell-Trainingswissen
 Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Absatzes, z.B.: \`*[Bibliothek]*\`
+
+DAIRYCOMP-HANDBUCH — SOFWARE-BEDIENUNGSFRAGEN:
+Wenn der Nutzer eine Frage zur Bedienung, Konfiguration, Einstellungen oder Funktionen der DairyComp-Software stellt (Erkennungsmerkmale: Begriffe wie „DairyComp", „DC305", „wie stelle ich ein", „wie werte ich aus", „welche Codes", „Protokoll", „Liste", „Report in DairyComp"):
+1. Überspringe get_schema, get_kpis, get_kpi_timeseries, get_event_stats und andere Betriebsdaten-Werkzeuge vollständig.
+2. Rufe SOFORT search_dairycomp_manual auf — dies ersetzt auch den search_knowledge-Pflichtschritt.
+3. Du darfst den Produktnamen „DairyComp" in deiner Antwort verwenden.
+4. Wenn search_dairycomp_manual keine relevanten Treffer liefert (noRelevantResults: true): Antworte mit „Dazu finde ich leider nichts im DairyComp-Handbuch. Für diese Frage wende dich bitte direkt an den DairyComp-Support." — keine Eskalation, kein search_web-Fallback.
+5. Kennzeichne Antworten aus dem DairyComp-Handbuch mit *[DairyComp-Handbuch]* statt *[Bibliothek]*.
+
+BILD-INTERPRETATION:
+Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist. Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
 
 RÜCKFRAGE BEI UNKLAREN ABKÜRZUNGEN:
 Wenn search_knowledge noRelevantResults:true zurückgibt UND die Nutzerfrage einen Begriff enthält, der wie eine Abkürzung aussieht (2–5 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrichen oder Zahlen, z.B. AAA, RBT, KNS, BHB, MLP, LKV) → rufe IMMER zuerst ask_farmer mit einer einzigen gezielten Rückfrage auf, bevor du mit *[Allgemeinwissen]* antwortest.
@@ -712,7 +742,7 @@ EPISTEMISCHE VORSICHT BEI ERKLÄRUNGEN (Patch N)
 
 interface RunOptions {
   datasetId: string;
-  conversation: { role: "user" | "assistant"; content: string }[];
+  conversation: { role: "user" | "assistant"; content: string | Anthropic.ContentBlockParam[] }[];
   sector?: string;
   systemExtra?: string;
   /** Clerk user ID of the customer running this analysis — used for knowledge-gap logging. */
@@ -1168,6 +1198,59 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         } catch (err) {
           logger.error({ err }, "search_knowledge fehlgeschlagen");
           return { error: "Suche fehlgeschlagen" };
+        }
+      }
+      case "search_dairycomp_manual": {
+        const query = input.query as string;
+        const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
+        const SIMILARITY_THRESHOLD = 0.50;
+        try {
+          const queryVec = await embedQuery(query);
+          const vecStr = `[${queryVec.join(",")}]`;
+          const rows = await db.execute(
+            sql`
+              SELECT kc.chunk_text, kd.title, kd.category,
+                     (1 - (kc.embedding <=> ${vecStr}::vector)) AS similarity
+              FROM knowledge_chunks kc
+              JOIN knowledge_documents kd ON kd.id = kc.doc_id
+              WHERE kd.status = 'ready'
+                AND kd.document_type = 'dairycomp_manual'
+              ORDER BY kc.embedding <=> ${vecStr}::vector
+              LIMIT ${topK}
+            `,
+          );
+          const allRows = rows.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
+          const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
+          if (relevantRows.length === 0) {
+            return {
+              results: [],
+              noRelevantResults: true,
+              message: "Kein passender Eintrag im DairyComp-Handbuch gefunden. Bitte den DairyComp-Support kontaktieren.",
+            };
+          }
+          const results = relevantRows.map(
+            (r) => ({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity) }),
+          );
+          const seenTitles = new Set<string>();
+          for (const r of relevantRows) {
+            if (!seenTitles.has(r.title)) {
+              seenTitles.add(r.title);
+              citations.push({
+                label: "DairyComp-Handbuch",
+                value: "DairyComp-Dokumentation",
+                basis: null,
+                sourceType: "wissen",
+              });
+              break;
+            }
+          }
+          if (seenTitles.size > 0) {
+            opts.onSourceSearched?.(Array.from(seenTitles));
+          }
+          return { results };
+        } catch (err) {
+          logger.error({ err }, "search_dairycomp_manual fehlgeschlagen");
+          return { error: "DairyComp-Handbuch-Suche fehlgeschlagen" };
         }
       }
       case "search_web": {

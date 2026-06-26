@@ -25,6 +25,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { checkQuota, incrementQuota, maybeSendQuotaWarning } from "../lib/quota";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { type Chart, type Citation } from "../lib/agent";
 import { logger } from "../lib/logger";
 import { categorizeQuestion } from "../lib/categorize";
@@ -33,6 +34,7 @@ import { getOrBufferWriter, registerWriter, removeWriter, type SseWriter } from 
 import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
+const chatObjectStorage = new ObjectStorageService();
 
 async function ownDatasetId(datasetId: string, userId: string): Promise<boolean> {
   const [d] = await db
@@ -437,13 +439,14 @@ router.post(
       // ample time (≥1 tool-call round trip) to open the SSE connection.
       const id = a.id;
       const w = getOrBufferWriter(id);
+      const imageObjectPath = parsed.data.imageObjectPath;
       processQuestion(a, parsed.data.question, {
         onTextDelta: (delta) => w.sendDelta(delta),
         onSourceSearched: (sources) => w.sendSources(sources),
         onProgress: (step) => w.sendProgress(step),
         onChart: (chart) => w.sendChart(chart),
         onDone: () => w.sendDone(),
-      })
+      }, imageObjectPath ? { imageObjectPath } : undefined)
         .then((msg) => {
           if (!msg.error) {
             incrementQuota(msgUserId)
@@ -458,6 +461,30 @@ router.post(
           logger.error({ err }, "Background ask processQuestion failed");
         });
     });
+  },
+);
+
+// ── Chat-Image: Upload-URL anfordern ──────────────────────────────────────────
+// Der Browser lädt das Bild direkt in Object-Storage hoch; nur der objectPath
+// wird im Nachrichtentext mitgeschickt. Max 4 MB wird im Frontend geprüft.
+router.post(
+  "/chat-images/upload-url",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const { contentType } = req.body ?? {};
+    const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+    if (!contentType || !ALLOWED.includes(contentType)) {
+      res.status(400).json({ error: "Ungültiger Bildtyp. Erlaubt: JPEG, PNG, WEBP" });
+      return;
+    }
+    try {
+      const uploadURL = await chatObjectStorage.getObjectEntityUploadURL();
+      const objectPath = chatObjectStorage.normalizeObjectEntityPath(uploadURL);
+      res.json({ uploadURL, objectPath });
+    } catch (err) {
+      logger.error({ err }, "Chat-Image Upload-URL konnte nicht erstellt werden");
+      res.status(500).json({ error: "Upload-URL konnte nicht erstellt werden" });
+    }
   },
 );
 

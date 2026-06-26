@@ -538,6 +538,11 @@ export async function setupAnalystSandbox(): Promise<void> {
     END $$
   `);
 
+  // Migration: image_object_path on messages (chat image attachments, DSGVO-covered via dataset delete)
+  await pool.query(
+    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_object_path TEXT"
+  );
+
   // 5 + 6. RLS and dataset-isolation policies — PRODUCTION ONLY.
   //
   // The Replit deployment system diffs the Development DB directly against

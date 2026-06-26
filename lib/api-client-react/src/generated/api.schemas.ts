@@ -443,6 +443,7 @@ export interface AnalysisDetail {
 export interface QuestionInput {
   /** @minLength 1 */
   question: string;
+  imageObjectPath?: string;
 }
 
 /**

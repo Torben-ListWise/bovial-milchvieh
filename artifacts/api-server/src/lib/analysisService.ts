@@ -18,6 +18,7 @@ import { logger } from "./logger";
 import { normalizeSector } from "./serializers";
 import { getSubscription } from "./quota";
 import Anthropic from "@anthropic-ai/sdk";
+import { ObjectStorageService } from "./objectStorage";
 
 const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -68,8 +69,11 @@ export type SseCallbacks = {
   onDone?: () => void;
 };
 
+const chatObjectStorage = new ObjectStorageService();
+
 export type ProcessQuestionOptions = {
   hidden?: boolean;
+  imageObjectPath?: string;
 };
 
 // Insert the user message, run the agent grounded on deterministic compute,
@@ -86,6 +90,7 @@ export async function processQuestion(
       role: "user",
       content: question,
       ...(opts?.hidden ? { hidden: true } : {}),
+      ...(opts?.imageObjectPath ? { imageObjectPath: opts.imageObjectPath } : {}),
     } as any);
 
     const history = await db
@@ -94,12 +99,43 @@ export async function processQuestion(
       .where(eq(messagesTable.analysisId, analysis.id))
       .orderBy(asc(messagesTable.createdAt));
 
-    const conversation = history
+    const conversation: Array<{ role: "user" | "assistant"; content: string | Anthropic.ContentBlockParam[] }> = history
       .filter((m) => m.content)
       .map((m) => ({
         role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
         content: m.content as string,
       }));
+
+    // If the current message has an image attached, replace the last user message
+    // with an image + text content block so the agent can interpret it visually.
+    if (opts?.imageObjectPath) {
+      try {
+        const file = await chatObjectStorage.getObjectEntityFile(opts.imageObjectPath);
+        const [imageBuffer] = await file.download();
+        const base64 = imageBuffer.toString("base64");
+        const ext = opts.imageObjectPath.split(".").pop()?.toLowerCase() ?? "";
+        const mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" =
+          ext === "png" ? "image/png"
+          : ext === "webp" ? "image/webp"
+          : ext === "gif" ? "image/gif"
+          : "image/jpeg";
+        // Find and replace the last user message with the image content block
+        for (let i = conversation.length - 1; i >= 0; i--) {
+          if (conversation[i].role === "user") {
+            conversation[i] = {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+                { type: "text", text: question },
+              ],
+            };
+            break;
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, imageObjectPath: opts.imageObjectPath }, "Chat-Bild konnte nicht geladen werden — sende nur Text");
+      }
+    }
 
     // Load dataset sector for sector-specific agent context
     let sector = "dairy";

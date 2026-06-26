@@ -63,7 +63,7 @@ import {
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
   Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
   Pin, MoreHorizontal, Trash2,
-  ThumbsUp, ThumbsDown,
+  ThumbsUp, ThumbsDown, ImagePlus,
 } from "lucide-react";
 
 const FEEDBACK_API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -1767,6 +1767,12 @@ export function AnalysesPage() {
     try { return localStorage.getItem("sidebar-files-open") === "false"; } catch { return false; }
   });
   const [pendingContextFileIds, setPendingContextFileIds] = useState<string[]>([]);
+  const [pendingImage, setPendingImage] = useState<{
+    file: File;
+    objectPath: string;
+    preview: string;
+    uploading: boolean;
+  } | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   // Upload scope picker: null = no picker shown, otherwise the file being dropped
   const [scopePicker, setScopePicker] = useState<{
@@ -1785,6 +1791,7 @@ export function AnalysesPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const askIsPendingRef = useRef(false);
   const pendingQuestionRef = useRef("");
   const answeredMsgIdsRef = useRef<Set<string>>(new Set());
@@ -2248,9 +2255,48 @@ export function AnalysesPage() {
     try { localStorage.setItem("sidebar-files-open", String(!next)); } catch {}
   }
 
+  async function handleImageSelect(file: File) {
+    const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast({ variant: "destructive", title: "Bild zu groß", description: "Maximale Bildgröße: 4 MB (JPEG, PNG, WEBP)" });
+      return;
+    }
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      toast({ variant: "destructive", title: "Ungültiges Format", description: "Erlaubte Formate: JPEG, PNG, WEBP" });
+      return;
+    }
+    const preview = URL.createObjectURL(file);
+    setPendingImage({ file, objectPath: "", preview, uploading: true });
+    try {
+      const token = await getToken();
+      const urlRes = await fetch(`${FEEDBACK_API_BASE}/api/chat-images/upload-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ contentType: file.type }),
+      });
+      if (!urlRes.ok) throw new Error("Upload-URL konnte nicht erstellt werden");
+      const { uploadURL, objectPath } = await urlRes.json();
+      await fetch(uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      setPendingImage({ file, objectPath, preview, uploading: false });
+    } catch {
+      setPendingImage(null);
+      URL.revokeObjectURL(preview);
+      toast({ variant: "destructive", title: "Bild-Upload fehlgeschlagen", description: "Bitte erneut versuchen." });
+    }
+  }
+
   async function handleSubmit(q?: string) {
     const text = (q ?? question).trim();
     if (!text) return;
+    if (pendingImage?.uploading) return;
 
     pendingQuestionRef.current = text;
 
@@ -2266,7 +2312,10 @@ export function AnalysesPage() {
       setPendingContextFileIds([]);
       setFilePickerOpen(false);
     } else {
-      ask.mutate({ analysisId: activeAnalysisId, data: { question: text } });
+      const imageObjectPath = pendingImage?.objectPath || undefined;
+      ask.mutate({ analysisId: activeAnalysisId, data: { question: text, imageObjectPath } });
+      if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
+      setPendingImage(null);
     }
   }
 
@@ -2769,7 +2818,55 @@ export function AnalysesPage() {
           </button>
         </div>
       )}
+      {/* Image preview above the input row */}
+      {pendingImage && (
+        <div className="mb-2 flex items-center gap-2">
+          <div className="relative w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-border bg-muted">
+            <img src={pendingImage.preview} alt="Bild-Vorschau" className="w-full h-full object-cover" />
+            {pendingImage.uploading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (pendingImage.preview) URL.revokeObjectURL(pendingImage.preview);
+              setPendingImage(null);
+            }}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Bild entfernen"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+            {pendingImage.uploading ? "Wird hochgeladen…" : pendingImage.file.name}
+          </span>
+        </div>
+      )}
       <div className="flex gap-2 items-center">
+        {/* Hidden file input for image selection */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImageSelect(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={isPending || chatQuotaExceeded || !!pendingImage}
+          title="Bild anhängen (JPEG, PNG, WEBP, max. 4 MB)"
+          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ImagePlus className="w-4 h-4" />
+        </button>
         <Input
           ref={inputRef}
           value={question}
@@ -2787,7 +2884,7 @@ export function AnalysesPage() {
           type="submit"
           size="icon"
           className="w-11 h-11 shrink-0"
-          disabled={isPending || chatQuotaExceeded || !question.trim()}
+          disabled={isPending || chatQuotaExceeded || !question.trim() || pendingImage?.uploading}
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />

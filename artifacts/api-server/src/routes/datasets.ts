@@ -28,6 +28,8 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { serializeDataset, mapDatasetStatus, normalizeSector } from "../lib/serializers";
+import { ObjectStorageService } from "../lib/objectStorage";
+import { logger } from "../lib/logger";
 import { computeDashboard, getDatasetSchema } from "../lib/compute";
 import { canReadDataset, getActiveHostIds } from "../lib/teamAccess";
 
@@ -193,6 +195,31 @@ router.delete("/datasets/:datasetId", requireAuth, async (req: Request, res: Res
   if (linkedAnalyses.length > 0) {
     const { inArray } = await import("drizzle-orm");
     const analysisIds = linkedAnalyses.map((a) => a.id);
+    // DSGVO: clean up chat image files from object storage before deleting message rows
+    try {
+      const msgRows = await db
+        .select({ imageObjectPath: messagesTable.imageObjectPath } as any)
+        .from(messagesTable)
+        .where(inArray(messagesTable.analysisId, analysisIds));
+      const imagePaths = (msgRows as any[])
+        .map((r: any) => r.imageObjectPath)
+        .filter((p: unknown): p is string => typeof p === "string" && p.length > 0);
+      if (imagePaths.length > 0) {
+        const storageService = new ObjectStorageService();
+        await Promise.allSettled(
+          imagePaths.map(async (path: string) => {
+            try {
+              const file = await storageService.getObjectEntityFile(path);
+              await file.delete();
+            } catch (err) {
+              logger.warn({ err, path }, "Chat-Bild konnte nicht aus Object-Storage gelöscht werden");
+            }
+          }),
+        );
+      }
+    } catch (err) {
+      logger.warn({ err }, "Chat-Bild DSGVO-Bereinigung fehlgeschlagen — Datenbankzeilen werden trotzdem gelöscht");
+    }
     await db.delete(messagesTable).where(inArray(messagesTable.analysisId, analysisIds));
   }
   await db.delete(analysesTable).where(eq(analysesTable.datasetId, datasetId));

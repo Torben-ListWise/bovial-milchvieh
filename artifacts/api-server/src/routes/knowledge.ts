@@ -118,32 +118,33 @@ router.post(
       objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
     }
 
-    // If uploading as benchmark_reference, replace the existing one first
-    if (documentType === "benchmark_reference") {
-      const [existingBenchmark] = await db
+    // Single-active-document types: uploading a new version replaces the existing one.
+    const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual"] as const;
+    if (documentType && (SINGLE_ACTIVE_TYPES as readonly string[]).includes(documentType)) {
+      const [existingDoc] = await db
         .select()
         .from(knowledgeDocumentsTable)
-        .where(eq(knowledgeDocumentsTable.documentType, "benchmark_reference"))
+        .where(eq(knowledgeDocumentsTable.documentType, documentType))
         .limit(1);
-      if (existingBenchmark) {
+      if (existingDoc) {
         await db
           .delete(knowledgeChunksTable)
-          .where(eq(knowledgeChunksTable.docId, existingBenchmark.id));
+          .where(eq(knowledgeChunksTable.docId, existingDoc.id));
         try {
-          const file = await objectStorage.getObjectEntityFile(existingBenchmark.objectPath);
+          const file = await objectStorage.getObjectEntityFile(existingDoc.objectPath);
           await file.delete();
         } catch (err) {
           logger.warn(
-            { err, id: existingBenchmark.id },
-            "Altes Benchmark-Objekt konnte nicht gelöscht werden",
+            { err, id: existingDoc.id, documentType },
+            "Altes Single-Active-Dokument konnte nicht aus Object-Storage gelöscht werden",
           );
         }
         await db
           .delete(knowledgeDocumentsTable)
-          .where(eq(knowledgeDocumentsTable.id, existingBenchmark.id));
+          .where(eq(knowledgeDocumentsTable.id, existingDoc.id));
         logger.info(
-          { id: existingBenchmark.id },
-          "Altes Referenz-Benchmark-Dokument ersetzt",
+          { id: existingDoc.id, documentType },
+          "Bestehendes Single-Active-Dokument ersetzt",
         );
       }
     }
