@@ -12,3 +12,4 @@
 - [Milchvieh agent streaming](milchvieh-agent-streaming.md) — use messages.stream() + stream.on("text") for real-time deltas; no verification step (adds 15-30s with no UX benefit)
 - [Milchvieh DB migration idempotency](milchvieh-migration-idempotency.md) — use CREATE INDEX IF NOT EXISTS not ADD CONSTRAINT for unique indexes; ADD CONSTRAINT has no IF NOT EXISTS in PG
 - [Milchvieh conception rate linking](milchvieh-conception-rate.md) — conception rate must join BRED→PREG via animal_id+date window; result='P' on BRED is never set in German HMS exports
+- [Milchvieh run_sql tool](milchvieh-run-sql.md) — agent has run_sql for arbitrary SELECT queries; dataset_id injected in system prompt as CURRENT_DATASET_ID; 500-row JS truncation safety net

@@ -405,6 +405,40 @@ const TOOLS: Tool[] = [
       required: ["title", "chartType", "source"],
     },
   },
+  {
+    name: "run_sql",
+    description:
+      "Führt eine benutzerdefinierte PostgreSQL SELECT-Abfrage gegen die Datensatztabellen aus. " +
+      "Verwende dieses Werkzeug wenn die spezialisierten Werkzeuge nicht ausreichen — z.B. für:\n" +
+      "- Zeitabstand zwischen Events desselben Tieres (z.B. Tage zwischen FRESH und BRED)\n" +
+      "- Tiere mit bestimmten Ereignismustern (z.B. 3+ Besamungen ohne PREG)\n" +
+      "- Individuelle Tierdaten, Trendanalysen über mehrere Event-Typen gleichzeitig\n" +
+      "- Felder in data_rows, die get_schema als Spalten auflistet\n" +
+      "- Jede Frage, die flexible SQL-Logik erfordert\n\n" +
+      "TABELLEN (dataset_id IMMER als WHERE-Filter angeben):\n" +
+      "cow_events: dataset_id, animal_id TEXT, event_date DATE, event_type TEXT, " +
+      "dim INTEGER (Laktationstag), remark TEXT, result VARCHAR(4), technician TEXT\n" +
+      "data_rows: dataset_id, file_id UUID, record_date DATE, data JSONB\n" +
+      "  → JSONB-Zugriff: data->>'Spaltenname' (Text), (data->>'Zahl')::numeric\n\n" +
+      "REGELN: Nur SELECT/WITH erlaubt. Max. 500 Zeilen. Bei großen Tabellen LIMIT oder Aggregation verwenden.\n" +
+      "Die aktuelle dataset_id steht im Systemkontext als CURRENT_DATASET_ID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Valide PostgreSQL SELECT- oder WITH-Abfrage. Kein INSERT/UPDATE/DELETE/DROP/TRUNCATE. " +
+            "Immer WHERE dataset_id = '<CURRENT_DATASET_ID>' einbauen.",
+        },
+        description: {
+          type: "string",
+          description: "Kurze Beschreibung was diese Abfrage analysiert (1 Satz, für Fortschrittsanzeige)",
+        },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 const SECTOR_CONTEXT: Record<string, string> = {
@@ -420,6 +454,7 @@ WERKZEUGWAHL BEI EVENT-DATEN:
 - Zählung/Trend eines bestimmten Event-Typs (z.B. wie viele Lahmheiten pro Monat?) → get_event_stats(event_type, group_by)
 - Bullenvergleich nach Konzeptionsrate → get_event_stats(event_type='BRED', group_by='remark')
 - Produktionskennzahlen (Milch, SCC, Fett) → get_kpis / get_timeseries (aus den strukturierten data_rows)
+- Komplexe/individuelle Abfragen (Tiere mit Mustern, Zeitabstände, Mehrfach-Joins) → run_sql mit eigenem SQL
 
 EVENT-TYP-SCHLÜSSEL (systemübergreifend gültig):
 BRED=Besamung | FRESH=Abkalbung | DRY=Trockenstellen | LAME=Lahmheit
@@ -745,6 +780,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
   const sectorCtx = SECTOR_CONTEXT[opts.sector ?? "dairy"] ?? SECTOR_CONTEXT.dairy;
   const SYSTEM_PROMPT = `${sectorCtx}\n\n${SYSTEM_PROMPT_BASE}`;
+
+  // Tell the agent the current dataset_id so it can use it in run_sql WHERE clauses
+  const datasetContext = `\n\nCURRENT_DATASET_ID: ${datasetId}\nVerwende diese ID in allen run_sql WHERE-Klauseln: WHERE dataset_id = '${datasetId}'`;
 
   function buildSystemBlocks(
     docCtx: string,
@@ -1431,6 +1469,47 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           return { error: "Berechnung fehlgeschlagen" };
         }
       }
+      case "run_sql": {
+        const rawQuery = (input.query as string | undefined)?.trim();
+        if (!rawQuery) return { error: "Keine Abfrage angegeben" };
+
+        // Safety: strip SQL comments then require SELECT or WITH as first keyword
+        const normalized = rawQuery
+          .replace(/--[^\n]*/g, " ")
+          .replace(/\/\*[\s\S]*?\*\//g, " ")
+          .trim()
+          .toLowerCase();
+        const firstKeyword = normalized.split(/\s+/)[0];
+        if (firstKeyword !== "select" && firstKeyword !== "with") {
+          return { error: "Nur SELECT- oder WITH-Abfragen erlaubt. Schreiboperationen (INSERT, UPDATE, DELETE, DDL) sind nicht gestattet." };
+        }
+
+        // Warn if the active dataset isn't referenced (common mistake)
+        if (!rawQuery.includes(datasetId)) {
+          logger.warn({ datasetId }, "run_sql: Abfrage referenziert keine bekannte dataset_id — prüfe Filterbedingung");
+        }
+
+        try {
+          const result = await db.execute(sql.raw(rawQuery));
+          const allRows = result.rows as Record<string, unknown>[];
+          const truncated = allRows.length > 500;
+          const rows = truncated ? allRows.slice(0, 500) : allRows;
+          const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+          return {
+            columns,
+            rows,
+            row_count: rows.length,
+            truncated,
+            ...(truncated
+              ? { note: "Ergebnis auf 500 Zeilen begrenzt — füge LIMIT oder WHERE hinzu für präzisere Ergebnisse." }
+              : {}),
+          };
+        } catch (err) {
+          logger.error({ err, query: rawQuery }, "run_sql fehlgeschlagen");
+          const msg = err instanceof Error ? err.message : String(err);
+          return { error: `SQL-Fehler: ${msg.split("\n")[0]}` };
+        }
+      }
       default:
         return { error: `Unbekanntes Werkzeug: ${block.name}` };
     }
@@ -1455,6 +1534,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "ask_farmer": return "Formuliere Rückfragen";
       case "get_event_stats": return `Berechne Event-Statistik${metric ? ` für ${metric}` : ""}`;
       case "get_repro_kpis": return "Berechne Fruchtbarkeitskennzahlen";
+      case "run_sql": return `Führe SQL-Abfrage aus${input.description ? `: ${input.description as string}` : ""}`;
       default: return "Verarbeite Daten";
     }
   }
@@ -1481,6 +1561,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "ask_farmer",
     "get_event_stats",
     "get_repro_kpis",
+    "run_sql",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -1493,7 +1574,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         max_tokens: 8192,
         system: buildSystemBlocks(
           docContext,
-          ((opts.systemExtra ?? "") + knowledgeTitles) || undefined,
+          ((opts.systemExtra ?? "") + knowledgeTitles + datasetContext) || undefined,
         ),
         tools: TOOLS,
         tool_choice: { type: "auto" as const },
