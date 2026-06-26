@@ -505,6 +505,14 @@ export async function ensureExtensions(): Promise<void> {
  * restrict every query to the dataset_id set via SET LOCAL before execution.
  *
  * Idempotent — safe to call on every server startup.
+ *
+ * NOTE: The role and RLS policies are ALSO defined in the Drizzle TypeScript
+ * schema (analystRole in schema/analystRole.ts, pgPolicy entries in
+ * schema/events.ts and schema/files.ts) so that Drizzle generates correct
+ * production migrations (with full USING clause, in the right order).
+ * The DO-blocks below serve as idempotent fallbacks and handle GRANT
+ * statements that Drizzle cannot manage. If the `using` expression or role
+ * definition changes, update BOTH the schema files and the blocks below.
  */
 export async function setupAnalystSandbox(): Promise<void> {
   // 1. Create the restricted role — no login, no superuser, no RLS bypass

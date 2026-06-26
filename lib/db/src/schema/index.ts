@@ -1,3 +1,4 @@
+export * from "./analystRole";
 export * from "./users";
 export * from "./datasets";
 export * from "./files";

@@ -9,7 +9,10 @@ import {
   index,
   unique,
   varchar,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { analystRole } from "./analystRole";
 
 export const cowEventsTable = pgTable(
   "cow_events",
@@ -35,8 +38,21 @@ export const cowEventsTable = pgTable(
     index("cow_events_dataset_date_idx").on(table.datasetId, table.eventDate),
     index("cow_events_dataset_animal_idx").on(table.datasetId, table.animalId),
     unique("cow_events_dataset_hash_unique").on(table.datasetId, table.rowHash),
-  ],
-);
+    // RLS policy: dataset-level row isolation for the analyst sandbox.
+    // Defined here so Drizzle generates a correct CREATE POLICY (with full
+    // USING clause) in the production migration before this file is deployed.
+    // Also maintained as a DO-block fallback in setupAnalystSandbox()
+    // (lib/db/src/migrate.ts) which additionally handles GRANT statements
+    // that Drizzle cannot manage. If the `using` expression changes, update
+    // BOTH this file and setupAnalystSandbox() in migrate.ts.
+    pgPolicy("analyst_cow_events_isolation", {
+      as: "permissive",
+      for: "select",
+      to: analystRole,
+      using: sql`dataset_id::text = current_setting('app.current_dataset_id', true)`,
+    }),
+  ]
+).enableRLS();
 
 export interface EventImportSummary {
   inserted: number;
