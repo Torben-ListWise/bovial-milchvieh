@@ -15,3 +15,4 @@
 - [Milchvieh run_sql security](milchvieh-run-sql-security.md) — run_sql uses milchvieh_analyst role + RLS for DB-level dataset isolation; never text-pattern matching
 - [Milchvieh benchmark report](milchvieh-benchmark-report.md) — 3-case KPI logic, documentType='benchmark_reference', kpiRows in sections JSONB, factor in master_data
 - [Drizzle HNSW index operator class](drizzle-hnsw-index.md) — use .using("hnsw", sql`col vector_cosine_ops`) not .using().on(); operator class goes in using() call
+- [Milchvieh server startup order](milchvieh-startup-order.md) — server must listen() before warmupEmbeddingModel(); .hf-cache is gitignored so model downloads at cold start in prod

@@ -175,10 +175,6 @@ ensureExtensions()
     await setupAnalystSandbox();
     logger.info("Analyst sandbox (milchvieh_analyst role + RLS) bereit");
 
-    // Warm up the embedding model BEFORE accepting traffic so the first
-    // farmer upload never pays the ONNX cold-start penalty (~2-5 s).
-    await warmupEmbeddingModel();
-
     const httpServer = createServer(app);
     attachWebSocketServer(httpServer);
 
@@ -199,9 +195,11 @@ ensureExtensions()
       startDigestScheduler();
       void clearOrphanedAnalyses();
 
-      // Migrate legacy docs and resume pending ingestions in the background
-      // now that the model is already hot.
-      void reembedLegacyDocs()
+      // Warm up the embedding model in the background so the health check
+      // passes immediately. The first embedding request pays the ONNX
+      // cold-start penalty only if warmup hasn't finished yet.
+      void warmupEmbeddingModel()
+        .then(() => reembedLegacyDocs())
         .then(() => resumePendingIngestions())
         .catch((err) => logger.error({ err }, "Post-Startup-Ingestion fehlgeschlagen"));
     });
