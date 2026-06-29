@@ -114,6 +114,7 @@ function serializeMessage(m: Message) {
     charts: (m.charts as Chart[] | null) ?? [],
     citations: (m.citations as Citation[] | null) ?? [],
     error: m.error ?? null,
+    imageObjectPath: (m as any).imageObjectPath ?? null,
     createdAt: m.createdAt,
   };
 }
@@ -386,6 +387,30 @@ router.delete("/analyses/:analysisId", requireAuth, async (req: Request, res: Re
     res.status(404).json({ error: "Analyse nicht gefunden" });
     return;
   }
+  // DSGVO: clean up chat image files from object storage before deleting message rows
+  try {
+    const msgRows = await db
+      .select({ imageObjectPath: messagesTable.imageObjectPath } as any)
+      .from(messagesTable)
+      .where(eq(messagesTable.analysisId, analysisId));
+    const imagePaths = (msgRows as any[])
+      .map((r: any) => r.imageObjectPath)
+      .filter((p: unknown): p is string => typeof p === "string" && p.length > 0);
+    if (imagePaths.length > 0) {
+      await Promise.allSettled(
+        imagePaths.map(async (path: string) => {
+          try {
+            const file = await chatObjectStorage.getObjectEntityFile(path);
+            await file.delete();
+          } catch (err) {
+            logger.warn({ err, path }, "Chat-Bild konnte nicht aus Object-Storage gelöscht werden");
+          }
+        }),
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, "Chat-Bild DSGVO-Bereinigung fehlgeschlagen — Datenbankzeilen werden trotzdem gelöscht");
+  }
   await db.delete(messagesTable).where(eq(messagesTable.analysisId, analysisId));
   await db.delete(analysesTable).where(eq(analysesTable.id, analysisId));
   res.status(204).end();
@@ -484,6 +509,34 @@ router.post(
     } catch (err) {
       logger.error({ err }, "Chat-Image Upload-URL konnte nicht erstellt werden");
       res.status(500).json({ error: "Upload-URL konnte nicht erstellt werden" });
+    }
+  },
+);
+
+router.get(
+  "/chat-images/download",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const objectPath = req.query.objectPath as string;
+    if (!objectPath) {
+      res.status(400).json({ error: "objectPath fehlt" });
+      return;
+    }
+    try {
+      const file = await chatObjectStorage.getObjectEntityFile(objectPath);
+      const [buffer] = await file.download();
+      const ext = objectPath.split(".").pop()?.toLowerCase();
+      const contentType =
+        ext === "jpg" || ext === "jpeg" ? "image/jpeg"
+        : ext === "png" ? "image/png"
+        : ext === "webp" ? "image/webp"
+        : "application/octet-stream";
+      res.set("Content-Type", contentType);
+      res.set("Cache-Control", "private, max-age=86400");
+      res.send(buffer);
+    } catch (err) {
+      logger.error({ err, objectPath }, "Chat-Bild konnte nicht geladen werden");
+      res.status(404).json({ error: "Bild nicht gefunden" });
     }
   },
 );

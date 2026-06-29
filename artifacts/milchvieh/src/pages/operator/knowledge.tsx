@@ -233,6 +233,7 @@ interface UploadItem {
   status: "pending" | "uploading" | "ingesting" | "done" | "error";
   error?: string;
   isBenchmarkRef?: boolean;
+  isDairyCompManual?: boolean;
 }
 
 // ── Betriebshinweise section ────────────────────────────────────────────────
@@ -557,6 +558,7 @@ export function KnowledgePage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [uploadAsBenchmarkRef, setUploadAsBenchmarkRef] = useState(false);
+  const [uploadAsDairyCompManual, setUploadAsDairyCompManual] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["knowledge-docs"],
@@ -653,7 +655,7 @@ export function KnowledgePage() {
           contentType: item.file.type || "application/octet-stream",
           size: item.file.size,
           title: item.title || undefined,
-          documentType: item.isBenchmarkRef ? "benchmark_reference" : undefined,
+          documentType: item.isDairyCompManual ? "dairycomp_manual" : item.isBenchmarkRef ? "benchmark_reference" : undefined,
         }),
       });
 
@@ -754,7 +756,8 @@ export function KnowledgePage() {
       file: f,
       title: f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").trim(),
       status: "pending",
-      isBenchmarkRef: uploadAsBenchmarkRef,
+      isBenchmarkRef: uploadAsBenchmarkRef && !uploadAsDairyCompManual,
+      isDairyCompManual: uploadAsDairyCompManual,
     }));
     setUploadItems((prev) => [...prev, ...items]);
   }
@@ -970,8 +973,8 @@ export function KnowledgePage() {
                   <input
                     type="checkbox"
                     id="benchmark-ref-toggle"
-                    checked={uploadAsBenchmarkRef}
-                    onChange={(e) => setUploadAsBenchmarkRef(e.target.checked)}
+                    checked={uploadAsBenchmarkRef && !uploadAsDairyCompManual}
+                    onChange={(e) => { setUploadAsBenchmarkRef(e.target.checked); setUploadAsDairyCompManual(false); }}
                     className="w-4 h-4 mt-0.5 accent-amber-600 shrink-0"
                   />
                   <label htmlFor="benchmark-ref-toggle" className="text-sm cursor-pointer select-none">
@@ -982,6 +985,26 @@ export function KnowledgePage() {
                     <span className="text-xs text-muted-foreground block mt-0.5">
                       Wird bei der Berichtserstellung für den Benchmarkvergleich herangezogen.
                       Ersetzt automatisch den bisherigen Referenz-Benchmark.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-md border bg-blue-50 border-blue-200">
+                  <input
+                    type="checkbox"
+                    id="dairycomp-manual-toggle"
+                    checked={uploadAsDairyCompManual}
+                    onChange={(e) => { setUploadAsDairyCompManual(e.target.checked); setUploadAsBenchmarkRef(false); }}
+                    className="w-4 h-4 mt-0.5 accent-blue-600 shrink-0"
+                  />
+                  <label htmlFor="dairycomp-manual-toggle" className="text-sm cursor-pointer select-none">
+                    <span className="font-medium flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                      Als DairyComp-Handbuch hochladen
+                    </span>
+                    <span className="text-xs text-muted-foreground block mt-0.5">
+                      Wird für DairyComp-Bedienungsfragen im Chat verwendet.
+                      Ersetzt automatisch das bisherige DairyComp-Handbuch.
                     </span>
                   </label>
                 </div>
@@ -1184,6 +1207,12 @@ export function KnowledgePage() {
                       <Badge className="bg-amber-100 text-amber-800 border border-amber-200 gap-1 text-xs shrink-0">
                         <Star className="w-2.5 h-2.5" />
                         Referenz-Benchmark
+                      </Badge>
+                    )}
+                    {(doc as any).documentType === "dairycomp_manual" && (
+                      <Badge className="bg-blue-100 text-blue-800 border border-blue-200 gap-1 text-xs shrink-0">
+                        <BookOpen className="w-2.5 h-2.5" />
+                        DairyComp-Handbuch
                       </Badge>
                     )}
                     <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />

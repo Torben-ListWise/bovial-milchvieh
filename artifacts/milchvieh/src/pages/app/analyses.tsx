@@ -1732,6 +1732,45 @@ function NeueDatatenBanner({
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
+function ChatImageThumbnail({ objectPath }: { objectPath: string }) {
+  const { getToken } = useAuth();
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let blobUrl: string | null = null;
+    async function load() {
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${FEEDBACK_API_BASE}/api/chat-images/download?objectPath=${encodeURIComponent(objectPath)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
+        if (!res.ok || !active) return;
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+        if (active) setSrc(blobUrl);
+      } catch {}
+    }
+    load();
+    return () => {
+      active = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [objectPath]);
+
+  if (!src) return null;
+  return (
+    <div className="flex justify-end mb-1">
+      <img
+        src={src}
+        alt="Angehängtes Bild"
+        className="max-w-[200px] max-h-[200px] rounded-xl border border-border object-cover shadow-sm"
+      />
+    </div>
+  );
+}
+
 export function AnalysesPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const { toast } = useToast();
@@ -2729,6 +2768,9 @@ export function AnalysesPage() {
                 }
                 return (
                   <div key={msg.id}>
+                    {msg.role === "user" && msg.imageObjectPath && (
+                      <ChatImageThumbnail objectPath={msg.imageObjectPath} />
+                    )}
                     <MessageBubble
                       msg={msg}
                       isNew={isNewMessage(msg)}

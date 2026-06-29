@@ -404,6 +404,8 @@ export interface AnalysisMessage {
   backQuestions?: Array<{ text: string; options?: string[] }> | null;
   /** @nullable */
   error?: string | null;
+  /** @nullable */
+  imageObjectPath?: string | null;
   createdAt: string;
 }
 

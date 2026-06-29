@@ -449,6 +449,7 @@ export const GetAnalysisResponse = zod.object({
   "followUpQuestions": zod.array(zod.string()).optional(),
   "backQuestions": zod.array(zod.object({ text: zod.string(), options: zod.array(zod.string()).optional() })).nullish(),
   "error": zod.string().nullish(),
+  "imageObjectPath": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }))
 })
