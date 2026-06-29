@@ -97,14 +97,19 @@ async function reembedLegacyDocs(): Promise<void> {
 
 async function resumePendingIngestions() {
   try {
-    const pending = await db
-      .select({ id: knowledgeDocumentsTable.id, title: knowledgeDocumentsTable.title })
+    // Re-ingest both "pending" docs (interrupted before start) and "error" docs
+    // (failed on a previous run — e.g. due to wrong model-cache path that is now fixed).
+    const docs = await db
+      .select({ id: knowledgeDocumentsTable.id, title: knowledgeDocumentsTable.title, status: knowledgeDocumentsTable.status })
       .from(knowledgeDocumentsTable)
-      .where(eq(knowledgeDocumentsTable.status, "pending"));
-    if (pending.length === 0) return;
-    logger.info({ count: pending.length }, "Starte Ingestion für ausstehende Dokumente (sequenziell)");
-    for (const doc of pending) {
-      logger.info({ id: doc.id, title: doc.title }, "Ingestion gestartet");
+      .where(or(
+        eq(knowledgeDocumentsTable.status, "pending"),
+        eq(knowledgeDocumentsTable.status, "error"),
+      ));
+    if (docs.length === 0) return;
+    logger.info({ count: docs.length }, "Starte Ingestion für ausstehende/fehlerhafte Dokumente (sequenziell)");
+    for (const doc of docs) {
+      logger.info({ id: doc.id, title: doc.title, status: doc.status }, "Ingestion gestartet");
       try {
         await ingestKnowledgeDoc(doc.id);
         logger.info({ id: doc.id, title: doc.title }, "Ingestion abgeschlossen");

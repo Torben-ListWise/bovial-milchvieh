@@ -1,5 +1,7 @@
 import { pipeline, env } from "@huggingface/transformers";
 import type { FeatureExtractionPipeline } from "@huggingface/transformers";
+import { fileURLToPath } from "url";
+import path from "path";
 import { logger } from "./logger";
 
 export const EMBEDDING_DIMENSIONS = 768;
@@ -12,12 +14,24 @@ const MAX_CHUNKS = 500;
 const CHUNK_SIZE = 600;
 const CHUNK_OVERLAP = 100;
 
-// Model files are pre-downloaded into .hf-cache at build time via
-// scripts/download-model.mjs (called from build.mjs). Point the library at
-// that local directory so it never attempts a remote fetch at startup.
-env.cacheDir = "./.hf-cache";
-env.localModelPath = "./.hf-cache";
+// Use an ABSOLUTE path derived from import.meta.url so the cache works
+// regardless of process.cwd(). In the esbuild ESM bundle (dist/index.mjs),
+// import.meta.url = file:///…/artifacts/api-server/dist/index.mjs, so
+// resolving "../.hf-cache" lands at artifacts/api-server/.hf-cache — correct
+// in both dev and production deployment.
+const HF_CACHE_DIR = path.resolve(
+  fileURLToPath(new URL(".", import.meta.url)),
+  "..",
+  ".hf-cache",
+);
+
+env.cacheDir = HF_CACHE_DIR;
+env.localModelPath = HF_CACHE_DIR;
 env.allowRemoteModels = false;
+
+// Log so we can verify the resolved path in production logs.
+// eslint-disable-next-line no-console
+console.log(`[embeddings] HF cache dir resolved to: ${HF_CACHE_DIR}`);
 
 // ────────────────────────────────────────────────────────────────────
 // Exported stable promise — resolves when the model is fully loaded.

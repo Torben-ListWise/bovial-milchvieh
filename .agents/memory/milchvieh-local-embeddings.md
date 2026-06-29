@@ -18,8 +18,8 @@ Wrong prefixes silently degrade retrieval quality.
 - `LOCAL_MODEL_NAME = "multilingual-e5-base"` (stored in DB `embedding_model` column)
 - `HF_MODEL_ID = "Xenova/multilingual-e5-base"` in embeddings.ts
 - Dimensions: 768 — matches HNSW index and existing schema
-- Cache: `env.cacheDir = "./.hf-cache"` (relative to process CWD = api-server root)
-- First load: ~25s (model download ~280MB); subsequent loads from disk cache
+- Cache: MUST use absolute path via `import.meta.url` — relative `./.hf-cache` fails in production where CWD differs. Pattern: `path.resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '.hf-cache')`
+- First load: ~5s from disk cache (model is 1.1GB ONNX, pre-downloaded at build time)
 - `HF_TOKEN` secret is set but not needed for this model (can be ignored)
 
 ## Exported embeddingModelReady promise
@@ -32,4 +32,4 @@ Wrong prefixes silently degrade retrieval quality.
 ## Re-embedding migration (reembedLegacyDocs in index.ts)
 - On startup: after warmup, drops HNSW index, re-ingests each legacy doc (embedding_model IS NULL or != LOCAL_MODEL_NAME), recreates HNSW index
 - `ingestKnowledgeDoc()` is atomic per doc: delete old chunks → embed → insert → set embedding_model
-- Docs stuck in `processing` state are NOT auto-reset — must be manually reset via SQL to `pending`
+- Docs in `error` state ARE now auto-retried on startup (`resumePendingIngestions` in index.ts handles both `pending` and `error`)
