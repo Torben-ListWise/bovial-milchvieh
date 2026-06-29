@@ -580,6 +580,25 @@ export function KnowledgePage() {
     },
   });
 
+  const retryIngestMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/knowledge/${id}/ingest`, {
+        method: "POST",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Neueinlesung fehlgeschlagen");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-docs"] });
+      toast({ title: "Neu einlesen gestartet" });
+    },
+    onError: () => {
+      toast({ title: "Neueinlesung fehlgeschlagen", variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const token = await getToken();
@@ -1216,6 +1235,18 @@ export function KnowledgePage() {
                       </Badge>
                     )}
                     <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />
+                    {doc.status === "error" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-muted-foreground hover:text-primary"
+                        onClick={() => retryIngestMutation.mutate(doc.id)}
+                        disabled={retryIngestMutation.isPending}
+                        title="Einlesen erneut versuchen"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
