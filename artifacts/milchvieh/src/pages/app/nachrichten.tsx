@@ -5,7 +5,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageLayout } from "@/components/PageLayout";
-import { Newspaper, ExternalLink, ArrowRight, Clock, ChevronLeft } from "lucide-react";
+import { Newspaper, ExternalLink, ArrowRight, Clock, ChevronLeft, Copy, Check } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -128,6 +129,20 @@ function CtaButton({
 
 function EditionCard({ edition, datasetId }: { edition: NewsletterEdition; datasetId?: string }) {
   const readTime = estimateReadTime(edition.appBody);
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  function handleCopyLink() {
+    const params = new URLSearchParams();
+    params.set("edition", edition.id);
+    if (datasetId) params.set("datasetId", datasetId);
+    const url = `${window.location.origin}/app/nachrichten?${params.toString()}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      toast({ description: "Link wurde in die Zwischenablage kopiert." });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   return (
     <article className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -138,10 +153,24 @@ function EditionCard({ edition, datasetId }: { edition: NewsletterEdition; datas
         >
           {edition.topic}
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Clock className="w-3.5 h-3.5" />
-          {readTime} Min. Lesezeit
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="w-3.5 h-3.5" />
+            {readTime} Min. Lesezeit
+          </span>
+          <button
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Link kopieren"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-green-500" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+            Link kopieren
+          </button>
+        </div>
       </div>
 
       {/* Body */}
