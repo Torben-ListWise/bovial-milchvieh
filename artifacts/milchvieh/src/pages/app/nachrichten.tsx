@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
 import { useLocation, useSearch } from "wouter";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageLayout } from "@/components/PageLayout";
 import { Newspaper, ExternalLink, ArrowRight, Clock } from "lucide-react";
@@ -66,27 +68,22 @@ function estimateReadTime(text: string): number {
   return Math.max(1, Math.round(words / 200));
 }
 
-// Split appBody into paragraphs for structured rendering.
-// The last paragraph starting with "Handlungsempfehlung:" gets special treatment.
-function splitBody(text: string): { main: string[]; action: string | null } {
-  const paras = text
-    .split(/\n\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+// ── Markdown prose styles ─────────────────────────────────────────────────────
 
-  const actionIdx = paras.findIndex((p) =>
-    p.toLowerCase().startsWith("handlungsempfehlung"),
-  );
-
-  if (actionIdx >= 0) {
-    return {
-      main: paras.slice(0, actionIdx),
-      action: paras[actionIdx],
-    };
-  }
-
-  return { main: paras.slice(0, -1), action: paras[paras.length - 1] ?? null };
-}
+const PROSE_CLASSES =
+  "text-sm text-foreground leading-relaxed " +
+  "[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-3 [&_h1]:mt-4 " +
+  "[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-2 [&_h2]:mt-4 " +
+  "[&_h3]:text-base [&_h3]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-3 " +
+  "[&_p]:mb-3 [&_p:last-child]:mb-0 " +
+  "[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ul]:space-y-1 " +
+  "[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_ol]:space-y-1 " +
+  "[&_li]:leading-relaxed " +
+  "[&_strong]:font-semibold " +
+  "[&_em]:italic " +
+  "[&_blockquote]:border-l-4 [&_blockquote]:border-primary/30 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground [&_blockquote]:mb-3 " +
+  "[&_hr]:border-border [&_hr]:my-4 " +
+  "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:opacity-80";
 
 // ── CTA Button ────────────────────────────────────────────────────────────────
 
@@ -107,8 +104,6 @@ function CtaButton({
     if (ctaType === "route") {
       navigate(ctaTarget);
     } else {
-      // Navigate to analyses/chat with pre-filled prompt
-      // Build URL correctly: datasetId uses "?" separator, prompt appends with "&"
       const promptParam = encodeURIComponent(ctaTarget);
       if (datasetId) {
         navigate(`/app/analyses?datasetId=${datasetId}&prompt=${promptParam}`);
@@ -133,7 +128,6 @@ function CtaButton({
 
 function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition; datasetId?: string }) {
   const readTime = estimateReadTime(edition.appBody);
-  const { main, action } = splitBody(edition.appBody);
 
   return (
     <article className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -152,6 +146,7 @@ function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition
 
       {/* Body */}
       <div className="px-5 py-5 space-y-4">
+        {/* Title + date */}
         <div>
           <p className="text-xs text-muted-foreground mb-1.5">
             {formatDate(edition.scheduledDate)}
@@ -161,21 +156,12 @@ function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition
           </h2>
         </div>
 
-        {/* Main paragraphs */}
-        <div className="space-y-3">
-          {main.map((para, i) => (
-            <p key={i} className="text-sm text-foreground leading-relaxed">
-              {para}
-            </p>
-          ))}
+        {/* Full body rendered as markdown */}
+        <div className={PROSE_CLASSES}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {edition.appBody}
+          </ReactMarkdown>
         </div>
-
-        {/* Action recommendation */}
-        {action && (
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
-            <p className="text-sm text-foreground leading-relaxed">{action}</p>
-          </div>
-        )}
 
         {/* Sources */}
         {edition.sources && edition.sources.length > 0 && (
@@ -202,9 +188,11 @@ function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition
         )}
 
         {/* CTA */}
-        <div className="pt-1">
-          <CtaButton ctaType={edition.ctaType} ctaTarget={edition.ctaTarget} datasetId={datasetId} />
-        </div>
+        {edition.ctaTarget && (
+          <div className="pt-1">
+            <CtaButton ctaType={edition.ctaType} ctaTarget={edition.ctaTarget} datasetId={datasetId} />
+          </div>
+        )}
       </div>
     </article>
   );
