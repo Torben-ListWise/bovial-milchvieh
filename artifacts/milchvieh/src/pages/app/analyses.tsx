@@ -1795,6 +1795,26 @@ function AnalysisResultsPanel({
     }
   }
 
+  // Most recent widgetSpec across all messages — drives the sticky calculator panel
+  const lastWidgetSpec = useMemo(() => {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const ws = (msgs[i] as any).widgetSpec;
+      if (ws?.type) return ws as { type: string; prefill: Record<string, number> };
+    }
+    return null;
+  }, [msgs]);
+
+  const [widgetPanelCollapsed, setWidgetPanelCollapsed] = useState(false);
+  const prevWidgetTypeRef = useRef<string | null>(null);
+
+  // Auto-expand when a new widgetSpec type appears
+  useEffect(() => {
+    if (lastWidgetSpec?.type && lastWidgetSpec.type !== prevWidgetTypeRef.current) {
+      setWidgetPanelCollapsed(false);
+      prevWidgetTypeRef.current = lastWidgetSpec.type;
+    }
+  }, [lastWidgetSpec?.type]);
+
   // Scroll to the streaming area as soon as the agent starts — don't wait for the full response.
   useEffect(() => {
     if (!isWorking) return;
@@ -1865,49 +1885,83 @@ function AnalysisResultsPanel({
     );
   }
 
-  return (
-    <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-4 space-y-4">
-      {resultPairs.map((pair, idx) => (
-        <ResultCard
-          key={pair.msg.id}
-          questionTitle={pair.questionTitle}
-          msg={pair.msg}
-          analysisId={analysis.id}
-          cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
-        />
-      ))}
-
-      {isWorking && (
-        <div ref={streamingCardRef}>
-        {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
-          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
-        ) : (
-        <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-            <AiIcon size={14} working className="text-primary" />
-          </div>
-          <div className="flex-1 rounded-2xl rounded-tl-sm border-l-4 border-primary bg-primary/5 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <span className="flex gap-1 shrink-0">
-                <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
-                <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
-                <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
-              </span>
-              <span className="text-sm font-medium text-foreground">Berechne Ergebnis…</span>
-            </div>
-            {workingQuestion && (
-              <p className="text-xs text-muted-foreground mt-1.5 truncate max-w-[360px]">
-                „{workingQuestion}"
-              </p>
-            )}
-          </div>
+  const stickyCalculatorPanel = lastWidgetSpec ? (
+    <div className="shrink-0 border-t border-border bg-background">
+      <button
+        type="button"
+        onClick={() => setWidgetPanelCollapsed((c) => !c)}
+        className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted/50 transition-colors"
+        aria-expanded={!widgetPanelCollapsed}
+      >
+        <div className="flex items-center gap-1.5">
+          <Calculator className="w-3 h-3 text-primary shrink-0" />
+          <span className="text-xs font-semibold text-muted-foreground">
+            {lastWidgetSpec.type === "heat_abatement" ? "🌡️ Hitzestress-Rechner" : "🐄 Frischmelker-ROI-Rechner"}
+          </span>
         </div>
-        )
-        }
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${widgetPanelCollapsed ? "-rotate-90" : ""}`}
+        />
+      </button>
+      {!widgetPanelCollapsed && (
+        <div className="px-4 pb-4 max-h-[55vh] overflow-y-auto">
+          {lastWidgetSpec.type === "heat_abatement" && (
+            <HeatAbatementWidget prefill={lastWidgetSpec.prefill ?? {}} />
+          )}
+          {lastWidgetSpec.type === "fresh_cow" && (
+            <FreshCowWidget prefill={lastWidgetSpec.prefill ?? {}} />
+          )}
         </div>
       )}
+    </div>
+  ) : null;
 
-      <div className="h-2" />
+  return (
+    <div className="h-full flex flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {resultPairs.map((pair, idx) => (
+          <ResultCard
+            key={pair.msg.id}
+            questionTitle={pair.questionTitle}
+            msg={pair.msg}
+            analysisId={analysis.id}
+            cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
+          />
+        ))}
+
+        {isWorking && (
+          <div ref={streamingCardRef}>
+          {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
+            <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
+          ) : (
+          <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+              <AiIcon size={14} working className="text-primary" />
+            </div>
+            <div className="flex-1 rounded-2xl rounded-tl-sm border-l-4 border-primary bg-primary/5 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="flex gap-1 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
+                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
+                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
+                </span>
+                <span className="text-sm font-medium text-foreground">Berechne Ergebnis…</span>
+              </div>
+              {workingQuestion && (
+                <p className="text-xs text-muted-foreground mt-1.5 truncate max-w-[360px]">
+                  „{workingQuestion}"
+                </p>
+              )}
+            </div>
+          </div>
+          )
+          }
+          </div>
+        )}
+
+        <div className="h-2" />
+      </div>
+      {stickyCalculatorPanel}
     </div>
   );
 }
