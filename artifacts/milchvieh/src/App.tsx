@@ -137,6 +137,8 @@ import { LandingPage } from "@/pages/LandingPage";
 import { CookieBanner } from "@/components/CookieBanner";
 import { UpgradePage } from "@/pages/app/upgrade";
 import { TeamAcceptPage } from "@/pages/app/team-accept";
+import { NachrichtenPage } from "@/pages/app/nachrichten";
+import { NewsEditorPage } from "@/pages/operator/news-editor";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -305,6 +307,8 @@ function AppPortal() {
         <Route path="/app/reports" component={ReportsPage} />
         <Route path="/app/rules" component={RulesPage} />
         <Route path="/app/settings" component={SettingsPage} />
+        <Route path="/app/nachrichten" component={NachrichtenPage} />
+        <Route path="/app/nachrichten-editor" component={NewsEditorPage} />
         <Route path="/app/upgrade" component={UpgradePage} />
         <Route path="/app">
           {effectiveView === 'operator'

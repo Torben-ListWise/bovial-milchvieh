@@ -5,6 +5,7 @@ import {
   uuid,
   date,
   real,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 export const datasetsTable = pgTable("datasets", {
@@ -24,6 +25,15 @@ export const datasetsTable = pgTable("datasets", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  insightsSummary: jsonb("insights_summary").$type<{
+    text: string;
+    reportCount: number;
+    basedOnReportIds: string[];
+    generatedAt: string;
+  }>(),
+  insightsSummaryUpdatedAt: timestamp("insights_summary_updated_at", {
+    withTimezone: true,
+  }),
 });
 
 export type Dataset = typeof datasetsTable.$inferSelect;

@@ -22,6 +22,7 @@ import { requireAuth } from "../lib/auth";
 import { computeDashboard } from "../lib/compute";
 import { runAgent } from "../lib/agent";
 import { logger } from "../lib/logger";
+import { generateInsightsSummary } from "../lib/insightsSummary";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
@@ -291,6 +292,10 @@ Antworte mit genau diesem JSON (null wenn Wert nicht im Dokument enthalten):
       datasetRef: datasetId.slice(0, 8),
     });
 
+    generateInsightsSummary(datasetId).catch((err) =>
+      logger.warn({ err, datasetId }, "InsightsSummary-Generierung fehlgeschlagen — wird übersprungen"),
+    );
+
     res.status(201).json(serializeReport(created));
   },
 );
@@ -399,6 +404,23 @@ router.get(
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(html);
     logger.info({ reportId }, "Bericht-PDF-Export (HTML) ausgeliefert");
+  },
+);
+
+router.get(
+  "/datasets/:datasetId/insights-summary",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const datasetId = req.params.datasetId as string;
+    if (!(await ownDataset(datasetId, req.userId!))) {
+      res.status(404).json({ error: "Nicht gefunden" });
+      return;
+    }
+    const [row] = await db
+      .select({ insightsSummary: datasetsTable.insightsSummary })
+      .from(datasetsTable)
+      .where(eq(datasetsTable.id, datasetId));
+    res.json(row?.insightsSummary ?? null);
   },
 );
 

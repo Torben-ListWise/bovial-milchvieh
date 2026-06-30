@@ -547,6 +547,23 @@ export async function setupAnalystSandbox(): Promise<void> {
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_object_path TEXT"
   );
 
+  // Migration: news_editions + dataset insights_summary columns
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_editions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      teaser TEXT,
+      body_markdown TEXT,
+      topic_badges JSONB,
+      status TEXT NOT NULL DEFAULT 'draft',
+      published_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS news_editions_status_idx ON news_editions (status)`);
+  await pool.query(`ALTER TABLE datasets ADD COLUMN IF NOT EXISTS insights_summary JSONB`);
+  await pool.query(`ALTER TABLE datasets ADD COLUMN IF NOT EXISTS insights_summary_updated_at TIMESTAMPTZ`);
+
   // 5 + 6. RLS and dataset-isolation policies — PRODUCTION ONLY.
   //
   // The Replit deployment system diffs the Development DB directly against

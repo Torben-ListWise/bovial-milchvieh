@@ -16,3 +16,4 @@ export * from "./farmNotes";
 export * from "./events";
 export * from "./betaToolLogs";
 export * from "./messageFeedback";
+export * from "./news";

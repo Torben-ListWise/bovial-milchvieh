@@ -1,0 +1,45 @@
+WÖCHENTLICHER NACHRICHTEN-BATCH MIT THEMENROTATION UND FREIGABE
+
+Über einen Replit Scheduled Deployment, getrennt vom Hauptserver, einmal wöchentlich (Vorschlag: Sonntagnacht, anpassbar).
+
+1. THEMENROTATION UND QUELLEN
+Feste, im Operator-Bereich pflegbare Liste an Oberthemen mit zugeordneten Quell-URLs anlegen:
+- Eutergesundheit
+- Fruchtbarkeit
+- Fütterung
+- Klauengesundheit: https://thedairylandinitiative.vetmed.wisc.edu/lifestep-lameness/locomotion-scoring/, https://dairy.extension.wisc.edu/article-topic/animal-welfare-herd-health/
+- Hitzestress: https://dairy.extension.wisc.edu/heat-stress/
+- Technik/Digitalisierung: https://dairy.extension.wisc.edu/article-topic/emerging-technologies-and-facilities/
+Rotation fortlaufend zyklisch, mit der Möglichkeit, ein Thema saisonal manuell vorzuziehen.
+
+2. WÖCHENTLICHER JOB: 7 ENTWÜRFE AUF EINMAL
+Pro Lauf werden 7 Ausgaben erzeugt, eine pro Tag der kommenden Woche, jeweils mit fortlaufendem Thema aus der Rotation und festem Zieldatum (Tag 1 bis Tag 7). Pro Ausgabe:
+a) Stoffgrundlage: bestehende Wissensbibliothek zum Thema plus die zugeordneten Quell-URLs, ergänzt um eine leichte Web-Suche nach aktuellem Stoff zum Thema. Kein Überspringen bei fehlendem "neuem" Inhalt nötig, da Ausgaben evergreen-artige Lerninhalte sind, keine reinen Eilmeldungen.
+b) App-Version: Anthropic-API-Aufruf zur Erstellung einer eigenständig formulierten, deutschen Ausgabe mit ca. 2 Minuten Lesezeit (2-3 kurze Absätze plus eine abschließende kompakte Handlungsempfehlung), strikt nach Copyright-Vorgaben: kein wörtliches Zitat über 15 Wörter, maximal ein Zitat pro Quelle, eigenständige Formulierung statt Strukturübernahme der Originalartikel.
+c) Social-Media-Version: separat generierte, kürzere Variante (3-4 Sätze), bewusst eigenständiger formuliert als die App-Version, Quellenname nur als reine Textnennung ohne Link.
+d) Quellenangabe: Name und URL aller verwendeten Quellen separat gespeichert (für Anzeige in der App).
+e) Call-to-Action-Vorschlag: pro Ausgabe schlägt der Agent eine passende interne Verknüpfung vor, entweder als Navigationsziel zu einer bestehenden internen Route (z. B. Klauengesundheit zu den gefilterten Lahmheits-Warnungen) oder, falls keine passende Route existiert (z. B. Fütterung), als vorausgefüllte Chat-Frage. Dieser Vorschlag ist nur ein Vorschlag, kein automatisch live geschalteter Link.
+
+3. SPEICHERUNG
+Neue Tabelle newsletter_editions: scheduledDate, topic, title, appBody, socialBody, sources (Liste aus Name+URL), ctaType (route oder chat_prompt), ctaTarget (Routenpfad oder Prompttext), status (draft / approved / rejected). Alle 7 Ausgaben eines Laufs zunächst als draft, mit dem jeweiligen scheduledDate der kommenden Woche.
+
+4. OPERATOR-FREIGABE-ANSICHT (WÖCHENTLICHES BATCH-REVIEW)
+Neue Ansicht im Operator-Bereich, die alle Entwürfe einer Woche gemeinsam anzeigt, sortiert nach scheduledDate. Pro Entwurf editierbar: Titel, App-Text, Social-Text, CTA-Typ und CTA-Ziel, sowie die Möglichkeit, die Reihenfolge/Zuordnung der Themen auf die sieben Tage zu vertauschen, bevor freigegeben wird. Pro Entwurf einzeln freigeben (status auf approved) oder verwerfen (status auf rejected), keine Sammel-Freigabe ohne Einzelprüfung.
+
+5. ANZEIGE IM NACHRICHTEN-BEREICH (KUNDENBEREICH)
+Zeigt automatisch die neueste Ausgabe mit status approved, deren scheduledDate kleiner oder gleich dem aktuellen Datum ist, kein separater täglicher Veröffentlichungs-Job nötig, reine Datumsfilterung beim Anzeigen. Darstellung pro Ausgabe:
+- Themen-Badge oben links mit Farbcodierung pro Thema (jedes Oberthema bekommt eine feste, unterscheidbare Akzentfarbe)
+- Lesezeit-Hinweis oben rechts ("2 Min. Lesezeit")
+- Titel und Datum
+- Fließtext in 2-3 Absätzen plus abgesetzter Handlungsempfehlung als letzter Absatz
+- Abgetrennter Quellen-Bereich mit Institutionsname als Link (nicht die rohe URL)
+- Call-to-Action-Button am Ende der Karte: bei ctaType route führt er zur internen Zielseite, bei ctaType chat_prompt öffnet er den Chat mit der vorausgefüllten Frage
+Darunter eine kompakte Liste älterer freigegebener Ausgaben (Themen-Badge, Kurztitel, Datum je Zeile), nicht nur die aktuellste sichtbar.
+
+6. TESTS VOR ABSCHLUSS
+a) Der wöchentliche Job lässt sich manuell testweise auslösen und erzeugt 7 Entwürfe mit fortlaufenden Zieldaten, vollständig befüllten App- und Social-Texten, Quellen und CTA-Vorschlag.
+b) Im Operator-Bereich sind alle 7 Entwürfe der Woche sichtbar, einzeln bearbeitbar und einzeln freigebbar.
+c) Nach Freigabe eines Entwurfs mit erreichtem Zieldatum erscheint genau diese Ausgabe im Nachrichten-Bereich des Kundenbereichs, mit korrektem Themen-Badge, Lesezeit-Hinweis, Quellenlink und funktionierendem CTA-Button.
+d) Ein nicht freigegebener oder noch in der Zukunft liegender Entwurf erscheint nicht im Kundenbereich.
+e) Ältere freigegebene Ausgaben erscheinen korrekt chronologisch in der Liste darunter.
+Bitte alle fünf Testergebnisse explizit zurückmelden.

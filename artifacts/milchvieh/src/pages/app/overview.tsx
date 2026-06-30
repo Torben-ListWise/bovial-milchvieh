@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@clerk/react";
 import {
   useGetDatasetOverview,
   getGetDatasetOverviewQueryKey,
@@ -26,8 +27,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, X, ArrowRight, ChevronRight, Loader2 } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 import { DynamicChart } from "@/components/DynamicChart";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
@@ -68,6 +71,147 @@ function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; dat
       >
         <X className="w-4 h-4" />
       </button>
+    </div>
+  );
+}
+
+interface NewsPreview {
+  id: string;
+  title: string;
+  teaser: string | null;
+  topicBadges: string[] | null;
+  publishedAt: string | null;
+}
+
+function NewsPreviewCard() {
+  const { getToken } = useAuth();
+  const [edition, setEdition] = useState<NewsPreview | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const token = await getToken();
+        const resp = await fetch(`${API_BASE}/api/news/latest`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) { setEdition(null); return; }
+        const data = await resp.json() as NewsPreview | null;
+        if (!cancelled) setEdition(data);
+      } catch {
+        if (!cancelled) setEdition(null);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  if (edition === undefined || edition === null) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Newspaper className="w-4 h-4 text-primary shrink-0" />
+          {edition.topicBadges?.map((badge) => (
+            <span
+              key={badge}
+              className="bg-primary/10 text-primary text-xs font-medium rounded-full px-2.5 py-0.5"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+        {edition.publishedAt && (
+          <span className="text-xs text-muted-foreground shrink-0">
+            {new Date(edition.publishedAt).toLocaleDateString("de-DE", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })}
+          </span>
+        )}
+      </div>
+      <p className="font-semibold text-base text-foreground leading-snug">{edition.title}</p>
+      {edition.teaser && (
+        <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">{edition.teaser}</p>
+      )}
+      <Link href="/app/nachrichten">
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline cursor-pointer">
+          Weiterlesen <ArrowRight className="w-3.5 h-3.5" />
+        </span>
+      </Link>
+    </div>
+  );
+}
+
+interface InsightsSummaryData {
+  text: string;
+  reportCount: number;
+  generatedAt: string;
+}
+
+function InsightsSummaryCard({ datasetId }: { datasetId: string }) {
+  const { getToken } = useAuth();
+  const [summary, setSummary] = useState<InsightsSummaryData | null | undefined>(undefined);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const token = await getToken();
+        const resp = await fetch(`${API_BASE}/api/datasets/${datasetId}/insights-summary`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) { setSummary(null); return; }
+        const data = await resp.json() as InsightsSummaryData | null;
+        if (!cancelled) setSummary(data);
+      } catch {
+        if (!cancelled) setSummary(null);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [datasetId, getToken]);
+
+  if (summary === undefined) {
+    return <Skeleton className="h-24 rounded-xl" />;
+  }
+
+  if (!summary || summary.reportCount < 2) return null;
+
+  const formattedDate = new Date(summary.generatedAt).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <button
+        className="w-full flex items-center gap-2 text-left"
+        onClick={() => setCollapsed((c) => !c)}
+      >
+        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <AiIcon size={14} className="text-primary" />
+        </div>
+        <span className="flex-1 text-sm font-semibold text-foreground">
+          Erkenntnisse aus deinen letzten Auswertungen
+        </span>
+        {collapsed
+          ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+          : <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />}
+      </button>
+
+      {!collapsed && (
+        <>
+          <p className="text-sm text-foreground leading-relaxed">{summary.text}</p>
+          <p className="text-xs text-muted-foreground">
+            Basierend auf {summary.reportCount} {summary.reportCount === 1 ? "Auswertung" : "Auswertungen"} · zuletzt berechnet {formattedDate}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -249,6 +393,9 @@ export function DatasetOverview() {
       </div>
 
       <SchnellauswertungenSection datasetId={datasetId} />
+
+      <NewsPreviewCard />
+      <InsightsSummaryCard datasetId={datasetId} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {overview.charts.map((chart) => (
