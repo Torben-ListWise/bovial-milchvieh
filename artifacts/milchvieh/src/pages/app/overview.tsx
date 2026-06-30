@@ -106,9 +106,13 @@ function NewsPreviewCard() {
     async function load() {
       try {
         const token = await getToken();
+        const authHeaders: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
         // Try new newsletter endpoint first
         const resp = await fetch(`${API_BASE}/api/news/newsletter/current`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
+          credentials: "include",
         });
         if (resp.ok) {
           const data = await resp.json() as NewsPreview | null;
@@ -117,7 +121,8 @@ function NewsPreviewCard() {
         }
         // Fall back to legacy endpoint
         const legacyResp = await fetch(`${API_BASE}/api/news/latest`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
+          credentials: "include",
         });
         if (!legacyResp.ok) { if (!cancelled) setEdition(null); return; }
         const data = await legacyResp.json() as NewsPreview | null;
