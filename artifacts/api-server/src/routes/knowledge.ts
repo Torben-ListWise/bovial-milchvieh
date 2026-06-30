@@ -293,6 +293,30 @@ router.post(
   },
 );
 
+router.post(
+  "/knowledge/:id/mark-upload-error",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const message =
+      typeof (req.body as any)?.message === "string"
+        ? (req.body as any).message
+        : "Upload fehlgeschlagen";
+    const [updated] = await db
+      .update(knowledgeDocumentsTable)
+      .set({ status: "error", errorMessage: message })
+      .where(eq(knowledgeDocumentsTable.id, id))
+      .returning({ id: knowledgeDocumentsTable.id });
+    if (!updated) {
+      res.status(404).json({ error: "Dokument nicht gefunden" });
+      return;
+    }
+    logger.warn({ docId: id, message }, "Knowledge-Dokument Upload-Fehler markiert");
+    res.json({ ok: true });
+  },
+);
+
 // PATCH /knowledge/:id — update category (and optionally title) for a single doc
 router.patch(
   "/knowledge/:id",

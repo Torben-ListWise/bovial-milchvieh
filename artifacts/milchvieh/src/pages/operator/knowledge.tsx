@@ -689,7 +689,21 @@ export function KnowledgePage() {
         body: item.file,
         headers: { "Content-Type": item.file.type || "application/octet-stream" },
       });
-      if (!putRes.ok) throw new Error("Datei-Upload fehlgeschlagen");
+      if (!putRes.ok) {
+        const putErrMsg = `Datei-Upload fehlgeschlagen (HTTP ${putRes.status})`;
+        void fetch(`${API_BASE}/api/knowledge/${docId}/mark-upload-error`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...authHeader },
+          body: JSON.stringify({ message: putErrMsg }),
+        }).catch(() => undefined);
+        toast({
+          title: "Upload fehlgeschlagen",
+          description: `Die Datei "${item.file.name}" konnte nicht hochgeladen werden. Bitte erneut versuchen.`,
+          variant: "destructive",
+        });
+        throw new Error(putErrMsg);
+      }
 
       updateItem({ status: "ingesting" });
       await fetch(`${API_BASE}/api/knowledge/${docId}/ingest`, {
@@ -1235,7 +1249,9 @@ export function KnowledgePage() {
                       </Badge>
                     )}
                     <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />
-                    {doc.status === "error" && (
+                    {(doc.status === "error" ||
+                      (doc.status === "pending" &&
+                        Date.now() - new Date(doc.createdAt).getTime() > 5 * 60 * 1000)) && (
                       <Button
                         variant="ghost"
                         size="icon"

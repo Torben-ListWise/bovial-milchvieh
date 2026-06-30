@@ -1261,7 +1261,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "search_dairycomp_manual": {
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
-        const SIMILARITY_THRESHOLD = 0.50;
+        const SIMILARITY_THRESHOLD = 0.35;
+        const FALLBACK_THRESHOLD = 0.20;
         try {
           const queryVec = await embedQuery(query);
           const vecStr = `[${queryVec.join(",")}]`;
@@ -1278,7 +1279,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             `,
           );
           const allRows = rows.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
-          const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
+          let relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
+          if (relevantRows.length < 2) {
+            const fallbackRows = allRows.filter((r) => Number(r.similarity) >= FALLBACK_THRESHOLD);
+            if (fallbackRows.length > relevantRows.length) {
+              relevantRows = fallbackRows;
+            }
+          }
           if (relevantRows.length === 0) {
             return {
               results: [],

@@ -739,6 +739,8 @@ export async function ingestKnowledgeDoc(docId: string): Promise<void> {
     .where(eq(knowledgeDocumentsTable.id, docId));
   if (!doc) return;
 
+  const startedAt = Date.now();
+
   try {
     await db
       .update(knowledgeDocumentsTable)
@@ -793,8 +795,13 @@ export async function ingestKnowledgeDoc(docId: string): Promise<void> {
       .update(knowledgeDocumentsTable)
       .set({ status: "ready", chunkCount: chunks.length, embeddingModel: LOCAL_MODEL_NAME })
       .where(eq(knowledgeDocumentsTable.id, docId));
+
+    logger.info(
+      { docId, chunkCount: chunks.length, durationMs: Date.now() - startedAt, filename: doc.filename },
+      "Knowledge-Ingestion erfolgreich abgeschlossen",
+    );
   } catch (err) {
-    logger.error({ err, docId }, "Knowledge-Ingestion fehlgeschlagen");
+    logger.error({ err, docId, durationMs: Date.now() - startedAt }, "Knowledge-Ingestion fehlgeschlagen");
     await db
       .update(knowledgeDocumentsTable)
       .set({
