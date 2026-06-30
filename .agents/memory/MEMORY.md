@@ -17,3 +17,5 @@
 - [Drizzle HNSW index operator class](drizzle-hnsw-index.md) — use .using("hnsw", sql`col vector_cosine_ops`) not .using().on(); operator class goes in using() call
 - [Milchvieh server startup order](milchvieh-startup-order.md) — server must listen() before warmupEmbeddingModel(); .hf-cache is gitignored so model downloads at cold start in prod
 - [Milchvieh DevAutoLogin lockout](milchvieh-dev-autologin.md) — never reset attemptedRef in catch block; doing so causes infinite retry loop → Clerk account lockout after 100 attempts
+- [Milchvieh objectStorage lazy require](milchvieh-objectstorage-require.md) — objectStorage.ts uses lazy require() for adapters; esbuild bundles it correctly but createRequire() breaks the bundle; never change to ESM imports
+- [Milchvieh knowledge ingest startup](milchvieh-knowledge-ingest-startup.md) — index.ts auto-ingests status='pending' knowledge docs at server startup; reset to 'pending' + restart to retry stuck 'processing' docs; CRON_SECRET not set in dev

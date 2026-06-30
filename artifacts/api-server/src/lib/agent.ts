@@ -683,6 +683,47 @@ Jede inhaltliche Aussage, die nicht aus Betriebsdaten (get_kpis, get_timeseries,
 - *[Allgemeinwissen]* — weder Bibliothek noch Web lieferten relevante Treffer; Antwort stammt aus Modell-Trainingswissen
 Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Absatzes, z.B.: \`*[Bibliothek]*\`
 
+DAIRYCOMP 305 — BEFEHLSSYNTAX (eingebettetes Wissen, immer verfügbar):
+DairyComp 305 verwendet eine eigene Befehlssprache. Wenn der Nutzer einen DC-Befehl zeigt, erkläre ihn direkt anhand dieser Grammatik — ohne Werkzeugaufruf.
+
+Grundstruktur: BEFEHL FELDER FOR BEDINGUNGEN BY SORTIERUNG \MODIFIKATOR
+
+BEFEHLSTYPEN:
+- LIST / SHOW — Tierliste mit gewählten Feldern anzeigen
+- SUM — statistische Zusammenfassung / Aggregation (z.B. nach Gruppe, Monat, Laktation)
+- EVENTS — Ereignishistorie (Besamungen, Behandlungen, Abkalbungen…)
+- ENTER — manuelle Dateneingabe
+- FILEOUT — Export in Datei
+- EXEC — externes Programm ausführen
+- SETUP\\5RC:DATEI — Ausgabedatei umleiten
+- EC=N EDAY [REM] [CAR] — Ereignis-Schnelleingabe (EC=Ereigniscode, EDAY=Datum heute, REM=Bemerkung)
+
+HÄUFIGE FELDER:
+ID, EID, PEN (Gruppe), DIM (Laktationstage), LACT (Laktationsnr.), DCC/SCC (Zellzahl), WMLK1/DMLK1 (Wochenmilch/Tagesmilch), RPRO (Reproduktionsstatus-Code), RC (Status-Code), 5STEL (5-stellige Tiernummer), REG1 (Herdbuchnummer), DUE (Abkalbe-Termin), SBRED/LSIR (letzter Besamungsstier), A2A2 (Beta-Kasein-Status), DSLH (Tage seit letztem Brunst), TBRD (Trächtigkeitstage), BCS/BCSV (BCS-Wert), AGED (Alter in Tagen), GENDE (Geschlecht), RASSE (Rasse), AREA (Melkbereich/Selektionstor), CUT (Abmelkung), PPEN (vorherige Gruppe), STALL (Stallnummer)
+
+BEDINGUNGEN (nach FOR):
+- FELD=Wert — gleich; FELD<>Wert — ungleich
+- FELD>Wert, FELD<Wert — Vergleich
+- FELD=N-M — Bereich (z.B. PEN=1-6, LACT=2-4)
+- (COND1)(COND2) — ODER-Verknüpfung in Klammern
+- COND1 COND2 — UND-Verknüpfung (Leerzeichen)
+- Vordefinierte Filter: INMILK (melkende Kühe), FRESH (Frischmelker), PGCON (PG-Protokoll), BSYNCON (Besamungsprotokoll), VLCON (Tierarztliste)
+
+SORTIERUNG: BY FELD (aufsteigend), DOWNBY FELD (absteigend)
+
+MODIFIKATOREN (nach \):
+\\E — Bearbeitungsmodus, \\B — Besamungseingabe, \\G — Grafik, \\P — Drucken, \\V — ausführliche Ansicht, \\H — Historie, \\C — nur Anzahl, \\U — aufsteigend, \\2U — 2-spaltig aufsteigend, \\L50 — maximal 50 Zeilen, \\EAY — Erstkalbinnen-Auswertung, \\UE — alle Tiere in Besamungsgruppe, \\VH2U — 2-spaltig Behandlungshistorie, \\2SI — 2-spaltig Besamungsinfo, \\2A — 2-spaltig alle, \\2S40I… — Events-Format mit Spaltendefinition, \\9C — CSV-Export, \\9CA — CSV-Export append
+
+BEFEHLSVERKETTUNG:
+- ! trennt mehrere Befehle: CMD1!CMD2!CMD3 — werden nacheinander ausgeführt
+- %VARIABLENNAME — Nutzer-Eingabeaufforderung (z.B. %EINGABE_DATUM)
+- FORR statt FOR — wiederholt für alle Tiere ohne Bestätigung
+
+EREIGNISCODES (EC=N): 5=Besamung, 10=Bulle, 11=Trockenstellen, 12=Abort, 15=Abgang/Tod, 16=Tierarzt-Check, 17=Impfung, 21=Ödem, 22=Kultur/Probe, 32=DA (Labmagenverschiebung), 33=Durchfall, 50=Injektion/Spritzen, 58=Close-up-Einstallung
+
+BETRIEBSSPEZIFISCHE ABKÜRZUNGEN (ALTER3-Makros):
+Der Betrieb hat über 200 eigene Kürzel definiert (z.B. CLOSEUP, BREDSUM, BRDCLG, COWSUM, DRCON). Diese sind im Wissen indexiert. Wenn der Nutzer ein Kürzel nennt oder fragt was ein Befehl macht → rufe search_knowledge mit dem Kürzel auf.
+
 DAIRYCOMP-HANDBUCH — SOFWARE-BEDIENUNGSFRAGEN:
 Wenn der Nutzer eine Frage zur Bedienung, Konfiguration, Einstellungen oder Funktionen der DairyComp-Software stellt (Erkennungsmerkmale: Begriffe wie „DairyComp", „DC305", „wie stelle ich ein", „wie werte ich aus", „welche Codes", „Protokoll", „Liste", „Report in DairyComp"):
 1. Überspringe get_schema, get_kpis, get_kpi_timeseries, get_event_stats und andere Betriebsdaten-Werkzeuge vollständig.

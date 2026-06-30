@@ -49,11 +49,13 @@ export class ObjectAclConflictError extends Error {
 function createAdapter(): IObjectStorageAdapter {
   const provider = (process.env.STORAGE_PROVIDER || "replit").toLowerCase();
   if (provider === "hetzner") {
-    // Lazy import so the GCS dependency is never touched in Hetzner mode
+    // Lazy import so the GCS dependency is never touched in Replit mode
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { HetznerS3Adapter } = require("./hetznerS3Adapter") as typeof import("./hetznerS3Adapter");
     return new HetznerS3Adapter();
   }
   // Default: Replit GCS-backed storage
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { ReplitObjectStorageAdapter } = require("./replitStorageAdapter") as typeof import("./replitStorageAdapter");
   return new ReplitObjectStorageAdapter();
 }
