@@ -2514,9 +2514,9 @@ export function AnalysesPage() {
   }
 
   async function handleImageSelect(file: File) {
-    const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
+    const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
     if (file.size > MAX_IMAGE_SIZE) {
-      toast({ variant: "destructive", title: "Bild zu groß", description: "Maximale Bildgröße: 4 MB (JPEG, PNG, WEBP)" });
+      toast({ variant: "destructive", title: "Bild zu groß", description: "Maximale Bildgröße: 20 MB (JPEG, PNG, WEBP)" });
       return;
     }
     const allowed = ["image/jpeg", "image/png", "image/webp"];
@@ -3123,7 +3123,7 @@ export function AnalysesPage() {
           type="button"
           onClick={() => imageInputRef.current?.click()}
           disabled={isPending || chatQuotaExceeded || !!pendingImage}
-          title="Bild anhängen (JPEG, PNG, WEBP, max. 4 MB)"
+          title="Bild anhängen (JPEG, PNG, WEBP, max. 20 MB)"
           className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ImagePlus className="w-4 h-4" />

@@ -492,7 +492,7 @@ router.post(
 
 // ── Chat-Image: Upload-URL anfordern ──────────────────────────────────────────
 // Der Browser lädt das Bild direkt in Object-Storage hoch; nur der objectPath
-// wird im Nachrichtentext mitgeschickt. Max 4 MB wird im Frontend geprüft.
+// wird im Nachrichtentext mitgeschickt. Max 20 MB wird im Frontend geprüft.
 router.post(
   "/chat-images/upload-url",
   requireAuth,
