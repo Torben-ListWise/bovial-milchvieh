@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@clerk/react";
 import {
   useGetDatasetOverview,
@@ -33,10 +33,9 @@ import { AiIcon } from "@/components/AiIcon";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 import { DynamicChart } from "@/components/DynamicChart";
-import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { PageLayout } from "@/components/PageLayout";
-import { useListFiles, getListFilesQueryKey } from "@workspace/api-client-react";
+import { useListFiles, getListFilesQueryKey, useListDatasets, getListDatasetsQueryKey } from "@workspace/api-client-react";
 
 function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; datasetId: string }) {
   const [dismissed, setDismissed] = useState<boolean>(() => {
@@ -97,7 +96,7 @@ const TOPIC_COLORS_OVERVIEW: Record<string, string> = {
   cyan:   "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
 };
 
-function NewsPreviewCard() {
+function NewsPreviewCard({ datasetId }: { datasetId?: string | null }) {
   const { getToken } = useAuth();
   const [edition, setEdition] = useState<NewsPreview | null | undefined>(undefined);
 
@@ -194,7 +193,7 @@ function NewsPreviewCard() {
       {teaser && (
         <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">{teaser}</p>
       )}
-      <Link href="/app/nachrichten">
+      <Link href={datasetId ? `/app/nachrichten?datasetId=${datasetId}` : "/app/nachrichten"}>
         <span className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline cursor-pointer">
           Weiterlesen <ArrowRight className="w-3.5 h-3.5" />
         </span>
@@ -351,8 +350,51 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
   );
 }
 
+function NoDatasetOverview() {
+  return (
+    <PageLayout size="wide">
+      <h1 className="text-3xl font-bold text-foreground">Übersicht</h1>
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-4 text-center">
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <AiIcon size={22} className="text-primary" />
+        </div>
+        <div className="space-y-1">
+          <p className="font-semibold text-lg text-foreground">Noch keine Daten hochgeladen</p>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            Lade deine erste Datei hoch, um Auswertungen, KPIs und Benchmarks zu sehen.
+          </p>
+        </div>
+        <Link href="/app/datasets">
+          <span className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors cursor-pointer">
+            Daten hochladen <ArrowRight className="w-4 h-4" />
+          </span>
+        </Link>
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-foreground">Aktuelle Nachrichten</h2>
+        <NewsPreviewCard datasetId={null} />
+      </div>
+    </PageLayout>
+  );
+}
+
 export function DatasetOverview() {
-  const { datasetId, isLoading: datasetLoading } = useRequireDataset();
+  const [location, setLocation] = useLocation();
+  const search = useSearch();
+  const datasetId = new URLSearchParams(search).get("datasetId") || null;
+
+  const { data: datasets, isLoading: datasetsLoading } = useListDatasets({
+    query: { enabled: !datasetId, queryKey: getListDatasetsQueryKey() },
+  });
+
+  useEffect(() => {
+    if (datasetId || datasetsLoading) return;
+    if (datasets && datasets.length > 0) {
+      const path = location.split("?")[0];
+      setLocation(`${path}?datasetId=${datasets[0].id}`);
+    }
+  }, [datasetId, datasets, datasetsLoading, location, setLocation]);
+
   const { data: currentUser } = useGetCurrentUser();
   const { data: files } = useListFiles(datasetId!, {
     query: { enabled: !!datasetId, queryKey: getListFilesQueryKey(datasetId!) },
@@ -372,7 +414,13 @@ export function DatasetOverview() {
 
   const autoAnalysis = analyses?.find((a) => a.source === "auto" && a.templateRef === "auto_erstanalyse");
 
-  if (datasetLoading || !datasetId) {
+  if (!datasetId) {
+    if (datasetsLoading) {
+      return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
+    }
+    if (!datasets || datasets.length === 0) {
+      return <NoDatasetOverview />;
+    }
     return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
   }
 
@@ -452,7 +500,7 @@ export function DatasetOverview() {
 
       <SchnellauswertungenSection datasetId={datasetId} />
 
-      <NewsPreviewCard />
+      <NewsPreviewCard datasetId={datasetId} />
       <InsightsSummaryCard datasetId={datasetId} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
