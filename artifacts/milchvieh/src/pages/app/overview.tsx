@@ -10,6 +10,8 @@ import {
   getListTemplatesQueryKey,
   useRunTemplate,
   useGetCurrentUser,
+  useListReports,
+  getListReportsQueryKey,
   type AnalysisTemplate,
 } from "@workspace/api-client-react";
 
@@ -27,7 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -412,6 +414,11 @@ export function DatasetOverview() {
     },
   });
 
+  const { data: reports } = useListReports(
+    datasetId ?? "",
+    { query: { enabled: !!datasetId, queryKey: getListReportsQueryKey(datasetId ?? "") } }
+  );
+
   const autoAnalysis = analyses?.find((a) => a.source === "auto" && a.templateRef === "auto_erstanalyse");
 
   if (!datasetId) {
@@ -450,7 +457,7 @@ export function DatasetOverview() {
       )}
 
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-foreground">Übersicht</h1>
+        <h1 className="text-3xl font-bold text-foreground">Start</h1>
         {overview.warningCount > 0 && (
           <div className="flex items-center text-destructive bg-destructive/10 px-4 py-2 rounded-lg font-medium">
             <AlertTriangle className="w-5 h-5 mr-2" />
@@ -497,6 +504,51 @@ export function DatasetOverview() {
           </Card>
         ))}
       </div>
+
+      {datasetId && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Link href={`/app/upload?datasetId=${datasetId}`}>
+            <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Upload className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-foreground">Dateien &amp; Upload</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{files?.length ?? 0} hochgeladene {(files?.length ?? 0) === 1 ? "Datei" : "Dateien"}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </div>
+          </Link>
+
+          <Link href={`/app/warnings?datasetId=${datasetId}`}>
+            <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${overview.warningCount > 0 ? "bg-destructive/10" : "bg-primary/10"}`}>
+                <AlertTriangle className={`w-5 h-5 ${overview.warningCount > 0 ? "text-destructive" : "text-primary"}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-foreground">Warnungen</p>
+                <p className={`text-xs mt-0.5 ${overview.warningCount > 0 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                  {overview.warningCount} offene {overview.warningCount === 1 ? "Warnung" : "Warnungen"}
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </div>
+          </Link>
+
+          <Link href={`/app/reports?datasetId=${datasetId}`}>
+            <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-foreground">Berichte</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{reports?.length ?? 0} {(reports?.length ?? 0) === 1 ? "Bericht" : "Berichte"}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </div>
+          </Link>
+        </div>
+      )}
 
       <SchnellauswertungenSection datasetId={datasetId} />
 
