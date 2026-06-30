@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageLayout } from "@/components/PageLayout";
-import { Newspaper, ExternalLink, ArrowRight, Clock } from "lucide-react";
+import { Newspaper, ExternalLink, ArrowRight, Clock, ChevronLeft } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -124,9 +124,9 @@ function CtaButton({
   );
 }
 
-// ── Current edition card ──────────────────────────────────────────────────────
+// ── Edition card (shared by current + archive detail) ─────────────────────────
 
-function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition; datasetId?: string }) {
+function EditionCard({ edition, datasetId }: { edition: NewsletterEdition; datasetId?: string }) {
   const readTime = estimateReadTime(edition.appBody);
 
   return (
@@ -198,9 +198,81 @@ function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition
   );
 }
 
+// ── Archive detail view ───────────────────────────────────────────────────────
+
+function ArchiveDetailView({
+  editionId,
+  datasetId,
+  onBack,
+}: {
+  editionId: string;
+  datasetId?: string;
+  onBack: () => void;
+}) {
+  const { getToken } = useAuth();
+  const [edition, setEdition] = useState<NewsletterEdition | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const token = await getToken();
+        const resp = await fetch(`${API_BASE}/api/news/newsletter/${editionId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!cancelled) {
+          setEdition(resp.ok ? (await resp.json() as NewsletterEdition) : null);
+        }
+      } catch {
+        if (!cancelled) setEdition(null);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [editionId, getToken]);
+
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        Zurück zur Übersicht
+      </button>
+
+      {edition === undefined && (
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-3/4 rounded-lg" />
+          <Skeleton className="h-4 w-1/3 rounded-lg" />
+          <Skeleton className="h-56 rounded-xl" />
+        </div>
+      )}
+
+      {edition === null && (
+        <p className="text-muted-foreground text-sm py-8 text-center">
+          Ausgabe nicht gefunden.
+        </p>
+      )}
+
+      {edition && <EditionCard edition={edition} datasetId={datasetId} />}
+    </div>
+  );
+}
+
 // ── Archive list ──────────────────────────────────────────────────────────────
 
-function ArchiveList({ items, currentId }: { items: ArchiveItem[]; currentId: string | undefined }) {
+function ArchiveList({
+  items,
+  currentId,
+  onSelect,
+}: {
+  items: ArchiveItem[];
+  currentId: string | undefined;
+  onSelect: (id: string) => void;
+}) {
   const filtered = items.filter((i) => i.id !== currentId);
   if (filtered.length === 0) return null;
 
@@ -209,7 +281,11 @@ function ArchiveList({ items, currentId }: { items: ArchiveItem[]; currentId: st
       <h3 className="text-base font-semibold text-foreground">Ältere Ausgaben</h3>
       <div className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
         {filtered.map((item) => (
-          <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors group"
+          >
             <span
               className={`text-xs font-medium rounded-full px-2.5 py-0.5 shrink-0 ${topicColorClass(item.topicColor)}`}
             >
@@ -221,7 +297,10 @@ function ArchiveList({ items, currentId }: { items: ArchiveItem[]; currentId: st
             <span className="text-xs text-muted-foreground shrink-0">
               {formatDate(item.scheduledDate)}
             </span>
-          </div>
+            <span className="text-xs font-medium text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              Lesen
+            </span>
+          </button>
         ))}
       </div>
     </div>
@@ -233,7 +312,11 @@ function ArchiveList({ items, currentId }: { items: ArchiveItem[]; currentId: st
 export function NachrichtenPage() {
   const { getToken } = useAuth();
   const search = useSearch();
-  const datasetId = new URLSearchParams(search).get("datasetId") ?? undefined;
+  const [, navigate] = useLocation();
+
+  const params = new URLSearchParams(search);
+  const datasetId = params.get("datasetId") ?? undefined;
+  const editionId = params.get("edition") ?? undefined;
 
   const [current, setCurrent] = useState<NewsletterEdition | null | undefined>(undefined);
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
@@ -273,6 +356,19 @@ export function NachrichtenPage() {
     return () => { cancelled = true; };
   }, [getToken]);
 
+  function handleSelectArchive(id: string) {
+    const next = new URLSearchParams(search);
+    next.set("edition", id);
+    navigate(`/app/nachrichten?${next.toString()}`);
+  }
+
+  function handleBack() {
+    const next = new URLSearchParams(search);
+    next.delete("edition");
+    const qs = next.toString();
+    navigate(qs ? `/app/nachrichten?${qs}` : "/app/nachrichten");
+  }
+
   return (
     <PageLayout>
       <div className="max-w-2xl mx-auto space-y-6">
@@ -284,30 +380,45 @@ export function NachrichtenPage() {
           <h1 className="text-2xl font-bold text-foreground">Nachrichten</h1>
         </div>
 
-        {/* Loading */}
-        {current === undefined && (
-          <div className="space-y-3">
-            <Skeleton className="h-6 w-3/4 rounded-lg" />
-            <Skeleton className="h-4 w-1/3 rounded-lg" />
-            <Skeleton className="h-56 rounded-xl" />
-          </div>
-        )}
+        {/* Archive detail view */}
+        {editionId ? (
+          <ArchiveDetailView
+            editionId={editionId}
+            datasetId={datasetId}
+            onBack={handleBack}
+          />
+        ) : (
+          <>
+            {/* Loading */}
+            {current === undefined && (
+              <div className="space-y-3">
+                <Skeleton className="h-6 w-3/4 rounded-lg" />
+                <Skeleton className="h-4 w-1/3 rounded-lg" />
+                <Skeleton className="h-56 rounded-xl" />
+              </div>
+            )}
 
-        {/* No content */}
-        {current === null && archive.length === 0 && (
-          <p className="text-muted-foreground text-sm py-8 text-center">
-            Aktuell keine Nachrichten verfügbar.
-          </p>
-        )}
+            {/* No content */}
+            {current === null && archive.length === 0 && (
+              <p className="text-muted-foreground text-sm py-8 text-center">
+                Aktuell keine Nachrichten verfügbar.
+              </p>
+            )}
 
-        {/* Current edition */}
-        {current && (
-          <CurrentEditionCard edition={current} datasetId={datasetId} />
-        )}
+            {/* Current edition */}
+            {current && (
+              <EditionCard edition={current} datasetId={datasetId} />
+            )}
 
-        {/* Archive */}
-        {archive.length > 0 && (
-          <ArchiveList items={archive} currentId={current?.id} />
+            {/* Archive */}
+            {archive.length > 0 && (
+              <ArchiveList
+                items={archive}
+                currentId={current?.id}
+                onSelect={handleSelectArchive}
+              />
+            )}
+          </>
         )}
       </div>
     </PageLayout>

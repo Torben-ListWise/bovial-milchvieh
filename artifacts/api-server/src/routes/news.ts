@@ -92,6 +92,39 @@ router.get(
   },
 );
 
+/**
+ * GET /news/newsletter/:id
+ * Returns a single approved edition by ID.
+ * Must be registered AFTER the static /archive and /current routes to avoid
+ * the wildcard swallowing those paths.
+ * Only approved editions whose scheduledDate ≤ today are visible to customers.
+ */
+router.get(
+  "/news/newsletter/:id",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const today = todayStr();
+    const [edition] = await db
+      .select()
+      .from(newsletterEditionsTable)
+      .where(
+        and(
+          eq(newsletterEditionsTable.id, id),
+          eq(newsletterEditionsTable.status, "approved"),
+          lte(newsletterEditionsTable.scheduledDate, today),
+        ),
+      )
+      .limit(1);
+
+    if (!edition) {
+      res.status(404).json({ error: "Ausgabe nicht gefunden" });
+      return;
+    }
+    res.json(edition);
+  },
+);
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // NEWSLETTER EDITIONS — Operator routes
 // ═══════════════════════════════════════════════════════════════════════════════
