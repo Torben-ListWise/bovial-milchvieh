@@ -281,9 +281,27 @@ function ArchiveDetailView({
       )}
 
       {edition === null && (
-        <p className="text-muted-foreground text-sm py-8 text-center">
-          Ausgabe nicht gefunden.
-        </p>
+        <div className="flex flex-col items-center gap-4 py-12 text-center">
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+            <Newspaper className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-base font-semibold text-foreground">
+              Diese Ausgabe ist gerade nicht verfügbar
+            </p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Der Link könnte veraltet sein oder die Ausgabe wurde noch nicht veröffentlicht.
+              Im Archiv finden Sie alle verfügbaren Beiträge.
+            </p>
+          </div>
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Zum Archiv
+          </button>
+        </div>
       )}
 
       {edition && <EditionCard edition={edition} datasetId={datasetId} />}
