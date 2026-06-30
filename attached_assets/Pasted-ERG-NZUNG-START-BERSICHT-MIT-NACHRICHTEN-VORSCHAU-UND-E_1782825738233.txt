@@ -1,0 +1,15 @@
+ERGÄNZUNG: STARTÜBERSICHT MIT NACHRICHTEN-VORSCHAU UND ERKENNTNIS-ZUSAMMENFASSUNG
+
+Bezieht sich auf die bestehende Seite /app/overview, keine neue Seite. Zwei neue Abschnitte ergänzen, zusätzlich zu den bereits vorhandenen Schnellauswertungs-Kacheln.
+
+1. NACHRICHTEN-VORSCHAU AUF DER STARTSEITE
+Oberhalb oder neben den bestehenden Schnellauswertungs-Kacheln eine kompakte Vorschau der aktuellsten freigegebenen Nachrichten-Ausgabe einblenden (Themen-Badge, Titel, erste ein bis zwei Sätze, "Weiterlesen"-Link zur vollständigen Nachrichten-Seite). Nur die jeweils neueste Ausgabe, keine Liste mehrerer Ausgaben auf der Startseite selbst.
+
+2. ZUSAMMENFASSUNG DER LETZTEN 5 AUSWERTUNGEN
+"Auswertung" bezeichnet hier ausschließlich automatisch erzeugte Benchmarkreports (nicht einzelne Chat-Nachrichten oder Ad-hoc-Fragen). Die fünf zuletzt für den jeweiligen Betrieb erzeugten Benchmarkreports werden herangezogen, um eine kurze, eigenständig formulierte Erkenntnis-Zusammenfassung zu erzeugen: welche wiederkehrenden Auffälligkeiten, Trends oder Verbesserungen sich über diese fünf Auswertungen hinweg zeigen (z. B. "Die Zellzahl liegt seit drei aufeinanderfolgenden Auswertungen über dem Richtwert" oder "Die Pregnancy Rate hat sich in den letzten Auswertungen verbessert").
+
+Diese Zusammenfassung wird nicht bei jedem Seitenaufruf neu vom Modell generiert (Kostenrisiko, siehe frühere Diskussion zu Tool-Call-Effizienz), sondern einmalig neu berechnet, sobald ein neuer Benchmarkreport für den Betrieb erzeugt wird, und bis dahin zwischengespeichert.
+
+Werte, die aus dieser Zusammenfassung stammen, folgen denselben bestehenden Zitier- und Vertrauensregeln wie der Rest der App: konkrete Zahlenwerte mit Quellenangabe, keine unbestätigten kausalen Erklärungen als Tatsache formuliert (Patch N), sondern als Beobachtung über die letzten fünf Auswertungen hinweg.
+
+Test: Nach Erzeugung von mindestens fünf Benchmarkreports für einen Test-Betrieb zeigt die Startseite eine kurze, korrekt formulierte Erkenntnis-Zusammenfassung an, die sich erkennbar auf Inhalte aus diesen fünf Reports bezieht, nicht erfunden wirkt. Nach einem sechsten neuen Report aktualisiert sich die Zusammenfassung entsprechend (älteste der fünf fällt heraus). Die Nachrichten-Vorschau zeigt korrekt die aktuellste freigegebene Ausgabe mit funktionierendem Link zur vollständigen Nachrichten-Seite.

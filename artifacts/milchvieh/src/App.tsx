@@ -315,7 +315,7 @@ function AppPortal() {
             ? <Redirect to="/app/monitoring" />
             : (dbUser as any)?.onboardingCompletedAt == null
               ? <Redirect to="/app/upload" />
-              : <Redirect to="/app/analyses" />}
+              : <Redirect to="/app/overview" />}
         </Route>
       </Switch>
     </AppLayout>
