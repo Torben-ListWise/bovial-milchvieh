@@ -78,10 +78,24 @@ function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; dat
 interface NewsPreview {
   id: string;
   title: string;
-  teaser: string | null;
-  topicBadges: string[] | null;
-  publishedAt: string | null;
+  topic?: string;
+  topicColor?: string;
+  scheduledDate?: string;
+  appBody?: string;
+  teaser?: string | null;
+  topicBadges?: string[] | null;
+  publishedAt?: string | null;
+  batchRunAt?: string | null;
 }
+
+const TOPIC_COLORS_OVERVIEW: Record<string, string> = {
+  blue:   "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  green:  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  amber:  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  purple: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  rose:   "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+  cyan:   "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+};
 
 function NewsPreviewCard() {
   const { getToken } = useAuth();
@@ -92,11 +106,21 @@ function NewsPreviewCard() {
     async function load() {
       try {
         const token = await getToken();
-        const resp = await fetch(`${API_BASE}/api/news/latest`, {
+        // Try new newsletter endpoint first
+        const resp = await fetch(`${API_BASE}/api/news/newsletter/current`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!resp.ok) { setEdition(null); return; }
-        const data = await resp.json() as NewsPreview | null;
+        if (resp.ok) {
+          const data = await resp.json() as NewsPreview | null;
+          if (!cancelled) setEdition(data);
+          return;
+        }
+        // Fall back to legacy endpoint
+        const legacyResp = await fetch(`${API_BASE}/api/news/latest`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!legacyResp.ok) { if (!cancelled) setEdition(null); return; }
+        const data = await legacyResp.json() as NewsPreview | null;
         if (!cancelled) setEdition(data);
       } catch {
         if (!cancelled) setEdition(null);
@@ -108,23 +132,41 @@ function NewsPreviewCard() {
 
   if (edition === undefined || edition === null) return null;
 
+  // Support both new newsletter schema and legacy schema
+  const displayDate = edition.scheduledDate ?? edition.publishedAt ?? null;
+  const teaser = edition.appBody
+    ? edition.appBody.split(/\n\n/)[0]?.slice(0, 180)
+    : (edition.teaser ?? null);
+  const topicName = edition.topic ?? null;
+  const topicColorKey = edition.topicColor ?? "blue";
+  const badgeClass = TOPIC_COLORS_OVERVIEW[topicColorKey] ?? "bg-primary/10 text-primary";
+
+  // Legacy: topicBadges
+  const legacyBadges = edition.topicBadges?.filter(Boolean) ?? [];
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <Newspaper className="w-4 h-4 text-primary shrink-0" />
-          {edition.topicBadges?.map((badge) => (
-            <span
-              key={badge}
-              className="bg-primary/10 text-primary text-xs font-medium rounded-full px-2.5 py-0.5"
-            >
-              {badge}
+          {topicName ? (
+            <span className={`text-xs font-medium rounded-full px-2.5 py-0.5 ${badgeClass}`}>
+              {topicName}
             </span>
-          ))}
+          ) : (
+            legacyBadges.map((badge) => (
+              <span
+                key={badge}
+                className="bg-primary/10 text-primary text-xs font-medium rounded-full px-2.5 py-0.5"
+              >
+                {badge}
+              </span>
+            ))
+          )}
         </div>
-        {edition.publishedAt && (
+        {displayDate && (
           <span className="text-xs text-muted-foreground shrink-0">
-            {new Date(edition.publishedAt).toLocaleDateString("de-DE", {
+            {new Date(displayDate).toLocaleDateString("de-DE", {
               day: "2-digit",
               month: "2-digit",
               year: "numeric",
@@ -133,8 +175,8 @@ function NewsPreviewCard() {
         )}
       </div>
       <p className="font-semibold text-base text-foreground leading-snug">{edition.title}</p>
-      {edition.teaser && (
-        <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">{edition.teaser}</p>
+      {teaser && (
+        <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">{teaser}</p>
       )}
       <Link href="/app/nachrichten">
         <span className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline cursor-pointer">

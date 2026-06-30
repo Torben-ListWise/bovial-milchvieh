@@ -1,23 +1,59 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useLocation, useSearch } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageLayout } from "@/components/PageLayout";
-import { Newspaper } from "lucide-react";
+import { Newspaper, ExternalLink, ArrowRight, Clock } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
-interface FullEdition {
-  id: string;
-  title: string;
-  teaser: string | null;
-  bodyMarkdown: string | null;
-  topicBadges: string[] | null;
-  publishedAt: string | null;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface NewsSource {
+  name: string;
+  url: string;
 }
 
-function formatDate(iso: string) {
+interface NewsletterEdition {
+  id: string;
+  scheduledDate: string;
+  topic: string;
+  topicColor: string;
+  title: string;
+  appBody: string;
+  socialBody: string;
+  sources: NewsSource[];
+  ctaType: "route" | "chat_prompt";
+  ctaTarget: string;
+  status: string;
+  batchRunAt: string | null;
+}
+
+interface ArchiveItem {
+  id: string;
+  scheduledDate: string;
+  topic: string;
+  topicColor: string;
+  title: string;
+  status: string;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const TOPIC_COLORS: Record<string, string> = {
+  blue:   "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  green:  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  amber:  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  purple: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  rose:   "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+  cyan:   "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+};
+
+function topicColorClass(color: string): string {
+  return TOPIC_COLORS[color] ?? TOPIC_COLORS.blue;
+}
+
+function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("de-DE", {
     day: "2-digit",
     month: "long",
@@ -25,25 +61,226 @@ function formatDate(iso: string) {
   });
 }
 
+function estimateReadTime(text: string): number {
+  const words = text.trim().split(/\s+/).length;
+  return Math.max(1, Math.round(words / 200));
+}
+
+// Split appBody into paragraphs for structured rendering.
+// The last paragraph starting with "Handlungsempfehlung:" gets special treatment.
+function splitBody(text: string): { main: string[]; action: string | null } {
+  const paras = text
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const actionIdx = paras.findIndex((p) =>
+    p.toLowerCase().startsWith("handlungsempfehlung"),
+  );
+
+  if (actionIdx >= 0) {
+    return {
+      main: paras.slice(0, actionIdx),
+      action: paras[actionIdx],
+    };
+  }
+
+  return { main: paras.slice(0, -1), action: paras[paras.length - 1] ?? null };
+}
+
+// ── CTA Button ────────────────────────────────────────────────────────────────
+
+function CtaButton({
+  ctaType,
+  ctaTarget,
+  datasetId,
+}: {
+  ctaType: "route" | "chat_prompt";
+  ctaTarget: string;
+  datasetId?: string;
+}) {
+  const [, navigate] = useLocation();
+
+  if (!ctaTarget) return null;
+
+  function handleClick() {
+    if (ctaType === "route") {
+      navigate(ctaTarget);
+    } else {
+      // Navigate to analyses/chat with pre-filled prompt
+      // Build URL correctly: datasetId uses "?" separator, prompt appends with "&"
+      const promptParam = encodeURIComponent(ctaTarget);
+      if (datasetId) {
+        navigate(`/app/analyses?datasetId=${datasetId}&prompt=${promptParam}`);
+      } else {
+        navigate(`/app/analyses?prompt=${promptParam}`);
+      }
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+    >
+      {ctaType === "route" ? "Jetzt ansehen" : "Im Chat besprechen"}
+      <ArrowRight className="w-4 h-4" />
+    </button>
+  );
+}
+
+// ── Current edition card ──────────────────────────────────────────────────────
+
+function CurrentEditionCard({ edition, datasetId }: { edition: NewsletterEdition; datasetId?: string }) {
+  const readTime = estimateReadTime(edition.appBody);
+  const { main, action } = splitBody(edition.appBody);
+
+  return (
+    <article className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+      {/* Meta bar */}
+      <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border/60 bg-muted/30">
+        <span
+          className={`text-xs font-semibold rounded-full px-3 py-1 ${topicColorClass(edition.topicColor)}`}
+        >
+          {edition.topic}
+        </span>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="w-3.5 h-3.5" />
+          {readTime} Min. Lesezeit
+        </span>
+      </div>
+
+      {/* Body */}
+      <div className="px-5 py-5 space-y-4">
+        <div>
+          <p className="text-xs text-muted-foreground mb-1.5">
+            {formatDate(edition.scheduledDate)}
+          </p>
+          <h2 className="text-xl font-bold text-foreground leading-snug">
+            {edition.title}
+          </h2>
+        </div>
+
+        {/* Main paragraphs */}
+        <div className="space-y-3">
+          {main.map((para, i) => (
+            <p key={i} className="text-sm text-foreground leading-relaxed">
+              {para}
+            </p>
+          ))}
+        </div>
+
+        {/* Action recommendation */}
+        {action && (
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+            <p className="text-sm text-foreground leading-relaxed">{action}</p>
+          </div>
+        )}
+
+        {/* Sources */}
+        {edition.sources && edition.sources.length > 0 && (
+          <div className="border-t border-border/60 pt-4">
+            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+              Quellen
+            </p>
+            <ul className="space-y-1">
+              {edition.sources.map((s, i) => (
+                <li key={i}>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                  >
+                    {s.name}
+                    <ExternalLink className="w-3 h-3 opacity-60" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* CTA */}
+        <div className="pt-1">
+          <CtaButton ctaType={edition.ctaType} ctaTarget={edition.ctaTarget} datasetId={datasetId} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+// ── Archive list ──────────────────────────────────────────────────────────────
+
+function ArchiveList({ items, currentId }: { items: ArchiveItem[]; currentId: string | undefined }) {
+  const filtered = items.filter((i) => i.id !== currentId);
+  if (filtered.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-base font-semibold text-foreground">Ältere Ausgaben</h3>
+      <div className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
+        {filtered.map((item) => (
+          <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+            <span
+              className={`text-xs font-medium rounded-full px-2.5 py-0.5 shrink-0 ${topicColorClass(item.topicColor)}`}
+            >
+              {item.topic}
+            </span>
+            <p className="flex-1 text-sm font-medium text-foreground truncate">
+              {item.title}
+            </p>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {formatDate(item.scheduledDate)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export function NachrichtenPage() {
   const { getToken } = useAuth();
-  const [edition, setEdition] = useState<FullEdition | null | undefined>(undefined);
+  const search = useSearch();
+  const datasetId = new URLSearchParams(search).get("datasetId") ?? undefined;
+
+  const [current, setCurrent] = useState<NewsletterEdition | null | undefined>(undefined);
+  const [archive, setArchive] = useState<ArchiveItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
+
     async function load() {
       try {
         const token = await getToken();
-        const resp = await fetch(`${API_BASE}/api/news/latest/full`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!resp.ok) { setEdition(null); return; }
-        const data = await resp.json() as FullEdition | null;
-        if (!cancelled) setEdition(data);
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [curResp, archResp] = await Promise.all([
+          fetch(`${API_BASE}/api/news/newsletter/current`, { headers }),
+          fetch(`${API_BASE}/api/news/newsletter/archive`, { headers }),
+        ]);
+
+        if (!cancelled) {
+          if (curResp.ok) {
+            const data = await curResp.json() as NewsletterEdition | null;
+            setCurrent(data);
+          } else {
+            setCurrent(null);
+          }
+
+          if (archResp.ok) {
+            const data = await archResp.json() as ArchiveItem[];
+            setArchive(data);
+          }
+        }
       } catch {
-        if (!cancelled) setEdition(null);
+        if (!cancelled) setCurrent(null);
       }
     }
+
     load();
     return () => { cancelled = true; };
   }, [getToken]);
@@ -51,6 +288,7 @@ export function NachrichtenPage() {
   return (
     <PageLayout>
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <Newspaper className="w-5 h-5 text-primary" />
@@ -58,59 +296,30 @@ export function NachrichtenPage() {
           <h1 className="text-2xl font-bold text-foreground">Nachrichten</h1>
         </div>
 
-        {edition === undefined && (
+        {/* Loading */}
+        {current === undefined && (
           <div className="space-y-3">
             <Skeleton className="h-6 w-3/4 rounded-lg" />
             <Skeleton className="h-4 w-1/3 rounded-lg" />
-            <Skeleton className="h-48 rounded-xl" />
+            <Skeleton className="h-56 rounded-xl" />
           </div>
         )}
 
-        {edition === null && (
+        {/* No content */}
+        {current === null && archive.length === 0 && (
           <p className="text-muted-foreground text-sm py-8 text-center">
-            Aktuell keine Nachrichten veröffentlicht.
+            Aktuell keine Nachrichten verfügbar.
           </p>
         )}
 
-        {edition && (
-          <article className="space-y-4">
-            {edition.topicBadges && edition.topicBadges.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {edition.topicBadges.map((badge) => (
-                  <span
-                    key={badge}
-                    className="bg-primary/10 text-primary text-xs font-medium rounded-full px-3 py-1"
-                  >
-                    {badge}
-                  </span>
-                ))}
-              </div>
-            )}
+        {/* Current edition */}
+        {current && (
+          <CurrentEditionCard edition={current} datasetId={datasetId} />
+        )}
 
-            {edition.publishedAt && (
-              <p className="text-xs text-muted-foreground">
-                {formatDate(edition.publishedAt)}
-              </p>
-            )}
-
-            <h2 className="text-xl font-semibold text-foreground leading-snug">
-              {edition.title}
-            </h2>
-
-            {edition.teaser && (
-              <p className="text-muted-foreground text-sm leading-relaxed border-l-2 border-primary/30 pl-3 italic">
-                {edition.teaser}
-              </p>
-            )}
-
-            {edition.bodyMarkdown && (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {edition.bodyMarkdown}
-                </ReactMarkdown>
-              </div>
-            )}
-          </article>
+        {/* Archive */}
+        {archive.length > 0 && (
+          <ArchiveList items={archive} currentId={current?.id} />
         )}
       </div>
     </PageLayout>

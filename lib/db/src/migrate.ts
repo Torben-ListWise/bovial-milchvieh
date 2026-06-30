@@ -606,4 +606,75 @@ export async function setupAnalystSandbox(): Promise<void> {
       END $$
     `);
   }
+
+  // Migration: news_topics — operator-managed topic rotation list
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_topics (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      name        TEXT        NOT NULL,
+      color       TEXT        NOT NULL DEFAULT 'blue',
+      source_urls JSONB       NOT NULL DEFAULT '[]',
+      sort_order  INTEGER     NOT NULL DEFAULT 0,
+      active      BOOLEAN     NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Migration: newsletter_editions — AI-generated weekly batch editions
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS newsletter_editions (
+      id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      scheduled_date DATE        NOT NULL,
+      topic          TEXT        NOT NULL,
+      topic_color    TEXT        NOT NULL DEFAULT 'blue',
+      topic_id       UUID,
+      title          TEXT        NOT NULL,
+      app_body       TEXT        NOT NULL,
+      social_body    TEXT        NOT NULL,
+      sources        JSONB       NOT NULL DEFAULT '[]',
+      cta_type       TEXT        NOT NULL DEFAULT 'chat_prompt',
+      cta_target     TEXT        NOT NULL DEFAULT '',
+      status         TEXT        NOT NULL DEFAULT 'draft',
+      batch_run_at   TIMESTAMPTZ,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS newsletter_editions_status_idx ON newsletter_editions (status)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS newsletter_editions_scheduled_date_idx ON newsletter_editions (scheduled_date)"
+  );
+  // Deduplicate any existing rows with the same scheduled_date (keep newest by created_at)
+  await pool.query(`
+    DELETE FROM newsletter_editions
+    WHERE id IN (
+      SELECT id FROM (
+        SELECT id,
+               ROW_NUMBER() OVER (PARTITION BY scheduled_date ORDER BY created_at DESC) AS rn
+        FROM newsletter_editions
+      ) sub
+      WHERE rn > 1
+    )
+  `);
+  // Enforce one edition per date at DB level (prevents race-condition duplicates)
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS newsletter_editions_scheduled_date_unique ON newsletter_editions (scheduled_date)"
+  );
+
+  // Seed default news topics if table is empty
+  const { rows: topicRows } = await pool.query(
+    "SELECT COUNT(*)::int AS c FROM news_topics"
+  );
+  if ((topicRows[0]?.c ?? 0) === 0) {
+    await pool.query(`
+      INSERT INTO news_topics (name, color, source_urls, sort_order) VALUES
+      ('Eutergesundheit',     'blue',   '[]', 10),
+      ('Fruchtbarkeit',       'green',  '[]', 20),
+      ('Fütterung',           'amber',  '[]', 30),
+      ('Klauengesundheit',    'purple', '["https://thedairylandinitiative.vetmed.wisc.edu/lifestep-lameness/locomotion-scoring/","https://dairy.extension.wisc.edu/article-topic/animal-welfare-herd-health/"]', 40),
+      ('Hitzestress',         'rose',   '["https://dairy.extension.wisc.edu/heat-stress/"]', 50),
+      ('Technik/Digitalisierung', 'cyan','["https://dairy.extension.wisc.edu/article-topic/emerging-technologies-and-facilities/"]', 60)
+    `);
+  }
 }
