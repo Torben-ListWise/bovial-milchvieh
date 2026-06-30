@@ -17,6 +17,7 @@ import {
   Settings2,
   Calendar,
   ArrowLeftRight,
+  Copy,
 } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -128,11 +129,24 @@ interface EditionCardProps {
 }
 
 function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap }: EditionCardProps) {
+  const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showSwap, setShowSwap] = useState(false);
   const [swapTarget, setSwapTarget] = useState("");
+  const [copiedSocial, setCopiedSocial] = useState(false);
+
+  async function handleCopySocial() {
+    try {
+      await navigator.clipboard.writeText(edition.socialBody);
+      setCopiedSocial(true);
+      toast({ title: "Social-Text kopiert", description: "Bereit zum Einfügen in WhatsApp oder Instagram." });
+      setTimeout(() => setCopiedSocial(false), 2000);
+    } catch {
+      toast({ variant: "destructive", title: "Kopieren fehlgeschlagen" });
+    }
+  }
 
   const [form, setForm] = useState({
     title: edition.title,
@@ -382,7 +396,23 @@ function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap
                 </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Social-Text</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-muted-foreground">Social-Text</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={handleCopySocial}
+                    title="Für Social Media kopieren"
+                  >
+                    {copiedSocial ? (
+                      <Check className="w-3 h-3 text-green-600" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                    {copiedSocial ? "Kopiert!" : "Für Social Media kopieren"}
+                  </Button>
+                </div>
                 <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-muted/30 rounded-lg p-3">
                   {edition.socialBody}
                 </div>
