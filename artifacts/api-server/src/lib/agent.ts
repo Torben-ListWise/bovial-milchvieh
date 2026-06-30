@@ -1796,6 +1796,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_master_data": return "Lade Stammdaten";
       case "read_document": return "Lese Dokumententext";
       case "search_knowledge": return "Durchsuche Wissensdatenbank";
+      case "search_dairycomp_manual": return "Durchsuche DairyComp-Handbuch";
       case "search_web": return "Durchsuche das Internet";
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
       case "emit_chart": return `Erstelle Diagramm`;
@@ -1865,6 +1866,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
     "read_document",
     "search_knowledge",
+    "search_dairycomp_manual",
     "calculate_investment",
     "ask_farmer",
     "get_event_stats",
