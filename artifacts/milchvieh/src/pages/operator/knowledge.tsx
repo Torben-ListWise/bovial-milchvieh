@@ -599,6 +599,29 @@ export function KnowledgePage() {
     },
   });
 
+  const setDocTypeMutation = useMutation({
+    mutationFn: async ({ id, documentType }: { id: string; documentType: string | null }) => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/knowledge/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ documentType }),
+      });
+      if (!res.ok) throw new Error("Typ-Änderung fehlgeschlagen");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-docs"] });
+      toast({ title: "Dokumenttyp aktualisiert" });
+    },
+    onError: () => {
+      toast({ title: "Typ-Änderung fehlgeschlagen", variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const token = await getToken();
@@ -1242,12 +1265,28 @@ export function KnowledgePage() {
                         Referenz-Benchmark
                       </Badge>
                     )}
-                    {(doc as any).documentType === "dairycomp_manual" && (
-                      <Badge className="bg-blue-100 text-blue-800 border border-blue-200 gap-1 text-xs shrink-0">
+                    {(doc as any).documentType === "dairycomp_manual" ? (
+                      <Badge
+                        className="bg-blue-100 text-blue-800 border border-blue-200 gap-1 text-xs shrink-0 cursor-pointer hover:bg-blue-200"
+                        title="Klicken um Zuweisung zu entfernen"
+                        onClick={() => setDocTypeMutation.mutate({ id: doc.id, documentType: null })}
+                      >
                         <BookOpen className="w-2.5 h-2.5" />
                         DairyComp-Handbuch
                       </Badge>
-                    )}
+                    ) : doc.status === "ready" && !(doc as any).documentType ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-blue-700 shrink-0"
+                        title="Als DairyComp-Handbuch markieren"
+                        disabled={setDocTypeMutation.isPending}
+                        onClick={() => setDocTypeMutation.mutate({ id: doc.id, documentType: "dairycomp_manual" })}
+                      >
+                        <BookOpen className="w-3 h-3 mr-1" />
+                        DC-Handbuch
+                      </Button>
+                    ) : null}
                     <StatusBadge status={doc.status} chunkCount={doc.chunkCount} />
                     {(doc.status === "error" ||
                       (doc.status === "pending" &&

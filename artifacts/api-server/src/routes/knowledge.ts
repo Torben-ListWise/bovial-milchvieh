@@ -324,14 +324,37 @@ router.patch(
   requireOperator,
   async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const { category, title } = req.body as { category?: string; title?: string };
+    const { category, title, documentType } = req.body as {
+      category?: string;
+      title?: string;
+      documentType?: string | null;
+    };
     const patch: Record<string, unknown> = {};
     if (typeof category === "string") patch.category = category || null;
     if (typeof title === "string" && title.trim()) patch.title = title.trim();
+    if (documentType !== undefined) patch.documentType = documentType || null;
     if (Object.keys(patch).length === 0) {
       res.status(400).json({ error: "Nichts zu aktualisieren" });
       return;
     }
+
+    // SINGLE_ACTIVE_TYPES: if setting a type that only allows one active doc,
+    // clear the same type from all other documents first.
+    const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual"] as const;
+    if (
+      typeof documentType === "string" &&
+      (SINGLE_ACTIVE_TYPES as readonly string[]).includes(documentType)
+    ) {
+      await db
+        .update(knowledgeDocumentsTable)
+        .set({ documentType: null })
+        .where(
+          and(
+            eq(knowledgeDocumentsTable.documentType, documentType),
+          ),
+        );
+    }
+
     const [updated] = await db
       .update(knowledgeDocumentsTable)
       .set(patch)
@@ -341,7 +364,8 @@ router.patch(
       res.status(404).json({ error: "Dokument nicht gefunden" });
       return;
     }
-    res.json({ ok: true, category: updated.category ?? null });
+    logger.info({ docId: id, documentType: updated.documentType }, "Knowledge-Dokument Typ aktualisiert");
+    res.json({ ok: true, category: updated.category ?? null, documentType: updated.documentType ?? null });
   },
 );
 
