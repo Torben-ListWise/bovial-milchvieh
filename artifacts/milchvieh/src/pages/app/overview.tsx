@@ -135,7 +135,18 @@ function NewsPreviewCard() {
     return () => { cancelled = true; };
   }, [getToken]);
 
-  if (edition === undefined || edition === null) return null;
+  if (edition === undefined) {
+    return <Skeleton className="h-28 rounded-xl" />;
+  }
+
+  if (edition === null) {
+    return (
+      <div className="rounded-xl border border-border bg-card/50 p-4 flex items-center gap-3 text-muted-foreground">
+        <Newspaper className="w-4 h-4 shrink-0" />
+        <p className="text-sm">Noch keine Nachrichten-Ausgabe verfügbar — der wöchentliche Batch wird sie automatisch erstellen.</p>
+      </div>
+    );
+  }
 
   // Support both new newsletter schema and legacy schema
   const displayDate = edition.scheduledDate ?? edition.publishedAt ?? null;
