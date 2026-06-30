@@ -99,11 +99,17 @@ export interface BetaToolEntry {
   escalationReason?: string | null;
 }
 
+export interface WidgetSpec {
+  type: "heat_abatement" | "fresh_cow";
+  prefill: Record<string, number>;
+}
+
 export interface AgentResult {
   text: string;
   charts: Chart[];
   citations: Citation[];
   backQuestions: FarmerQuestion[];
+  widgetSpec: WidgetSpec | null;
   toolLog: BetaToolEntry[];
   escalationTrigger: { type: string; reason: string } | null;
 }
@@ -470,6 +476,41 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "show_heat_abatement_calculator",
+    description: "Zeigt dem Landwirt einen interaktiven Hitzestress-Kühl-Investitionsrechner. Aufrufen wenn der Nutzer fragt, ob sich Kühlung, Ventilatoren oder Verdunstungskühlung lohnt, oder nach Hitzestress-Kosten fragt. Nicht für allgemeine Hitze-Tipps ohne Investitionsbezug.",
+    input_schema: {
+      type: "object",
+      properties: {
+        herdSize: { type: "number", description: "Anzahl laktierende Kühe (aus Dataset-Kontext vorausfüllen wenn bekannt)" },
+        heatStressDays: { type: "number", description: "Hitzestresstage/Jahr (Deutschland-Default: 45)" },
+        milkLossPerDayKg: { type: "number", description: "Milchverlust/Kuh/Hitzestresstag in kg (Default: 1.5)" },
+        milkPriceEuroKg: { type: "number", description: "Milchpreis €/kg (Default: 0.40)" },
+        investmentCost: { type: "number", description: "Investitionskosten Kühlsystem € (Default: 50000)" },
+        annualOperatingCost: { type: "number", description: "Betriebskosten/Jahr € (Default: 3000)" },
+        systemLifetimeYears: { type: "number", description: "Nutzungsdauer Jahre (Default: 15)" },
+        interestRatePct: { type: "number", description: "Zinssatz % (Default: 3.5)" },
+      },
+    },
+  },
+  {
+    name: "show_fresh_cow_calculator",
+    description: "Zeigt dem Landwirt einen interaktiven Frischmelker-Programm-ROI-Rechner. Aufrufen wenn der Nutzer fragt ob sich ein intensiveres Frischmelker-/Transitphasen-Programm lohnt, nach Metritis/Ketose/Hypokalzämie-Kosten fragt, oder die Wirtschaftlichkeit der Transitphase berechnen möchte.",
+    input_schema: {
+      type: "object",
+      properties: {
+        calvingsPerYear: { type: "number", description: "Abkalbungen/Jahr (aus Dataset-Kontext)" },
+        metritisRatePct: { type: "number", description: "Metritis-Inzidenz % (Default: 25)" },
+        ketosisRatePct: { type: "number", description: "Ketose-Inzidenz % (Default: 20)" },
+        hypocalcemiaRatePct: { type: "number", description: "Hypokalzämie-Inzidenz % (Default: 30)" },
+        metrisisCostEuro: { type: "number", description: "Kosten je Metritis-Fall € (Default: 400)" },
+        ketosisCostEuro: { type: "number", description: "Kosten je Ketose-Fall € (Default: 300)" },
+        hypocalcemiaCostEuro: { type: "number", description: "Kosten je Hypokalzämie-Fall € (Default: 150)" },
+        diseaseReductionPct: { type: "number", description: "Krankheitsreduktion mit verbessertem Programm % (Default: 35)" },
+        programCostPerCowEuro: { type: "number", description: "Mehrkosten Programm je abgekalbter Kuh € (Default: 25)" },
+      },
+    },
+  },
+  {
     name: "signal_escalation",
     description: "Rufe dieses Tool genau EINMAL auf, wenn einer der vier definierten Eskalationstrigger ausgelöst wird — BEVOR du die Antwort formulierst. Das Tool hat keine Auswirkung auf die Antwort, protokolliert aber den Trigger strukturiert für den Betreiber.",
     input_schema: {
@@ -652,6 +693,10 @@ Wenn der Nutzer eine Frage zur Bedienung, Konfiguration, Einstellungen oder Funk
 
 BILD-INTERPRETATION:
 Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist. Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
+
+HITZESTRESS-RECHNER: Wenn der Nutzer fragt ob sich Kühlung/Ventilatoren/Kühlsystem lohnen, oder nach Hitzestress-Milchverlusten, THI-Kosten oder Kühl-Investitionen fragt → rufe show_heat_abatement_calculator auf. Fülle herdSize aus dem Datensatz-Kontext vor (falls bekannt). Schreibe danach einen kurzen einleitenden Satz (1-2 Sätze), was der Rechner zeigt.
+
+FRISCHMELKER-RECHNER: Wenn der Nutzer fragt ob sich ein verbessertes Frischmelker-/Transitphasen-Programm lohnt, nach Metritis/Ketose/Hypokalzämie-Kosten fragt oder Früherkennung/Monitoring bei Frischkühen bewertet → rufe show_fresh_cow_calculator auf. Fülle calvingsPerYear aus dem Datensatz-Kontext vor (falls bekannt). Schreibe danach einen kurzen einleitenden Satz.
 
 RÜCKFRAGE BEI UNKLAREN ABKÜRZUNGEN:
 Wenn search_knowledge noRelevantResults:true zurückgibt UND die Nutzerfrage einen Begriff enthält, der wie eine Abkürzung aussieht (2–5 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrichen oder Zahlen, z.B. AAA, RBT, KNS, BHB, MLP, LKV) → rufe IMMER zuerst ask_farmer mit einer einzigen gezielten Rückfrage auf, bevor du mit *[Allgemeinwissen]* antwortest.
@@ -1331,6 +1376,14 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           return { error: "Web-Suche fehlgeschlagen" };
         }
       }
+      case "show_heat_abatement_calculator": {
+        widgetSpec = { type: "heat_abatement", prefill: input as Record<string, number> };
+        return { acknowledged: true, widget: "heat_abatement" };
+      }
+      case "show_fresh_cow_calculator": {
+        widgetSpec = { type: "fresh_cow", prefill: input as Record<string, number> };
+        return { acknowledged: true, widget: "fresh_cow" };
+      }
       case "ask_farmer": {
         const qs = (input.questions as Array<{text?: string; options?: string[]} | string> | undefined) ?? [];
         for (const q of qs) {
@@ -1787,6 +1840,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   let searchKnowledgeCalled = false;
   let firstTextDeltaFired = false;
   const backQuestions: FarmerQuestion[] = [];
+  let widgetSpec: WidgetSpec | null = null;
   let capturedEscalation: { type: string; reason: string } | null = null;
   const betaToolLog: BetaToolEntry[] = [];
   const maxTurns = 20;
@@ -1975,8 +2029,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     finalText =
       "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
       "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
-    return { text: finalText, charts, citations, backQuestions, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
+    return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
   }
 
-  return { text: finalText, charts, citations, backQuestions, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
+  return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
 }

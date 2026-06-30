@@ -153,6 +153,7 @@ export async function processQuestion(
     let charts: Chart[] = [];
     let citations: Citation[] = [];
     let backQuestions: import("./agent").FarmerQuestion[] = [];
+    let widgetSpec: import("./agent").WidgetSpec | null = null;
     let error: string | null = null;
     let agentResultText: string | undefined;
     let agentToolLog: BetaToolEntry[] = [];
@@ -246,6 +247,7 @@ export async function processQuestion(
       charts = result.charts;
       citations = result.citations;
       backQuestions = result.backQuestions ?? [];
+      widgetSpec = result.widgetSpec ?? null;
       agentResultText = result.text;
       agentToolLog = result.toolLog ?? [];
       agentEscalationTrigger = result.escalationTrigger ?? null;
@@ -298,6 +300,7 @@ export async function processQuestion(
         error,
         followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : null,
         backQuestions: backQuestions.length > 0 ? backQuestions : null,
+        widgetSpec: widgetSpec ?? null,
       } as any)
       .returning();
 

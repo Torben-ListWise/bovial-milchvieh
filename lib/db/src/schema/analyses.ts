@@ -46,6 +46,7 @@ export const messagesTable = pgTable(
     error: text("error"),
     followUpQuestions: jsonb("follow_up_questions"),
     backQuestions: jsonb("back_questions"),
+    widgetSpec: jsonb("widget_spec"),
     hidden: boolean("hidden").notNull().default(false),
     imageObjectPath: text("image_object_path"),
     createdAt: timestamp("created_at", { withTimezone: true })

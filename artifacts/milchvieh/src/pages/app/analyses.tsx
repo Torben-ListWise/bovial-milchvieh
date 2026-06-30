@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from "react";
+import { useState, useRef, useEffect, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/react";
 import ReactMarkdown from "react-markdown";
@@ -1414,6 +1414,219 @@ function StarterQuestions({
 
 // ── Result card (memoized) ───────────────────────────────────────────────────
 
+// ── Interactive Chat Calculators ──────────────────────────────────────────────
+
+type HeatAbatementPrefill = {
+  herdSize?: number;
+  heatStressDays?: number;
+  milkLossPerDayKg?: number;
+  milkPriceEuroKg?: number;
+  investmentCost?: number;
+  annualOperatingCost?: number;
+  systemLifetimeYears?: number;
+  interestRatePct?: number;
+};
+
+function HeatAbatementWidget({ prefill }: { prefill: Record<string, number> }) {
+  const p = prefill as HeatAbatementPrefill;
+  const [herdSize, setHerdSize] = useState(p.herdSize ?? 80);
+  const [heatStressDays, setHeatStressDays] = useState(p.heatStressDays ?? 45);
+  const [milkLossPerDayKg, setMilkLossPerDayKg] = useState(p.milkLossPerDayKg ?? 1.5);
+  const [milkPriceEuroKg, setMilkPriceEuroKg] = useState(p.milkPriceEuroKg ?? 0.40);
+  const [investmentCost, setInvestmentCost] = useState(p.investmentCost ?? 50000);
+  const [annualOperatingCost, setAnnualOperatingCost] = useState(p.annualOperatingCost ?? 3000);
+  const [systemLifetimeYears, setSystemLifetimeYears] = useState(p.systemLifetimeYears ?? 15);
+  const [interestRatePct, setInterestRatePct] = useState(p.interestRatePct ?? 3.5);
+
+  const result = useMemo(() => {
+    const annualMilkLossRevenue = herdSize * heatStressDays * milkLossPerDayKg * milkPriceEuroKg;
+    const i = interestRatePct / 100;
+    const n = systemLifetimeYears;
+    let annuity: number;
+    if (i === 0) {
+      annuity = investmentCost / n;
+    } else {
+      annuity = (investmentCost * i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+    }
+    const netAnnualBenefit = annualMilkLossRevenue - annualOperatingCost - annuity;
+    let breakEvenYear: number | null = null;
+    let cumulative = 0;
+    for (let y = 1; y <= 25; y++) {
+      cumulative += netAnnualBenefit;
+      if (cumulative > 0) { breakEvenYear = y; break; }
+    }
+    let rating: "wirtschaftlich" | "grenzwertig" | "nicht empfohlen";
+    if (breakEvenYear !== null && breakEvenYear <= systemLifetimeYears) {
+      rating = "wirtschaftlich";
+    } else if (breakEvenYear !== null && breakEvenYear <= systemLifetimeYears * 1.3) {
+      rating = "grenzwertig";
+    } else {
+      rating = "nicht empfohlen";
+    }
+    return { annualMilkLossRevenue, netAnnualBenefit, breakEvenYear, rating };
+  }, [herdSize, heatStressDays, milkLossPerDayKg, milkPriceEuroKg, investmentCost, annualOperatingCost, systemLifetimeYears, interestRatePct]);
+
+  const ratingColor = result.rating === "wirtschaftlich" ? "bg-green-50 border-green-200 text-green-800" : result.rating === "grenzwertig" ? "bg-yellow-50 border-yellow-200 text-yellow-800" : "bg-red-50 border-red-200 text-red-800";
+  const ratingDot = result.rating === "wirtschaftlich" ? "bg-green-500" : result.rating === "grenzwertig" ? "bg-yellow-500" : "bg-red-500";
+
+  function NumField({ label, value, onChange, unit, step }: { label: string; value: number; onChange: (v: number) => void; unit: string; step?: number }) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{label}</label>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            step={step ?? 1}
+            value={value}
+            onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v); }}
+            className="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{unit}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-base">🌡️</span>
+        <span className="text-sm font-semibold">Hitzestress-Rechner</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <NumField label="Laktierende Kühe" value={herdSize} onChange={setHerdSize} unit="Kühe" />
+        <NumField label="Hitzestresstage/Jahr" value={heatStressDays} onChange={setHeatStressDays} unit="Tage" />
+        <NumField label="Milchverlust/Kuh/Tag" value={milkLossPerDayKg} onChange={setMilkLossPerDayKg} unit="kg" step={0.1} />
+        <NumField label="Milchpreis" value={milkPriceEuroKg} onChange={setMilkPriceEuroKg} unit="€/kg" step={0.01} />
+        <NumField label="Investition" value={investmentCost} onChange={setInvestmentCost} unit="€" step={1000} />
+        <NumField label="Betriebskosten/Jahr" value={annualOperatingCost} onChange={setAnnualOperatingCost} unit="€/Jahr" step={100} />
+        <NumField label="Nutzungsdauer" value={systemLifetimeYears} onChange={setSystemLifetimeYears} unit="Jahre" />
+        <NumField label="Zinssatz" value={interestRatePct} onChange={setInterestRatePct} unit="%" step={0.1} />
+      </div>
+      <div className={`rounded-lg border p-3 ${ratingColor}`}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${ratingDot}`} />
+          <span className="text-xs font-semibold uppercase tracking-wide">{result.rating}</span>
+        </div>
+        <p className="text-2xl font-bold tabular-nums">
+          {result.netAnnualBenefit >= 0 ? "+" : ""}{result.netAnnualBenefit.toLocaleString("de-DE", { maximumFractionDigits: 0 })} €/Jahr
+        </p>
+        <p className="text-xs mt-1 opacity-80">
+          {result.breakEvenYear !== null ? `Amortisation nach ${result.breakEvenYear} Jahren` : "Amortisation außerhalb Planungshorizont"}
+          {" · "}Jährl. Milchverlust: {result.annualMilkLossRevenue.toLocaleString("de-DE", { maximumFractionDigits: 0 })} €
+        </p>
+        <p className="text-xs mt-0.5 opacity-70">
+          {result.rating === "wirtschaftlich" ? "Die Investition rechnet sich innerhalb der Nutzungsdauer." : result.rating === "grenzwertig" ? "Die Investition liegt knapp außerhalb — Optimierungspotenzial prüfen." : "Die Investition amortisiert sich nicht innerhalb der Nutzungsdauer."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+type FreshCowPrefill = {
+  calvingsPerYear?: number;
+  metritisRatePct?: number;
+  ketosisRatePct?: number;
+  hypocalcemiaRatePct?: number;
+  metrisisCostEuro?: number;
+  ketosisCostEuro?: number;
+  hypocalcemiaCostEuro?: number;
+  diseaseReductionPct?: number;
+  programCostPerCowEuro?: number;
+};
+
+function FreshCowWidget({ prefill }: { prefill: Record<string, number> }) {
+  const p = prefill as FreshCowPrefill;
+  const [calvingsPerYear, setCalvingsPerYear] = useState(p.calvingsPerYear ?? 80);
+  const [metritisRatePct, setMetritisRatePct] = useState(p.metritisRatePct ?? 25);
+  const [ketosisRatePct, setKetosisRatePct] = useState(p.ketosisRatePct ?? 20);
+  const [hypocalcemiaRatePct, setHypocalcemiaRatePct] = useState(p.hypocalcemiaRatePct ?? 30);
+  const [metrisisCostEuro, setMetrisisCostEuro] = useState(p.metrisisCostEuro ?? 400);
+  const [ketosisCostEuro, setKetosisCostEuro] = useState(p.ketosisCostEuro ?? 300);
+  const [hypocalcemiaCostEuro, setHypocalcemiaCostEuro] = useState(p.hypocalcemiaCostEuro ?? 150);
+  const [diseaseReductionPct, setDiseaseReductionPct] = useState(p.diseaseReductionPct ?? 35);
+  const [programCostPerCowEuro, setProgramCostPerCowEuro] = useState(p.programCostPerCowEuro ?? 25);
+
+  const result = useMemo(() => {
+    const currentDiseaseCost = calvingsPerYear * (
+      (metritisRatePct / 100) * metrisisCostEuro +
+      (ketosisRatePct / 100) * ketosisCostEuro +
+      (hypocalcemiaRatePct / 100) * hypocalcemiaCostEuro
+    );
+    const annualSavings = currentDiseaseCost * diseaseReductionPct / 100;
+    const annualProgramCost = calvingsPerYear * programCostPerCowEuro;
+    const netAnnualBenefit = annualSavings - annualProgramCost;
+    const roiPct = annualProgramCost > 0 ? (netAnnualBenefit / annualProgramCost) * 100 : 0;
+    let rating: "lohnt sich" | "grenzwertig" | "lohnt sich nicht";
+    if (netAnnualBenefit > 0) {
+      rating = "lohnt sich";
+    } else if (netAnnualBenefit > -(annualProgramCost * 0.2)) {
+      rating = "grenzwertig";
+    } else {
+      rating = "lohnt sich nicht";
+    }
+    return { currentDiseaseCost, annualSavings, annualProgramCost, netAnnualBenefit, roiPct, rating };
+  }, [calvingsPerYear, metritisRatePct, ketosisRatePct, hypocalcemiaRatePct, metrisisCostEuro, ketosisCostEuro, hypocalcemiaCostEuro, diseaseReductionPct, programCostPerCowEuro]);
+
+  const ratingColor = result.rating === "lohnt sich" ? "bg-green-50 border-green-200 text-green-800" : result.rating === "grenzwertig" ? "bg-yellow-50 border-yellow-200 text-yellow-800" : "bg-red-50 border-red-200 text-red-800";
+  const ratingDot = result.rating === "lohnt sich" ? "bg-green-500" : result.rating === "grenzwertig" ? "bg-yellow-500" : "bg-red-500";
+
+  function NumField({ label, value, onChange, unit, step }: { label: string; value: number; onChange: (v: number) => void; unit: string; step?: number }) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{label}</label>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            step={step ?? 1}
+            value={value}
+            onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v); }}
+            className="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{unit}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-base">🐄</span>
+        <span className="text-sm font-semibold">Frischmelker-ROI-Rechner</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <NumField label="Abkalbungen/Jahr" value={calvingsPerYear} onChange={setCalvingsPerYear} unit="Abkalbungen" />
+        <NumField label="Metritis-Rate" value={metritisRatePct} onChange={setMetritisRatePct} unit="%" step={0.5} />
+        <NumField label="Ketose-Rate" value={ketosisRatePct} onChange={setKetosisRatePct} unit="%" step={0.5} />
+        <NumField label="Hypokalzämie-Rate" value={hypocalcemiaRatePct} onChange={setHypocalcemiaRatePct} unit="%" step={0.5} />
+        <NumField label="Kosten Metritis/Fall" value={metrisisCostEuro} onChange={setMetrisisCostEuro} unit="€" step={10} />
+        <NumField label="Kosten Ketose/Fall" value={ketosisCostEuro} onChange={setKetosisCostEuro} unit="€" step={10} />
+        <NumField label="Kosten Hypokalzämie/Fall" value={hypocalcemiaCostEuro} onChange={setHypocalcemiaCostEuro} unit="€" step={10} />
+        <NumField label="Krankheitsreduktion" value={diseaseReductionPct} onChange={setDiseaseReductionPct} unit="%" step={1} />
+        <NumField label="Programmkosten/Kuh" value={programCostPerCowEuro} onChange={setProgramCostPerCowEuro} unit="€/Kuh" step={1} />
+      </div>
+      <div className={`rounded-lg border p-3 ${ratingColor}`}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${ratingDot}`} />
+          <span className="text-xs font-semibold uppercase tracking-wide">{result.rating}</span>
+        </div>
+        <p className="text-2xl font-bold tabular-nums">
+          {result.netAnnualBenefit >= 0 ? "+" : ""}{result.netAnnualBenefit.toLocaleString("de-DE", { maximumFractionDigits: 0 })} €/Jahr
+        </p>
+        <p className="text-xs mt-1 opacity-80">
+          ROI: {result.roiPct >= 0 ? "+" : ""}{result.roiPct.toLocaleString("de-DE", { maximumFractionDigits: 0 })} %
+          {" · "}Einsparungen: {result.annualSavings.toLocaleString("de-DE", { maximumFractionDigits: 0 })} €/Jahr
+          {" · "}Programmkosten: {result.annualProgramCost.toLocaleString("de-DE", { maximumFractionDigits: 0 })} €/Jahr
+        </p>
+        <p className="text-xs mt-0.5 opacity-70">
+          {result.rating === "lohnt sich" ? "Das verbesserte Programm erwirtschaftet mehr als es kostet." : result.rating === "grenzwertig" ? "Das Programm ist annähernd kostendeckend — Inzidenzwerte prüfen." : "Die Programmkosten übersteigen die erzielbaren Einsparungen."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const ResultCard = memo(function ResultCard({
   questionTitle,
   msg,
@@ -1484,6 +1697,12 @@ const ResultCard = memo(function ResultCard({
       {!collapsed && (
         <div className="px-4 py-3 space-y-3">
           <ResultMarkdownContent text={msg.content ?? ""} msgId={msg.id} />
+          {(msg as any).widgetSpec?.type === "heat_abatement" && (
+            <HeatAbatementWidget prefill={(msg as any).widgetSpec.prefill ?? {}} />
+          )}
+          {(msg as any).widgetSpec?.type === "fresh_cow" && (
+            <FreshCowWidget prefill={(msg as any).widgetSpec.prefill ?? {}} />
+          )}
           {(() => {
             const trustSources = extractTrustSources(msg.content ?? "");
             const hasCitations = msg.citations && msg.citations.length > 0;

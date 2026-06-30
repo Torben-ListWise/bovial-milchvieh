@@ -56,6 +56,10 @@ export async function ensureExtensions(): Promise<void> {
   await pool.query(
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS back_questions JSONB"
   );
+  // Migration: widget_spec column on messages (interactive chat calculators)
+  await pool.query(
+    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS widget_spec JSONB"
+  );
   // Migration: hidden column on messages (internal trigger prompts hidden from chat UI)
   await pool.query(
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"

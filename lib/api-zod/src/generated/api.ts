@@ -448,6 +448,10 @@ export const GetAnalysisResponse = zod.object({
 })).optional(),
   "followUpQuestions": zod.array(zod.string()).optional(),
   "backQuestions": zod.array(zod.object({ text: zod.string(), options: zod.array(zod.string()).optional() })).nullish(),
+  "widgetSpec": zod.object({
+  "type": zod.enum(["heat_abatement", "fresh_cow"]),
+  "prefill": zod.record(zod.number()),
+}).nullish(),
   "error": zod.string().nullish(),
   "imageObjectPath": zod.string().nullish(),
   "createdAt": zod.coerce.date()
