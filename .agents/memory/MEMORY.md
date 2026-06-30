@@ -16,3 +16,4 @@
 - [Milchvieh benchmark report](milchvieh-benchmark-report.md) — 3-case KPI logic, documentType='benchmark_reference', kpiRows in sections JSONB, factor in master_data
 - [Drizzle HNSW index operator class](drizzle-hnsw-index.md) — use .using("hnsw", sql`col vector_cosine_ops`) not .using().on(); operator class goes in using() call
 - [Milchvieh server startup order](milchvieh-startup-order.md) — server must listen() before warmupEmbeddingModel(); .hf-cache is gitignored so model downloads at cold start in prod
+- [Milchvieh DevAutoLogin lockout](milchvieh-dev-autologin.md) — never reset attemptedRef in catch block; doing so causes infinite retry loop → Clerk account lockout after 100 attempts

@@ -388,9 +388,9 @@ function DevAutoLogin() {
       })
       .then(() => notifyDevAutoLoginDone())
       .catch(() => {
-        // Credentials wrong or login failed — unblock and show normal login
+        // Credentials wrong or login failed — unblock and show normal login.
+        // Do NOT reset attemptedRef — prevents infinite retry loop (→ account lockout).
         notifyDevAutoLoginDone();
-        attemptedRef.current = false;
       });
   }, [isLoaded, isSignedIn, signIn, setActive, devEmail, devPassword]);
 
