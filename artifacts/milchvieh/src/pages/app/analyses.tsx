@@ -937,7 +937,9 @@ const PROSE_CLASSES = "prose prose-sm max-w-none " +
   "[&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:bg-muted/60 " +
   "[&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top " +
   "[&_tbody_tr:nth-child(even)]:bg-muted/20 " +
-  "[&_td[align=right]]:text-right [&_th[align=right]]:text-right [&_td[align=center]]:text-center [&_th[align=center]]:text-center";
+  "[&_td[align=right]]:text-right [&_th[align=right]]:text-right [&_td[align=center]]:text-center [&_th[align=center]]:text-center " +
+  "[&_pre]:!text-sm [&_pre]:leading-relaxed " +
+  "[&_:not(pre)>code]:!text-[0.9em]";
 
 const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
   const processed = stripTrustMarkers(text);
