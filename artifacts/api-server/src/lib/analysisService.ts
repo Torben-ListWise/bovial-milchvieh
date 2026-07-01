@@ -41,47 +41,46 @@ function classifyQuestion(q: string, hasImage: boolean): ModelTaskType {
   if (hasImage) return "chat_analysis";
   const lower = q.toLowerCase();
 
-  // Explicit complex-signal exclusions — any match → full analysis
+  // ── Step 1: Investment/stall-planning → deep Opus even on turn 0 ────────────
+  // Must be checked FIRST — these keywords also appear in the complexKeywords
+  // list below, so checking them before that list ensures they are routed to
+  // chat_analysis_deep rather than chat_analysis.
+  const investmentStallKeywords = [
+    "investition", "investier", "investiere",
+    "stall", "umbau", "neubau", "bauplanung",
+    "finanzier", "businessplan",
+    "langfristig", "rentabilit",
+    "strategie", "planung",
+  ];
+  if (investmentStallKeywords.some((k) => lower.includes(k))) return "chat_analysis_deep";
+
+  // ── Step 2: General complex-signal exclusions → standard full analysis ───────
   const complexKeywords = [
     "trend", "verlauf", "entwicklung", "zeitverlauf", "zeitreihe", "prognose",
     "vergleich", "gegenüber", "unterschied", "vorjahr", "vormonat",
-    "investition", "investiere", "investier", "kosten", "rentabilit",
-    "optimier", "strategie", "warum", "ursache", "erklär",
+    "kosten", "warum", "ursache", "erklär",
+    "optimier",
     "korrelation", "zusammenhang", "anomalie", "ausreißer",
     "ranking", "top", "flop", "benchmark", "bericht",
     "alle", "gesamt", "übersicht",
   ];
   if (complexKeywords.some((k) => lower.includes(k))) return "chat_analysis";
 
-  // Must reference at least one concrete dairy/livestock KPI
+  // ── Step 3: Must reference exactly one concrete dairy/livestock KPI ──────────
   const kpiKeywords = [
-    "milch", "milchleistung", "liter", "kg ecm", "ecm",
-    "zellzahl", "scc", "zellgehalt", "zellzahl",
-    "fett", "fettgehalt", "eiweiß", "eiweißgehalt", "protein",
+    "milchleistung", "milchmenge", "ecm",
+    "zellzahl", "scc", "zellgehalt",
+    "fettgehalt", "eiweißgehalt", "proteingehalt",
     "melkung", "gemelk",
-    "trächtig", "conception", "befruchtung", "brunst", "pregnancy",
+    "trächtig", "conception", "befruchtung", "brunst",
     "zwischenkalb", "kalbung", "abkalbung",
-    "trockensteher", "laktation",
+    "trockensteher", "laktationstag",
     "remontierung", "abgang", "nutzungsdauer",
-    "futteraufnahme", "grundfutter",
-    "temperature", "temperatur",
+    "futteraufnahme",
   ];
-  const hasKpi = kpiKeywords.some((k) => lower.includes(k));
-  if (!hasKpi) return "chat_analysis"; // no recognized KPI → don't assume simple
-
-  // Multiple KPI references → complex question
-  const kpiMatchCount = kpiKeywords.filter((k) => lower.includes(k)).length;
-  if (kpiMatchCount > 2) return "chat_analysis";
-
-  // Investment / stall-planning keywords → pre-route to deep Opus even on turn 0
-  const investmentStallKeywords = [
-    "investition", "investier", "investiere",
-    "stall", "umbau", "neubau", "bauplanung",
-    "strategie", "planung", "finanzier",
-    "langfristig", "rentabilit", "businessplan",
-    "zukunft", "perspektiv",
-  ];
-  if (investmentStallKeywords.some((k) => lower.includes(k))) return "chat_analysis_deep";
+  const kpiMatches = kpiKeywords.filter((k) => lower.includes(k));
+  // Simple path requires exactly one KPI reference — no more, no less
+  if (kpiMatches.length !== 1) return "chat_analysis";
 
   return "chat_analysis_simple";
 }

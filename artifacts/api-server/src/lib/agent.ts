@@ -1994,9 +1994,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     // Per-turn model routing
     // -------------------------------------------------------------------------
     const recentToolCalls = turnToolCounts.slice(-2).reduce((s, c) => s + c, 0);
+    // askFarmerCalledInPriorRound means the user has just answered a back-question
+    // from the previous conversation message — this is already conversational Turn N+1,
+    // so we allow escalation even on turn 0 of this runAgent() invocation.
     const shouldEscalate =
-      turn > 0 &&
-      (askFarmerEverCalled || recentToolCalls > 6 || opts.depthLevel === "deep");
+      (opts.askFarmerCalledInPriorRound === true && turn === 0) ||
+      (turn > 0 && (askFarmerEverCalled || recentToolCalls > 6 || opts.depthLevel === "deep"));
 
     let turnTaskType: ModelTaskType = opts.initialTaskType ?? "chat_analysis";
     // Turn-0 Opus is only used when pre-routing already classified the question
