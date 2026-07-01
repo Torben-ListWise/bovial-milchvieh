@@ -2,7 +2,7 @@ import { useGetAdminStats } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Database, FileText, AlertTriangle, Zap, Cpu } from "lucide-react";
+import { Users, Database, FileText, AlertTriangle, Zap } from "lucide-react";
 
 interface CacheStatsResponse {
   totalCalls: number;
@@ -83,37 +83,6 @@ export function OperatorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-destructive">{stats?.warningsOpen || 0}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Modell-Nutzung</h2>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Modell-Verteilung (alle Aufrufe)</CardTitle>
-            <Cpu className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { model: "claude-haiku-4-5-20251001", label: "Haiku", desc: "Haiku (Batch-Aufgaben)" },
-                { model: "claude-sonnet-4-6", label: "Sonnet", desc: "Sonnet (Standard-Chat)" },
-                { model: "claude-opus-4-6", label: "Opus", desc: "Opus (Tiefgründige Analysen)" },
-              ].map(({ model, label, desc }) => {
-                const count = (stats as any)?.[`modelCalls_${label.toLowerCase()}`];
-                return (
-                  <div key={model}>
-                    <div className="text-xs text-muted-foreground mb-1">{desc}</div>
-                    <div className="text-2xl font-bold">{count ?? "–"}</div>
-                    <div className="text-xs text-muted-foreground/60 mt-0.5 font-mono">{model}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-3">
-              Aus api_usage_log — wird beim Neuladen der Seite aktualisiert.
-            </p>
           </CardContent>
         </Card>
       </div>

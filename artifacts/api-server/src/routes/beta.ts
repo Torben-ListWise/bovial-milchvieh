@@ -39,7 +39,8 @@ router.get(
           MAX(btl.escalation_trigger)                               AS last_escalation_type,
           COUNT(DISTINCT mf.id) FILTER (WHERE mf.rating = 'down')  AS thumbs_down_count,
           COUNT(DISTINCT mf.id) FILTER (WHERE mf.rating = 'up')    AS thumbs_up_count,
-          MAX(a.updated_at) AS last_activity
+          MAX(a.updated_at) AS last_activity,
+          a.depth_level
         FROM analyses a
         JOIN users u ON u.id = a.user_id
         JOIN subscriptions s ON s.user_id = u.id AND s.plan = 'beta'
@@ -47,7 +48,7 @@ router.get(
         LEFT JOIN beta_tool_logs btl ON btl.analysis_id = a.id
         LEFT JOIN message_feedback mf ON mf.message_id = m.id
         ${filterUserId ? sql`WHERE u.id = ${filterUserId}` : sql``}
-        GROUP BY a.id, u.id
+        GROUP BY a.id, u.id, a.depth_level
         ${escalated === "true" ? sql`HAVING BOOL_OR(btl.escalation_trigger IS NOT NULL) = true` : sql``}
         ORDER BY MAX(a.updated_at) DESC
         LIMIT 200

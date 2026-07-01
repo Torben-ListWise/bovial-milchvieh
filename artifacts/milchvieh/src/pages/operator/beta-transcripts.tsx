@@ -28,6 +28,7 @@ type TranscriptSummary = {
   thumbs_down_count: number;
   thumbs_up_count: number;
   last_activity: string;
+  depth_level: "quick" | "deep" | null;
 };
 
 type ToolLog = {
@@ -348,6 +349,11 @@ export default function BetaTranscriptsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {t.depth_level === "deep" && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700">
+                      Ausführlich
+                    </span>
+                  )}
                   {t.has_escalation && (
                     <EscalationBadge trigger={t.last_escalation_type} />
                   )}

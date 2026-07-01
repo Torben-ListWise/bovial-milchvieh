@@ -31,19 +31,49 @@ const FALLBACK_CHIPS = [
   "Wo ist das größte Verbesserungspotenzial?",
 ];
 
-/** Keyword-based pre-routing heuristic (no LLM call). */
+/**
+ * Keyword-based pre-routing heuristic (no LLM call).
+ * Returns chat_analysis_simple only when the question refers to a single KPI
+ * and contains NO complex signal keywords (trend/investment/comparison/etc.).
+ * Any image in the message forces the full analysis path.
+ */
 function classifyQuestion(q: string, hasImage: boolean): ModelTaskType {
   if (hasImage) return "chat_analysis";
   const lower = q.toLowerCase();
+
+  // Explicit complex-signal exclusions — any match → full analysis
   const complexKeywords = [
-    "trend", "verlauf", "vergleich", "investition", "investiere", "investier",
-    "entwicklung", "prognose", "zeitreihe", "diagramm", "chart", "korrelation",
-    "benchmark", "anomalie", "ranking", "ursache", "warum", "optimier", "strategie",
+    "trend", "verlauf", "entwicklung", "zeitverlauf", "zeitreihe", "prognose",
+    "vergleich", "gegenüber", "unterschied", "vorjahr", "vormonat",
+    "investition", "investiere", "investier", "kosten", "rentabilit",
+    "optimier", "strategie", "warum", "ursache", "erklär",
+    "korrelation", "zusammenhang", "anomalie", "ausreißer",
+    "ranking", "top", "flop", "benchmark", "bericht",
+    "alle", "gesamt", "übersicht",
   ];
   if (complexKeywords.some((k) => lower.includes(k))) return "chat_analysis";
-  // Short question without complex terms → single-KPI fast path
-  if (q.trim().length < 80) return "chat_analysis_simple";
-  return "chat_analysis";
+
+  // Must reference at least one concrete dairy/livestock KPI
+  const kpiKeywords = [
+    "milch", "milchleistung", "liter", "kg ecm", "ecm",
+    "zellzahl", "scc", "zellgehalt", "zellzahl",
+    "fett", "fettgehalt", "eiweiß", "eiweißgehalt", "protein",
+    "melkung", "gemelk",
+    "trächtig", "conception", "befruchtung", "brunst", "pregnancy",
+    "zwischenkalb", "kalbung", "abkalbung",
+    "trockensteher", "laktation",
+    "remontierung", "abgang", "nutzungsdauer",
+    "futteraufnahme", "grundfutter",
+    "temperature", "temperatur",
+  ];
+  const hasKpi = kpiKeywords.some((k) => lower.includes(k));
+  if (!hasKpi) return "chat_analysis"; // no recognized KPI → don't assume simple
+
+  // Multiple KPI references → complex question
+  const kpiMatchCount = kpiKeywords.filter((k) => lower.includes(k)).length;
+  if (kpiMatchCount > 2) return "chat_analysis";
+
+  return "chat_analysis_simple";
 }
 
 export async function generateFollowUps(question: string, answer: string): Promise<string[]> {
@@ -238,6 +268,16 @@ export async function processQuestion(
       const depthLevel: "quick" | "deep" | null =
         depthLevelRaw === "quick" || depthLevelRaw === "deep" ? depthLevelRaw : null;
 
+      // Detect whether ask_farmer was called in a previous conversation message.
+      // If any prior assistant message has backQuestions, the current turn is the
+      // user's reply — escalate to Opus immediately so context-gathering continues.
+      const askFarmerCalledInPriorRound = history.some(
+        (m) =>
+          m.role === "assistant" &&
+          Array.isArray((m as any).backQuestions) &&
+          ((m as any).backQuestions as unknown[]).length > 0,
+      );
+
       const result = await Promise.race([
         runAgent({
           datasetId: analysis.datasetId,
@@ -249,6 +289,7 @@ export async function processQuestion(
           betaAnalysisId: analysis.id,
           initialTaskType,
           depthLevel,
+          askFarmerCalledInPriorRound,
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
           onChart: sse?.onChart,

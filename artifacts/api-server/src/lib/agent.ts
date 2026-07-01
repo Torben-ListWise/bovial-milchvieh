@@ -909,6 +909,12 @@ interface RunOptions {
    * null / undefined → auto (default behaviour).
    */
   depthLevel?: "quick" | "deep" | null;
+  /**
+   * True when ask_farmer was called in a PREVIOUS conversation message (prior runAgent() invocation)
+   * and the user has now replied. Causes immediate Opus escalation from Turn 0 of this invocation.
+   * Derived from message history by processQuestion() before calling runAgent().
+   */
+  askFarmerCalledInPriorRound?: boolean;
 }
 
 async function fetchDocumentContext(datasetId: string): Promise<string> {
@@ -1960,9 +1966,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const maxTurns = 20;
 
   // -------------------------------------------------------------------------
-  // Model routing state — tracked per runAgent() invocation
+  // Model routing state — tracked per runAgent() invocation.
+  // Seed askFarmerEverCalled from prior-round state so that when a user
+  // replies to an ask_farmer back-question (new processQuestion call), the
+  // very first turn of this invocation also escalates to Opus.
   // -------------------------------------------------------------------------
-  let askFarmerEverCalled = false;
+  let askFarmerEverCalled = opts.askFarmerCalledInPriorRound ?? false;
   const turnToolCounts: number[] = [];
 
   // Grounding: tools that prove real data was accessed

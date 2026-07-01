@@ -3226,14 +3226,13 @@ export function AnalysesPage() {
         <div className="flex items-center gap-1.5 mt-2 px-1">
           <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
           {([
-            { value: null, label: "Standard" },
-            { value: "quick" as const, label: "Schnell" },
-            { value: "deep" as const, label: "Tiefgründig" },
+            { value: null, label: "Schnelle Antwort" },
+            { value: "deep" as const, label: "Ausführliche Analyse" },
           ] as const).map(({ value, label }) => (
             <button
               key={String(value)}
               type="button"
-              onClick={() => setPendingDepthLevel(pendingDepthLevel === value ? null : value)}
+              onClick={() => setPendingDepthLevel(value)}
               className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
                 pendingDepthLevel === value
                   ? "border-primary bg-primary/10 text-primary font-medium"
@@ -3250,9 +3249,8 @@ export function AnalysesPage() {
         <div className="flex items-center gap-1.5 mt-2 px-1">
           <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
           {([
-            { value: null, label: "Standard" },
-            { value: "quick" as const, label: "Schnell" },
-            { value: "deep" as const, label: "Tiefgründig" },
+            { value: null, label: "Schnelle Antwort" },
+            { value: "deep" as const, label: "Ausführliche Analyse" },
           ] as const).map(({ value, label }) => {
             const current = (analysis as any).depthLevel ?? null;
             const isActive = current === value;
