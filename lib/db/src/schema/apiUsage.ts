@@ -15,7 +15,7 @@ export const apiUsageLogTable = pgTable(
     outputTokens: integer("output_tokens").notNull().default(0),
     cacheCreationTokens: integer("cache_creation_tokens").notNull().default(0),
     cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
-    modelUsed: text("model_used").notNull().default("claude-sonnet-4-6"),
+    modelUsed: text("model_used").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

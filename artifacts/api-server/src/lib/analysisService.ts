@@ -272,10 +272,22 @@ export async function processQuestion(
 
     try {
       const hasImage = !!opts?.imageObjectPath;
-      const initialTaskType = classifyQuestion(question, hasImage);
+      const classified = classifyQuestion(question, hasImage);
       const depthLevelRaw = (analysis as any).depthLevel as string | null | undefined;
       const depthLevel: "quick" | "deep" | null =
         depthLevelRaw === "quick" || depthLevelRaw === "deep" ? depthLevelRaw : null;
+
+      // Turn-0 Opus (chat_analysis_deep) is only used when BOTH the pre-routing
+      // heuristic detected investment/stall-planning context AND the user has
+      // explicitly chosen "Ausführliche Analyse" (depthLevel="deep").
+      // In auto/quick mode, investment/stall questions use Sonnet on turn 0 but
+      // can still escalate to Opus on turn N+1 via the normal shouldEscalate path.
+      const initialTaskType: ModelTaskType =
+        classified === "chat_analysis_deep" && depthLevel === "deep"
+          ? "chat_analysis_deep"
+          : classified === "chat_analysis_deep"
+          ? "chat_analysis"
+          : classified;
 
       // Detect whether the IMMEDIATELY PRECEDING assistant message used ask_farmer.
       // Only the last assistant message is checked — a backQuestion anywhere in
