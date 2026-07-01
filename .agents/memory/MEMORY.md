@@ -19,3 +19,4 @@
 - [Milchvieh DevAutoLogin lockout](milchvieh-dev-autologin.md) — never reset attemptedRef in catch block; doing so causes infinite retry loop → Clerk account lockout after 100 attempts
 - [Milchvieh objectStorage lazy require](milchvieh-objectstorage-require.md) — objectStorage.ts uses lazy require() for adapters; esbuild bundles it correctly but createRequire() breaks the bundle; never change to ESM imports
 - [Milchvieh knowledge ingest startup](milchvieh-knowledge-ingest-startup.md) — index.ts auto-ingests status='pending' knowledge docs at server startup; reset to 'pending' + restart to retry stuck 'processing' docs; CRON_SECRET not set in dev
+- [Milchvieh model routing](milchvieh-model-routing.md) — getModelForTask() in agent.ts is the ONLY place with model strings; all services import it; drizzle-kit push fails with 42710 (role exists) — use ALTER TABLE ... ADD COLUMN IF NOT EXISTS via psql instead

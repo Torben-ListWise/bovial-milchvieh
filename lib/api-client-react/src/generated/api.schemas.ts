@@ -367,6 +367,7 @@ export interface AnalysisUpdate {
   pinned?: boolean;
   tags?: string[];
   contextFileIds?: string[];
+  depthLevel?: 'quick' | 'deep' | null;
 }
 
 export interface Citation {

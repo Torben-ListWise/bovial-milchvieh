@@ -12,6 +12,7 @@ import { ingestKnowledgeDoc } from "../lib/ingest";
 import { scrapeUrl, validateUrl, canonicalizeUrl } from "../lib/scraper";
 import { logger } from "../lib/logger";
 import Anthropic from "@anthropic-ai/sdk";
+import { getModelForTask } from "../lib/agent";
 
 interface KnowledgeUploadUrlBodyType {
   filename: string;
@@ -446,7 +447,7 @@ Antworte NUR mit einem JSON-Array in dieser Form, ohne weiteren Text:
     try {
       const client = new Anthropic({ apiKey });
       const msg = await client.messages.create({
-        model: "claude-3-5-haiku-20241022",
+        model: getModelForTask("doc_categorization"),
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }],
       });

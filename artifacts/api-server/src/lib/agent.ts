@@ -33,7 +33,37 @@ import {
 import { CANONICAL_FIELD_MAP } from "./canonical";
 import { logger } from "./logger";
 
-const MODEL = "claude-sonnet-4-5";
+// ---------------------------------------------------------------------------
+// Central model routing — the ONLY place in the codebase with model strings.
+// All other files must import getModelForTask() and never hardcode a model.
+// Verified 2026-07-01: claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-6 ✓
+// ---------------------------------------------------------------------------
+
+export type ModelTaskType =
+  | "newsletter_generation"
+  | "insights_summary"
+  | "doc_categorization"
+  | "follow_up_generation"
+  | "benchmark_extraction"
+  | "chat_analysis_simple"
+  | "chat_analysis"
+  | "chat_analysis_deep";
+
+export function getModelForTask(taskType: ModelTaskType): string {
+  switch (taskType) {
+    case "newsletter_generation":
+    case "insights_summary":
+    case "doc_categorization":
+    case "follow_up_generation":
+    case "benchmark_extraction":
+      return "claude-haiku-4-5-20251001";
+    case "chat_analysis_simple":
+    case "chat_analysis":
+      return "claude-sonnet-4-6";
+    case "chat_analysis_deep":
+      return "claude-opus-4-6";
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Prompt-cache metrics accumulator (in-memory, per process, resets on restart)
@@ -531,6 +561,15 @@ const TOOLS: Tool[] = [
   },
 ];
 
+/** Reduced toolset for simple single-KPI questions — no ask_farmer, no investment calc, no chart. */
+function getToolsForTask(taskType: ModelTaskType): Tool[] {
+  if (taskType === "chat_analysis_simple") {
+    const exclude = new Set(["ask_farmer", "calculate_investment", "emit_chart"]);
+    return TOOLS.filter((t) => !exclude.has(t.name));
+  }
+  return TOOLS;
+}
+
 const SECTOR_CONTEXT: Record<string, string> = {
   dairy: `BETRIEBSTYP: Milchviehbetrieb
 Du analysierst Daten eines Milchviehbetriebs. Moderne Kernkennzahlen: Milchleistung (kg ECM), Zellzahl (SCC, Tsd./ml), Pregnancy Rate / 21-Tage-Trächtigkeitsrate (= Brunsterkennungsrate × Konzeptionsrate / 100), Heat Detection Rate, Remontierung, Laktationsnummer, Abgänge.
@@ -857,6 +896,19 @@ interface RunOptions {
   onSourceSearched?: (sources: string[]) => void;
   /** Called immediately when a chart is emitted by the agent (before done). */
   onChart?: (chart: Chart) => void;
+  /**
+   * Seed task type for model routing on Turn 0.
+   * "chat_analysis_simple" → Sonnet + reduced toolset for single-KPI questions.
+   * "chat_analysis" (default) → Sonnet + full toolset.
+   * Auto-escalates to Opus on Turn N+1 when: ask_farmer was used, >6 recent tool calls, or depthLevel="deep".
+   */
+  initialTaskType?: ModelTaskType;
+  /**
+   * "quick" caps the model at Sonnet (no Opus even on complex turns).
+   * "deep"  allows Opus from Turn 0 for explicitly complex questions.
+   * null / undefined → auto (default behaviour).
+   */
+  depthLevel?: "quick" | "deep" | null;
 }
 
 async function fetchDocumentContext(datasetId: string): Promise<string> {
@@ -1907,6 +1959,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const betaToolLog: BetaToolEntry[] = [];
   const maxTurns = 20;
 
+  // -------------------------------------------------------------------------
+  // Model routing state — tracked per runAgent() invocation
+  // -------------------------------------------------------------------------
+  let askFarmerEverCalled = false;
+  const turnToolCounts: number[] = [];
+
   // Grounding: tools that prove real data was accessed
   const groundedTools = new Set([
     "get_schema",
@@ -1923,18 +1981,42 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
+    // -------------------------------------------------------------------------
+    // Per-turn model routing
+    // -------------------------------------------------------------------------
+    const recentToolCalls = turnToolCounts.slice(-2).reduce((s, c) => s + c, 0);
+    const shouldEscalate =
+      turn > 0 &&
+      (askFarmerEverCalled || recentToolCalls > 6 || opts.depthLevel === "deep");
+
+    let turnTaskType: ModelTaskType = opts.initialTaskType ?? "chat_analysis";
+    if (turn === 0 && opts.depthLevel === "deep" && turnTaskType === "chat_analysis") {
+      turnTaskType = "chat_analysis_deep";
+    }
+    if (shouldEscalate) {
+      turnTaskType = "chat_analysis_deep";
+    }
+    // "quick" mode: never escalate to Opus
+    if (opts.depthLevel === "quick" && turnTaskType === "chat_analysis_deep") {
+      turnTaskType = "chat_analysis";
+    }
+
+    const turnModel = getModelForTask(turnTaskType);
+    const turnMaxTokens = turnTaskType === "chat_analysis_simple" ? 2048 : 8192;
+    const turnTools = getToolsForTask(turnTaskType);
+
     // Use streaming so text tokens reach the client in real-time via onTextDelta.
     // callWithRetry wraps finalMessage(); 500/529 errors from Anthropic occur
     // before the first token arrives, so retries never emit duplicate deltas.
     const response = await callWithRetry(async () => {
       const stream = client.messages.stream({
-        model: MODEL,
-        max_tokens: 8192,
+        model: turnModel,
+        max_tokens: turnMaxTokens,
         system: buildSystemBlocks(
           docContext,
           ((opts.systemExtra ?? "") + knowledgeTitles + datasetContext) || undefined,
         ),
-        tools: TOOLS,
+        tools: turnTools,
         tool_choice: { type: "auto" as const },
         messages,
       });
@@ -1977,6 +2059,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       outputTokens: usage.output_tokens,
       cacheCreationTokens: cacheCreation,
       cacheReadTokens: cacheRead,
+      modelUsed: turnModel,
     }).catch((err: unknown) => {
       logger.warn({ err }, "api_usage_log insert failed");
     });
@@ -2016,6 +2099,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       if (toolUses.some((t) => groundedTools.has(t.name) || ((isFollowUp || hasDocContext) && t.name === "emit_chart"))) {
         toolWasCalled = true;
       }
+      // Track ask_farmer calls for Opus escalation on next turn
+      if (toolUses.some((t) => t.name === "ask_farmer")) {
+        askFarmerEverCalled = true;
+      }
+      // Track tool count per turn for >6-tool escalation heuristic
+      turnToolCounts.push(toolUses.length);
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const tu of toolUses) {

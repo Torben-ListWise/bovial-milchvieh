@@ -17,6 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { asc, and, gte, lte, eq, sql } from "drizzle-orm";
 import { db, pool, newsTopicsTable, newsletterEditionsTable } from "@workspace/db";
 import { logger } from "./logger";
+import { getModelForTask } from "./agent";
 import { validateUrl } from "./scraper";
 import { embedQuery } from "./embeddings";
 import * as cheerio from "cheerio";
@@ -336,7 +337,7 @@ Wichtig:
 - Antworte NUR mit dem JSON, kein Markdown-Codeblock`;
 
   const response = await client.messages.create({
-    model: "claude-haiku-4-5",
+    model: getModelForTask("newsletter_generation"),
     max_tokens: 1200,
     messages: [{ role: "user", content: prompt }],
   });

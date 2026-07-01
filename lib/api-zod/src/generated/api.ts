@@ -378,6 +378,7 @@ export const ListAnalysesResponseItem = zod.object({
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
   "contextFileIds": zod.array(zod.string()).default([]),
+  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional(),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()
@@ -417,6 +418,7 @@ export const GetAnalysisResponse = zod.object({
   "templateRef": zod.string().nullish(),
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
+  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional(),
   "createdAt": zod.coerce.date(),
   "messages": zod.array(zod.object({
   "id": zod.string(),
@@ -471,7 +473,8 @@ export const UpdateAnalysisBody = zod.object({
   "category": zod.string().optional(),
   "pinned": zod.boolean().optional(),
   "tags": zod.array(zod.string()).optional(),
-  "contextFileIds": zod.array(zod.string().uuid()).optional()
+  "contextFileIds": zod.array(zod.string().uuid()).optional(),
+  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional()
 })
 
 export const UpdateAnalysisResponse = zod.object({
@@ -486,6 +489,7 @@ export const UpdateAnalysisResponse = zod.object({
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
   "contextFileIds": zod.array(zod.string()).default([]),
+  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional(),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()

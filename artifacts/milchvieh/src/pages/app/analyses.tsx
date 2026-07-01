@@ -2088,6 +2088,7 @@ export function AnalysesPage() {
     uploading: boolean;
   } | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
+  const [pendingDepthLevel, setPendingDepthLevel] = useState<"quick" | "deep" | null>(null);
   // Upload scope picker: null = no picker shown, otherwise the file being dropped
   const [scopePicker, setScopePicker] = useState<{
     file: File; uploadURL: string; objectPath: string; msgId: string;
@@ -2191,6 +2192,15 @@ export function AnalysesPage() {
         setQuestion("");
         inputRef.current?.focus();
         openSseStream(data.id);
+        // Apply pending depth level (if user selected one before first message)
+        if (pendingDepthLevel) {
+          updateAnalysis.mutate({ analysisId: data.id, data: { depthLevel: pendingDepthLevel } }, {
+            onSuccess: () => {
+              queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
+              queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(data.id) });
+            },
+          });
+        }
       },
       onError: (err: any) => {
         const status = err?.status ?? err?.response?.status;
@@ -2546,7 +2556,7 @@ export function AnalysesPage() {
     });
   }
 
-  function handleUpdateAnalysis(id: string, patch: { pinned?: boolean; contextFileIds?: string[] }) {
+  function handleUpdateAnalysis(id: string, patch: { pinned?: boolean; contextFileIds?: string[]; depthLevel?: "quick" | "deep" | null }) {
     updateAnalysis.mutate({ analysisId: id, data: patch }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
@@ -2623,6 +2633,7 @@ export function AnalysesPage() {
           ...(pendingContextFileIds.length > 0 ? { contextFileIds: pendingContextFileIds } : {}),
         },
       });
+      // After creation, apply selected depth level if any
       setPendingContextFileIds([]);
       setFilePickerOpen(false);
     } else {
@@ -3210,6 +3221,58 @@ export function AnalysesPage() {
           )}
         </Button>
       </div>
+      {/* Depth level selector — shown when there's no active analysis yet */}
+      {!activeAnalysisId && (
+        <div className="flex items-center gap-1.5 mt-2 px-1">
+          <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
+          {([
+            { value: null, label: "Standard" },
+            { value: "quick" as const, label: "Schnell" },
+            { value: "deep" as const, label: "Tiefgründig" },
+          ] as const).map(({ value, label }) => (
+            <button
+              key={String(value)}
+              type="button"
+              onClick={() => setPendingDepthLevel(pendingDepthLevel === value ? null : value)}
+              className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
+                pendingDepthLevel === value
+                  ? "border-primary bg-primary/10 text-primary font-medium"
+                  : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Depth level badge — shown on existing analysis */}
+      {activeAnalysisId && analysis && (
+        <div className="flex items-center gap-1.5 mt-2 px-1">
+          <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
+          {([
+            { value: null, label: "Standard" },
+            { value: "quick" as const, label: "Schnell" },
+            { value: "deep" as const, label: "Tiefgründig" },
+          ] as const).map(({ value, label }) => {
+            const current = (analysis as any).depthLevel ?? null;
+            const isActive = current === value;
+            return (
+              <button
+                key={String(value)}
+                type="button"
+                onClick={() => handleUpdateAnalysis(activeAnalysisId, { depthLevel: value })}
+                className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {!activeAnalysisId && (
         <p className="hidden md:block text-xs text-muted-foreground mt-1.5 px-1">
           Tipp: Dateien direkt auf diese Seite ziehen zum Hochladen

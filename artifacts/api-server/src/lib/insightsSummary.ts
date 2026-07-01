@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db, reportsTable, datasetsTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { getModelForTask } from "./agent";
 
 export async function generateInsightsSummary(datasetId: string): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -43,7 +44,7 @@ export async function generateInsightsSummary(datasetId: string): Promise<void> 
   let text: string | null = null;
   try {
     const msg = await client.messages.create({
-      model: "claude-3-5-haiku-20241022",
+      model: getModelForTask("insights_summary"),
       max_tokens: 350,
       messages: [
         {

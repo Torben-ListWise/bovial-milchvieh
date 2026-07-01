@@ -12,7 +12,7 @@ import {
   type Analysis,
   type Message,
 } from "@workspace/db";
-import { runAgent, MissingApiKeyError, type Chart, type Citation, type BetaToolEntry } from "./agent";
+import { runAgent, getModelForTask, type ModelTaskType, MissingApiKeyError, type Chart, type Citation, type BetaToolEntry } from "./agent";
 import { categorizeQuestion } from "./categorize";
 import { logger } from "./logger";
 import { normalizeSector } from "./serializers";
@@ -31,10 +31,25 @@ const FALLBACK_CHIPS = [
   "Wo ist das größte Verbesserungspotenzial?",
 ];
 
+/** Keyword-based pre-routing heuristic (no LLM call). */
+function classifyQuestion(q: string, hasImage: boolean): ModelTaskType {
+  if (hasImage) return "chat_analysis";
+  const lower = q.toLowerCase();
+  const complexKeywords = [
+    "trend", "verlauf", "vergleich", "investition", "investiere", "investier",
+    "entwicklung", "prognose", "zeitreihe", "diagramm", "chart", "korrelation",
+    "benchmark", "anomalie", "ranking", "ursache", "warum", "optimier", "strategie",
+  ];
+  if (complexKeywords.some((k) => lower.includes(k))) return "chat_analysis";
+  // Short question without complex terms → single-KPI fast path
+  if (q.trim().length < 80) return "chat_analysis_simple";
+  return "chat_analysis";
+}
+
 export async function generateFollowUps(question: string, answer: string): Promise<string[]> {
   try {
     const resp = await anthropicClient.messages.create({
-      model: "claude-sonnet-4-5",
+      model: getModelForTask("follow_up_generation"),
       max_tokens: 200,
       messages: [{
         role: "user",
@@ -217,6 +232,12 @@ export async function processQuestion(
     );
 
     try {
+      const hasImage = !!opts?.imageObjectPath;
+      const initialTaskType = classifyQuestion(question, hasImage);
+      const depthLevelRaw = (analysis as any).depthLevel as string | null | undefined;
+      const depthLevel: "quick" | "deep" | null =
+        depthLevelRaw === "quick" || depthLevelRaw === "deep" ? depthLevelRaw : null;
+
       const result = await Promise.race([
         runAgent({
           datasetId: analysis.datasetId,
@@ -226,6 +247,8 @@ export async function processQuestion(
           userId: analysis.userId ?? undefined,
           isBeta: isBetaUser,
           betaAnalysisId: analysis.id,
+          initialTaskType,
+          depthLevel,
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
           onChart: sse?.onChart,

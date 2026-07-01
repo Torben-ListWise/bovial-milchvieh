@@ -88,6 +88,9 @@ function serializeAnalysis(a: Analysis, messageCount?: number) {
     agentProgress: (a as any).agentProgress ?? null,
     agentSteps: ((a as any).agentSteps as string[] | null) ?? [],
     contextFileIds: ((a as any).contextFileIds as string[] | null) ?? [],
+    depthLevel: (["quick", "deep"].includes((a as any).depthLevel ?? "")
+      ? ((a as any).depthLevel as "quick" | "deep")
+      : null),
     messageCount: messageCount ?? 0,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt ?? null,
@@ -300,6 +303,7 @@ router.patch("/analyses/:analysisId", requireAuth, async (req: Request, res: Res
       ...(parsed.data.pinned !== undefined ? { pinned: parsed.data.pinned } : {}),
       ...(parsed.data.tags !== undefined ? { tags: parsed.data.tags } : {}),
       ...(parsed.data.contextFileIds !== undefined ? { contextFileIds: parsed.data.contextFileIds } : {}),
+      ...(parsed.data.depthLevel !== undefined ? { depthLevel: parsed.data.depthLevel } : {}),
       updatedAt: new Date(),
     } as any)
     .where(eq(analysesTable.id, analysisId))

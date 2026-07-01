@@ -20,7 +20,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { computeDashboard } from "../lib/compute";
-import { runAgent } from "../lib/agent";
+import { runAgent, getModelForTask } from "../lib/agent";
 import { logger } from "../lib/logger";
 import { generateInsightsSummary } from "../lib/insightsSummary";
 import Anthropic from "@anthropic-ai/sdk";
@@ -137,7 +137,7 @@ router.post(
         try {
           const client = new Anthropic({ apiKey });
           const extraction = await client.messages.create({
-            model: "claude-3-5-haiku-20241022",
+            model: getModelForTask("benchmark_extraction"),
             max_tokens: 512,
             messages: [
               {
