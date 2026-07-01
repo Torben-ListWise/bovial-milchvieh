@@ -1,0 +1,49 @@
+MODELL-ROUTING: HINTERGRUND-OPTIMIERUNG + TIEFENSTUFEN-AUSWAHL FÜR USER
+
+Zwei unabhängige Schritte, bitte in dieser Reihenfolge umsetzen.
+
+SCHRITT 1 — AUTOMATISCHES MODELL-ROUTING IM HINTERGRUND
+Kein UI-Aufwand, reine Backend-Änderung in agent.ts. Das aktuell einheitliche Modell (claude-sonnet-4-5) wird durch ein aufgabenabhängiges Routing ersetzt:
+
+HAIKU (claude-haiku-4-5-20251001) für:
+- Nächtlicher Newsletter-Job (wöchentliche Batch-Generierung)
+- Wöchentliche Erkenntnis-Zusammenfassung der letzten 5 Benchmarkreports auf der Startseite
+- Klassifikationsschritt vor dem Haupt-Tool-Pfad (DairyComp-Frage vs. Datenanalyse-Frage vs. allgemeine Frage) — dieser Schritt existiert bereits im Agent, bitte auf Haiku umstellen
+- Einfache Einzelkennzahl-Abfragen ohne Tool-Calls (erkennbar daran, dass stop_reason nach Turn 0 bereits end_turn ist ohne Tool-Use)
+
+SONNET (claude-sonnet-4-6) für:
+- Normaler Chat mit Datenanalyse (1-5 Tool-Calls, keine mehrstufige Rückfrage)
+- Benchmarkreport-Erstellung
+- Wissensbibliothek-Fragen (search_knowledge, search_dairycomp_manual)
+- Newsletter-Verdichtung und Übersetzung ins Deutsche
+
+OPUS (claude-opus-4-6) für:
+- Mehrstufige Investitionsplanung mit ask_farmer-Rückfragen (erkennbar: calculate_investment im Tool-Set aktiv UND ask_farmer wurde bereits aufgerufen)
+- Stallplanung mit Bildauswertung (erkennbar: Image-Content-Block in der Nachricht UND Stallplanungs-Kontext)
+- Komplexe Analysen mit mehr als 8 Tool-Calls in einem Turn-Zyklus
+
+Das Routing wird zentral an einer einzigen Stelle in agent.ts konfiguriert (eine kleine Routing-Funktion getModelForTask(taskType)), nicht verstreut über den Code, damit Modell-Updates später an einer Stelle passieren.
+
+Der aktuell verwendete Modell-String soll nicht hardcodiert bleiben, sondern immer über getModelForTask() bezogen werden. Bestehende Logik (Prompt-Caching, tool_choice, Patch H) bleibt vollständig erhalten.
+
+SCHRITT 2 — TIEFENSTUFEN-AUSWAHL FÜR DEN USER (optional, nach Schritt 1)
+Im Chat-Interface zwei Buttons vor dem Absenden einer Nachricht: "Schnelle Antwort" und "Ausführliche Analyse". Keine Modellnamen sichtbar, keine technischen Details — nur diese zwei Bezeichnungen.
+
+Im Backend mapped das wie folgt:
+- "Schnelle Antwort" → erzwingt maximal Haiku oder Sonnet, nie Opus, auch wenn die Aufgaben-Heuristik aus Schritt 1 eigentlich Opus wählen würde
+- "Ausführliche Analyse" → erlaubt Opus, erhöht intern ein Flag das dem Agent signalisiert, mehr Tool-Calls und mehrstufige Rückfragen zuzulassen als im Default
+
+Standard wenn der User nichts auswählt: automatisches Routing aus Schritt 1, kein Zwang zur Auswahl.
+
+Die gewählte Tiefenstufe wird pro Konversation in der Datenbank gespeichert (für spätere Auswertung im Operator-Bereich, welche Tiefenstufe wie oft gewählt wird — relevant für Kostencontrolling und Fair-Use-Auswertung).
+
+KEINE Umbenennung von Modellen, keine Anzeige von Modellnamen gegenüber dem User, keine Behauptung, ein Modell sei etwas anderes als es ist.
+
+TESTS VOR ABSCHLUSS:
+a) Eine einfache Einzelkennzahl-Frage ohne Tool-Calls verwendet Haiku laut Log
+b) Eine normale Datenanalyse-Frage mit get_kpis-Aufruf verwendet Sonnet laut Log
+c) Eine Investitionsfrage mit ask_farmer-Rückfrage verwendet Opus laut Log
+d) "Schnelle Antwort" erzwingt nicht-Opus auch bei einer komplexen Frage
+e) "Ausführliche Analyse" erlaubt Opus bei einer Investitionsfrage
+f) getModelForTask() ist die einzige Stelle im Code, an der Modell-Strings stehen — keine hardcodierten Strings an anderer Stelle
+Bitte alle sechs Testergebnisse explizit zurückmelden.

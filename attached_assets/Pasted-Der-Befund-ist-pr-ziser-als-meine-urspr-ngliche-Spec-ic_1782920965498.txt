@@ -1,0 +1,146 @@
+Der Befund ist präziser als meine ursprüngliche Spec — ich schreibe sie vollständig neu statt nur zu patchen, weil drei der Kritisch-Punkte die Grundlogik betreffen, nicht nur Details.
+Zur Modell-Frage vorab: Laut aktueller Anthropic-Dokumentation sind die korrekten Strings claude-haiku-4-5-20251001, claude-sonnet-4-6 und claude-opus-4-6 — alle drei existieren, der Replit-Agent hat claude-sonnet-4-6 fälschlich als nicht vorhanden eingestuft. Das sollte vor dem Absenden einmal per API-Aufruf verifiziert werden, wie er selbst vorschlägt.
+MODELL-ROUTING: KORRIGIERTE SPEC v2 — VOLLSTÄNDIG NEU, ERSETZT DIE VORHERIGE
+
+Hintergrund: Die vorherige Spec hatte drei kritische Logikfehler (Post-hoc-Erkennung, 
+zirkuläre Opus-Kriterien, fehlende Dateien) und drei mittlere Lücken 
+(DB-Migration, API-Log, UI-Widerspruch). Diese Spec adressiert alle neun Befunde.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCHRITT 0 — MODELL-STRINGS VERIFIZIEREN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Vor jeder anderen Änderung: Alle drei Modell-Strings einmalig per 
+Anthropic-API-Aufruf verifizieren (z. B. minimaler Test-Completion-Call).
+Ziel-Strings:
+- Haiku:  claude-haiku-4-5-20251001
+- Sonnet: claude-sonnet-4-6
+- Opus:   claude-opus-4-6
+
+Falls ein String ungültig zurückkommt: auf den nächst verfügbaren 
+Fallback wechseln und im Log festhalten, welcher String tatsächlich 
+verwendet wird. Kein Weitermachen ohne verifizierte Strings.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCHRITT 1 — ZENTRALE ROUTING-FUNKTION getModelForTask()
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Neue zentrale Funktion getModelForTask(taskType: TaskType): string anlegen.
+Alle sechs aktuell hardcodierten Modell-Strings durch Aufrufe dieser 
+Funktion ersetzen — vollständige Liste der betroffenen Stellen:
+
+- agent.ts:36           → taskType: "chat_analysis"
+- analysisService.ts:37 → taskType: "follow_up_generation"
+- insightsSummary.ts:46 → taskType: "insights_summary"
+- newsWeeklyBatch.ts:339→ taskType: "newsletter_generation"
+- knowledge.ts:449      → taskType: "doc_categorization"
+- reports.ts:140        → taskType: "benchmark_extraction"
+
+Mapping in getModelForTask():
+- "newsletter_generation"   → Haiku
+- "insights_summary"        → Haiku
+- "doc_categorization"      → Haiku
+- "follow_up_generation"    → Haiku
+- "benchmark_extraction"    → Haiku (bleibt wie heute, kein Upgrade auf Sonnet —
+                              einfache JSON-Extraktion ist Haiku-Stoff, 
+                              Kosten-Upgrade ist nicht gewünscht)
+- "chat_analysis"           → Sonnet (Default)
+- "chat_analysis_deep"      → Opus (nur wenn explizit durch Tiefenstufe oder 
+                              Turn-N+1-Eskalation ausgelöst, siehe Schritt 2)
+
+Test f) ist damit erfüllbar: getModelForTask() ist die einzige Stelle 
+im Code mit Modell-Strings. Keine anderen hardcodierten Strings erlaubt.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCHRITT 2 — PRE-ROUTING-HEURISTIK (NEU ZU BAUEN, EXISTIERT NICHT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Kein LLM-Call für die Klassifikation — leichtgewichtige Keyword/Struktur-
+Heuristik auf dem Fragetext vor Turn 0, rein regelbasiert:
+
+HAIKU-Signal (schnelle Einzelfrage):
+- Frage enthält genau eine Kennzahl-Referenz (Zellzahl, SCC, Milch, PR)
+  UND keine zeitlichen Vergleichswörter (Trend, Verlauf, letztes Jahr)
+  UND keine Investitions-Schlüsselwörter (Kosten, Euro, lohnt, investieren)
+  UND kein Bild-Anhang
+→ taskType: "chat_analysis" mit internem Flag simple:true 
+  (Haiku-Routing über getModelForTask, aber kein eigener taskType nötig —
+  das Standard-"chat_analysis" bleibt Sonnet, nur das Flag reduziert 
+  max_tokens und Toolset)
+
+OPUS-Eskalation (Turn N+1, nicht Turn 0):
+Opus wird NICHT auf Turn 0 entschieden. Stattdessen: Nach jedem Turn 
+wird geprüft, ob für den nächsten Turn auf Opus eskaliert werden soll.
+Opus-Kriterien (alle auf Beobachtungen aus abgeschlossenen Turns basiert):
+- ask_farmer wurde in einem vorherigen Turn aufgerufen (beobachtbar aus 
+  messages[]-Historie) UND Nutzer hat geantwortet (nächste user-Message 
+  nach ask_farmer vorhanden)
+- ODER: In den letzten 2 Turns wurden zusammen mehr als 6 Tool-Calls 
+  ausgeführt (aus messages[]-Historie zählbar)
+- ODER: Nutzer hat Tiefenstufe "Ausführliche Analyse" gewählt (siehe 
+  Schritt 3)
+→ taskType: "chat_analysis_deep" → Opus
+
+Default für alle anderen Turns: taskType: "chat_analysis" → Sonnet
+
+WICHTIG: "calculate_investment im Tool-Set aktiv" wird NICHT als 
+Opus-Kriterium verwendet — das Tool ist immer im Set, die Bedingung 
+wäre immer true. Gestrichen.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCHRITT 3 — TIEFENSTUFEN-AUSWAHL FÜR DEN USER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Einmalige Auswahl am Konversationsbeginn, nicht pro Nachricht.
+Beim Start einer neuen Konversation (nicht beim Absenden einzelner 
+Nachrichten) zwei Optionen anbieten:
+- "Schnelle Antwort" (Default, vorausgewählt)
+- "Ausführliche Analyse"
+
+Gilt für alle Nachrichten dieser Konversation, keine Änderung mittendrin.
+Kein Modellname sichtbar, keine technischen Details.
+
+Im Backend:
+- "Schnelle Antwort" → Opus-Eskalationskriterien aus Schritt 2 
+  bleiben aktiv, aber Opus wird durch Sonnet ersetzt falls ausgelöst
+- "Ausführliche Analyse" → Opus-Eskalation wie in Schritt 2, 
+  zusätzlich bereits ab Turn 0 Opus wenn Frage erkennbar komplex 
+  (Investition, Stallplanung, mehrstufige Analyse)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCHRITT 4 — DB-MIGRATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Drizzle-Schema-Änderungen:
+
+1. analyses-Tabelle: neue Spalte depth_level 
+   (text, nullable, Werte: "quick" | "deep", Default null für 
+   bestehende Einträge)
+
+2. api_usage_log-Tabelle (oder gleichwertige bestehende Log-Tabelle): 
+   neue Spalte model_used (text, not null) — wird bei jedem 
+   Anthropic-API-Aufruf mit dem tatsächlich verwendeten Modell-String 
+   befüllt, nicht mit dem taskType. Damit ist später auswertbar, 
+   welches Modell welche Kosten verursacht hat.
+
+Beide Spalten per drizzle-kit generate + db:push in Production 
+deployen. Bitte bestätigen, dass die Migration sauber durchläuft 
+ohne bestehende Daten zu verändern.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TESTS VOR ABSCHLUSS (alle sechs plus drei neue)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+a) Einfache Einzelkennzahl-Frage ohne Zeitvergleich/Investition/Bild 
+   → api_usage_log zeigt Haiku oder Sonnet (je nach simple-Flag), 
+   niemals Opus
+b) Normale Datenanalyse-Frage mit get_kpis-Aufruf → Sonnet laut Log
+c) Konversation mit ask_farmer-Rückfrage in Turn 1 → Turn 2 verwendet 
+   Opus laut Log
+d) "Schnelle Antwort" gewählt, dann komplexe Frage → kein Opus im Log
+e) "Ausführliche Analyse" gewählt, dann Investitionsfrage → Opus im Log
+f) Grep über die gesamte Codebasis nach hartcodierten Strings 
+   "claude-haiku", "claude-sonnet", "claude-opus" → kein Treffer 
+   außerhalb von getModelForTask()
+g) api_usage_log enthält nach einem API-Aufruf den tatsächlichen 
+   Modell-String in der neuen model_used-Spalte
+h) DB-Migration läuft ohne Fehler, bestehende analyses-Zeilen haben 
+   depth_level = null
+i) reports.ts verwendet weiterhin Haiku (kein stiller Kosten-Upgrade 
+   auf Sonnet)
+
+Bitte alle neun Testergebnisse explizit zurückmelden.
