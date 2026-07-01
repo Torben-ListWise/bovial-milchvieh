@@ -349,9 +349,17 @@ export default function BetaTranscriptsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {t.depth_level === "deep" && (
+                  {t.depth_level === "deep" ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700">
                       Ausführlich
+                    </span>
+                  ) : t.depth_level === "quick" ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-100 text-sky-700">
+                      Schnell
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+                      Automatisch
                     </span>
                   )}
                   {t.has_escalation && (

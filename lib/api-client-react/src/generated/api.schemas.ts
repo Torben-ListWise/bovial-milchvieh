@@ -359,6 +359,7 @@ export interface AnalysisInput {
   title?: string;
   question?: string;
   contextFileIds?: string[];
+  depthLevel?: 'quick' | 'deep' | null;
 }
 
 export interface AnalysisUpdate {

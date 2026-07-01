@@ -1999,9 +1999,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       (askFarmerEverCalled || recentToolCalls > 6 || opts.depthLevel === "deep");
 
     let turnTaskType: ModelTaskType = opts.initialTaskType ?? "chat_analysis";
-    if (turn === 0 && opts.depthLevel === "deep" && turnTaskType === "chat_analysis") {
-      turnTaskType = "chat_analysis_deep";
-    }
+    // Turn-0 Opus is only used when pre-routing already classified the question
+    // as investment/stall-planning (chat_analysis_deep) — NOT for every deep-mode question.
+    // depthLevel="deep" gates escalation on N+1 turns via shouldEscalate below.
     if (shouldEscalate) {
       turnTaskType = "chat_analysis_deep";
     }

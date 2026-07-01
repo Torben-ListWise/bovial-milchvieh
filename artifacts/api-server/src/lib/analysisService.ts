@@ -73,6 +73,16 @@ function classifyQuestion(q: string, hasImage: boolean): ModelTaskType {
   const kpiMatchCount = kpiKeywords.filter((k) => lower.includes(k)).length;
   if (kpiMatchCount > 2) return "chat_analysis";
 
+  // Investment / stall-planning keywords → pre-route to deep Opus even on turn 0
+  const investmentStallKeywords = [
+    "investition", "investier", "investiere",
+    "stall", "umbau", "neubau", "bauplanung",
+    "strategie", "planung", "finanzier",
+    "langfristig", "rentabilit", "businessplan",
+    "zukunft", "perspektiv",
+  ];
+  if (investmentStallKeywords.some((k) => lower.includes(k))) return "chat_analysis_deep";
+
   return "chat_analysis_simple";
 }
 
@@ -268,15 +278,16 @@ export async function processQuestion(
       const depthLevel: "quick" | "deep" | null =
         depthLevelRaw === "quick" || depthLevelRaw === "deep" ? depthLevelRaw : null;
 
-      // Detect whether ask_farmer was called in a previous conversation message.
-      // If any prior assistant message has backQuestions, the current turn is the
-      // user's reply — escalate to Opus immediately so context-gathering continues.
-      const askFarmerCalledInPriorRound = history.some(
-        (m) =>
-          m.role === "assistant" &&
-          Array.isArray((m as any).backQuestions) &&
-          ((m as any).backQuestions as unknown[]).length > 0,
-      );
+      // Detect whether the IMMEDIATELY PRECEDING assistant message used ask_farmer.
+      // Only the last assistant message is checked — a backQuestion anywhere in
+      // the history would over-escalate long conversations.
+      const lastAssistantMsg = [...history]
+        .reverse()
+        .find((m) => m.role === "assistant");
+      const askFarmerCalledInPriorRound =
+        lastAssistantMsg !== undefined &&
+        Array.isArray((lastAssistantMsg as any).backQuestions) &&
+        ((lastAssistantMsg as any).backQuestions as unknown[]).length > 0;
 
       const result = await Promise.race([
         runAgent({

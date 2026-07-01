@@ -208,6 +208,9 @@ router.post(
         ...(parsed.data.contextFileIds !== undefined
           ? { contextFileIds: parsed.data.contextFileIds }
           : {}),
+        ...(parsed.data.depthLevel !== undefined
+          ? { depthLevel: parsed.data.depthLevel }
+          : {}),
       } as any)
       .returning();
 

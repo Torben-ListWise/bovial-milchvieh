@@ -396,7 +396,8 @@ export const CreateAnalysisParams = zod.object({
 export const CreateAnalysisBody = zod.object({
   "title": zod.string().optional(),
   "question": zod.string().optional(),
-  "contextFileIds": zod.array(zod.string().uuid()).optional()
+  "contextFileIds": zod.array(zod.string().uuid()).optional(),
+  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional()
 })
 
 

@@ -2088,7 +2088,7 @@ export function AnalysesPage() {
     uploading: boolean;
   } | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
-  const [pendingDepthLevel, setPendingDepthLevel] = useState<"quick" | "deep" | null>(null);
+  const [pendingDepthLevel, setPendingDepthLevel] = useState<"quick" | "deep">("quick");
   // Upload scope picker: null = no picker shown, otherwise the file being dropped
   const [scopePicker, setScopePicker] = useState<{
     file: File; uploadURL: string; objectPath: string; msgId: string;
@@ -2192,15 +2192,6 @@ export function AnalysesPage() {
         setQuestion("");
         inputRef.current?.focus();
         openSseStream(data.id);
-        // Apply pending depth level (if user selected one before first message)
-        if (pendingDepthLevel) {
-          updateAnalysis.mutate({ analysisId: data.id, data: { depthLevel: pendingDepthLevel } }, {
-            onSuccess: () => {
-              queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
-              queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(data.id) });
-            },
-          });
-        }
       },
       onError: (err: any) => {
         const status = err?.status ?? err?.response?.status;
@@ -2630,6 +2621,7 @@ export function AnalysesPage() {
         data: {
           title: text,
           question: text,
+          depthLevel: pendingDepthLevel,
           ...(pendingContextFileIds.length > 0 ? { contextFileIds: pendingContextFileIds } : {}),
         },
       });
@@ -3226,11 +3218,11 @@ export function AnalysesPage() {
         <div className="flex items-center gap-1.5 mt-2 px-1">
           <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
           {([
-            { value: null, label: "Schnelle Antwort" },
+            { value: "quick" as const, label: "Schnelle Antwort" },
             { value: "deep" as const, label: "Ausführliche Analyse" },
           ] as const).map(({ value, label }) => (
             <button
-              key={String(value)}
+              key={value}
               type="button"
               onClick={() => setPendingDepthLevel(value)}
               className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
@@ -3249,11 +3241,12 @@ export function AnalysesPage() {
         <div className="flex items-center gap-1.5 mt-2 px-1">
           <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
           {([
-            { value: null, label: "Schnelle Antwort" },
+            { value: "quick" as const, label: "Schnelle Antwort" },
             { value: "deep" as const, label: "Ausführliche Analyse" },
           ] as const).map(({ value, label }) => {
-            const current = (analysis as any).depthLevel ?? null;
-            const isActive = current === value;
+            const current = (analysis as any).depthLevel as "quick" | "deep" | null;
+            // Treat null (legacy analyses) as "quick" for display purposes
+            const isActive = (current ?? "quick") === value;
             return (
               <button
                 key={String(value)}
