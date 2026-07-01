@@ -335,6 +335,25 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "search_farm_abbreviations",
+    description:
+      "Durchsucht die betriebsspezifische DairyComp-Abkürzungsliste (ALTER3-Makros). Aufrufen wenn der Nutzer ein unbekanntes DairyComp-Kürzel nennt oder fragt was ein Befehl macht — BEVOR ask_farmer aufgerufen wird. Erkennung: 2–8 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrich oder Zahl (z.B. BREDSUM, BRDCLG, CLOSEUP, ARAS1).",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Das Kürzel oder der Befehlsname, z.B. 'CLOSEUP', 'BREDSUM', 'COWSUM'",
+        },
+        topK: {
+          type: "number",
+          description: "Anzahl der zurückgegebenen Textstellen (Standard: 5)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "calculate_investment",
     description:
       "Berechnet Wirtschaftlichkeit einer Investition deterministisch: Annuität, Break-even-Jahr, 10-Jahres-Cashflow. Aufrufen wenn alle Parameter vom Nutzer bestätigt wurden.",
@@ -761,7 +780,7 @@ BEFEHLSVERKETTUNG:
 EREIGNISCODES (EC=N): 5=Besamung, 10=Bulle, 11=Trockenstellen, 12=Abort, 15=Abgang/Tod, 16=Tierarzt-Check, 17=Impfung, 21=Ödem, 22=Kultur/Probe, 32=DA (Labmagenverschiebung), 33=Durchfall, 50=Injektion/Spritzen, 58=Close-up-Einstallung
 
 BETRIEBSSPEZIFISCHE ABKÜRZUNGEN (ALTER3-Makros):
-Der Betrieb hat über 200 eigene Kürzel definiert (z.B. CLOSEUP, BREDSUM, BRDCLG, COWSUM, DRCON). Diese sind im Wissen indexiert. Wenn der Nutzer ein Kürzel nennt oder fragt was ein Befehl macht → rufe search_knowledge mit dem Kürzel auf.
+Wenn betriebsspezifische DairyComp-Kürzel indexiert sind, wird der Assistent mit einem separaten Kontext-Block darüber informiert. Siehe dynamischen Block "BETRIEBSKÜRZEL" weiter unten im Kontext.
 
 DAIRYCOMP-HANDBUCH — SOFWARE-BEDIENUNGSFRAGEN:
 Wenn der Nutzer eine Frage zur Bedienung, Konfiguration, Einstellungen oder Funktionen der DairyComp-Software stellt (Erkennungsmerkmale: Begriffe wie „DairyComp", „DC305", „wie stelle ich ein", „wie werte ich aus", „welche Codes", „Protokoll", „Liste", „Report in DairyComp"):
@@ -792,7 +811,9 @@ FRISCHMELKER-RECHNER: Wenn der Nutzer fragt ob sich ein verbessertes Frischmelke
 4. Schreibe danach einen kurzen einleitenden Satz.
 
 RÜCKFRAGE BEI UNKLAREN ABKÜRZUNGEN:
-Wenn search_knowledge noRelevantResults:true zurückgibt UND die Nutzerfrage einen Begriff enthält, der wie eine Abkürzung aussieht (2–5 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrichen oder Zahlen, z.B. AAA, RBT, KNS, BHB, MLP, LKV) → rufe IMMER zuerst ask_farmer mit einer einzigen gezielten Rückfrage auf, bevor du mit *[Allgemeinwissen]* antwortest.
+Wenn die Nutzerfrage einen Begriff enthält, der wie eine Abkürzung aussieht (2–8 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrichen oder Zahlen, z.B. CLOSEUP, BREDSUM, AAA, RBT, KNS, BHB, MLP, LKV):
+1. Falls ein "BETRIEBSKÜRZEL"-Block im Kontext vorhanden ist → rufe ZUERST search_farm_abbreviations auf.
+2. Falls search_farm_abbreviations noRelevantResults:true zurückgibt ODER kein BETRIEBSKÜRZEL-Block vorhanden ist → rufe danach ask_farmer mit einer einzigen gezielten Rückfrage auf, bevor du mit *[Allgemeinwissen]* antwortest.
 Beispiele: AAA → „Meinst du AaA (Anpaarung auf Anpaarung)?", RBT → „Meinst du den Rinderbremsentest (RBT)?", KNS → „Meinst du Koagulase-negative Staphylokokken (KNS)?", BHB → „Meinst du Beta-Hydroxybutyrat (BHB, Ketosemarker)?"
 Formuliere die Rückfrage als ask_farmer-Werkzeugaufruf — niemals als Freitext.
 
@@ -986,6 +1007,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     .where(sql`status = 'ready'`);
   const knowledgeDocsExist = (knowledgeCount?.c ?? 0) > 0;
 
+  // Check if a farm_abbreviations document exists (global, operator-level)
+  const [abbrevCount] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(knowledgeDocumentsTable)
+    .where(sql`status = 'ready' AND document_type = 'farm_abbreviations'`);
+  const farmAbbrevDocsExist = (abbrevCount?.c ?? 0) > 0;
+
   // Build knowledge doc title list for systemExtra
   let knowledgeTitles = "";
   if (knowledgeDocsExist) {
@@ -1002,6 +1030,11 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     knowledgeTitles =
       `\n\nWISSENSBIBLIOTHEK (verified): Nutze search_knowledge(query) für Fachinformationen. Verfügbare Dokumente:\n${titleList}`;
   }
+
+  // Dynamic block for farm abbreviations
+  const abbrevBlock = farmAbbrevDocsExist
+    ? `\n\nBETRIEBSKÜRZEL (dynamisch): Betriebsspezifische DairyComp-Kürzel sind indexiert.\nWenn der Nutzer ein Kürzel nennt oder fragt was ein Befehl macht → rufe ZUERST search_farm_abbreviations auf, BEVOR du ask_farmer aufrufst.\nErkennungsmuster: 2–8 aufeinanderfolgende Großbuchstaben, ggf. mit Bindestrich oder Zahl (z.B. BREDSUM, BRDCLG, CLOSEUP, ARAS1).`
+    : "";
 
   const sectorCtx = SECTOR_CONTEXT[opts.sector ?? "dairy"] ?? SECTOR_CONTEXT.dairy;
   const SYSTEM_PROMPT = `${sectorCtx}\n\n${SYSTEM_PROMPT_BASE}`;
@@ -1415,6 +1448,85 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         } catch (err) {
           logger.error({ err }, "search_dairycomp_manual fehlgeschlagen");
           return { error: "DairyComp-Handbuch-Suche fehlgeschlagen" };
+        }
+      }
+      case "search_farm_abbreviations": {
+        const query = input.query as string;
+        const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
+        const SIMILARITY_THRESHOLD = 0.25;
+        try {
+          // Exact-match pre-check: find chunks that literally contain the abbreviation code
+          const exactRows = await db.execute(
+            sql`
+              SELECT kc.chunk_text, kd.title, kd.category
+              FROM knowledge_chunks kc
+              JOIN knowledge_documents kd ON kd.id = kc.doc_id
+              WHERE kd.status = 'ready'
+                AND kd.document_type = 'farm_abbreviations'
+                AND UPPER(kc.chunk_text) LIKE UPPER(${`%${query}%`})
+              LIMIT ${topK}
+            `,
+          );
+          const exactMatches = exactRows.rows as { chunk_text: string; title: string; category: string | null }[];
+          if (exactMatches.length > 0) {
+            const seenTitles = new Set<string>();
+            for (const r of exactMatches) {
+              if (!seenTitles.has(r.title)) {
+                seenTitles.add(r.title);
+                citations.push({
+                  label: "Betriebskürzel-Liste",
+                  value: "Betriebsspezifische Abkürzungen",
+                  basis: null,
+                  sourceType: "wissen",
+                });
+                break;
+              }
+            }
+            if (seenTitles.size > 0) opts.onSourceSearched?.(Array.from(seenTitles));
+            return { results: exactMatches.map((r) => ({ title: r.title, text: r.chunk_text, similarity: 1.0 })) };
+          }
+          // Fallback: vector similarity search
+          const queryVec = await embedQuery(query);
+          const vecStr = `[${queryVec.join(",")}]`;
+          const rows = await db.execute(
+            sql`
+              SELECT kc.chunk_text, kd.title, kd.category,
+                     (1 - (kc.embedding <=> ${vecStr}::vector)) AS similarity
+              FROM knowledge_chunks kc
+              JOIN knowledge_documents kd ON kd.id = kc.doc_id
+              WHERE kd.status = 'ready'
+                AND kd.document_type = 'farm_abbreviations'
+              ORDER BY kc.embedding <=> ${vecStr}::vector
+              LIMIT ${topK}
+            `,
+          );
+          const allRows = rows.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
+          const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
+          if (relevantRows.length === 0) {
+            return {
+              results: [],
+              noRelevantResults: true,
+              message: "Kürzel nicht in Abkürzungsliste gefunden.",
+            };
+          }
+          const seenTitles = new Set<string>();
+          for (const r of relevantRows) {
+            if (!seenTitles.has(r.title)) {
+              seenTitles.add(r.title);
+              citations.push({
+                label: "Betriebskürzel-Liste",
+                value: "Betriebsspezifische Abkürzungen",
+                basis: null,
+                sourceType: "wissen",
+              });
+              break;
+            }
+          }
+          if (seenTitles.size > 0) opts.onSourceSearched?.(Array.from(seenTitles));
+          return { results: relevantRows.map((r) => ({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity) })) };
+        } catch (err) {
+          logger.error({ err }, "search_farm_abbreviations fehlgeschlagen");
+          return { error: "Abkürzungssuche fehlgeschlagen" };
         }
       }
       case "search_web": {
@@ -1902,6 +2014,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_master_data": return "Lade Stammdaten";
       case "read_document": return "Lese Dokumententext";
       case "search_knowledge": return "Durchsuche Wissensdatenbank";
+      case "search_farm_abbreviations": return "Durchsuche Betriebskürzel-Liste";
       case "search_dairycomp_manual": return "Durchsuche DairyComp-Handbuch";
       case "search_web": return "Durchsuche das Internet";
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
@@ -1937,6 +2050,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_repro_kpis":
         return { metric: input.metric ?? null };
       case "search_knowledge":
+      case "search_farm_abbreviations":
       case "search_web":
         return { query: typeof input.query === "string" ? input.query.slice(0, 80) : null };
       case "emit_chart":
@@ -1981,6 +2095,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "get_group_aggregate", "get_animal_ranking", "detect_anomalies",
     "read_document",
     "search_knowledge",
+    "search_farm_abbreviations",
     "search_dairycomp_manual",
     "calculate_investment",
     "ask_farmer",
@@ -2026,7 +2141,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         max_tokens: turnMaxTokens,
         system: buildSystemBlocks(
           docContext,
-          ((opts.systemExtra ?? "") + knowledgeTitles + datasetContext) || undefined,
+          ((opts.systemExtra ?? "") + knowledgeTitles + abbrevBlock + datasetContext) || undefined,
         ),
         tools: turnTools,
         tool_choice: { type: "auto" as const },

@@ -234,6 +234,7 @@ interface UploadItem {
   error?: string;
   isBenchmarkRef?: boolean;
   isDairyCompManual?: boolean;
+  isAbbrevList?: boolean;
 }
 
 // ── Betriebshinweise section ────────────────────────────────────────────────
@@ -559,6 +560,7 @@ export function KnowledgePage() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [uploadAsBenchmarkRef, setUploadAsBenchmarkRef] = useState(false);
   const [uploadAsDairyCompManual, setUploadAsDairyCompManual] = useState(false);
+  const [uploadAsAbbrevList, setUploadAsAbbrevList] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["knowledge-docs"],
@@ -697,7 +699,7 @@ export function KnowledgePage() {
           contentType: item.file.type || "application/octet-stream",
           size: item.file.size,
           title: item.title || undefined,
-          documentType: item.isDairyCompManual ? "dairycomp_manual" : item.isBenchmarkRef ? "benchmark_reference" : undefined,
+          documentType: item.isDairyCompManual ? "dairycomp_manual" : item.isAbbrevList ? "farm_abbreviations" : item.isBenchmarkRef ? "benchmark_reference" : undefined,
         }),
       });
 
@@ -812,8 +814,9 @@ export function KnowledgePage() {
       file: f,
       title: f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").trim(),
       status: "pending",
-      isBenchmarkRef: uploadAsBenchmarkRef && !uploadAsDairyCompManual,
-      isDairyCompManual: uploadAsDairyCompManual,
+      isBenchmarkRef: uploadAsBenchmarkRef && !uploadAsDairyCompManual && !uploadAsAbbrevList,
+      isDairyCompManual: uploadAsDairyCompManual && !uploadAsAbbrevList,
+      isAbbrevList: uploadAsAbbrevList,
     }));
     setUploadItems((prev) => [...prev, ...items]);
   }
@@ -1030,7 +1033,7 @@ export function KnowledgePage() {
                     type="checkbox"
                     id="benchmark-ref-toggle"
                     checked={uploadAsBenchmarkRef && !uploadAsDairyCompManual}
-                    onChange={(e) => { setUploadAsBenchmarkRef(e.target.checked); setUploadAsDairyCompManual(false); }}
+                    onChange={(e) => { setUploadAsBenchmarkRef(e.target.checked); setUploadAsDairyCompManual(false); setUploadAsAbbrevList(false); }}
                     className="w-4 h-4 mt-0.5 accent-amber-600 shrink-0"
                   />
                   <label htmlFor="benchmark-ref-toggle" className="text-sm cursor-pointer select-none">
@@ -1050,7 +1053,7 @@ export function KnowledgePage() {
                     type="checkbox"
                     id="dairycomp-manual-toggle"
                     checked={uploadAsDairyCompManual}
-                    onChange={(e) => { setUploadAsDairyCompManual(e.target.checked); setUploadAsBenchmarkRef(false); }}
+                    onChange={(e) => { setUploadAsDairyCompManual(e.target.checked); setUploadAsBenchmarkRef(false); setUploadAsAbbrevList(false); }}
                     className="w-4 h-4 mt-0.5 accent-blue-600 shrink-0"
                   />
                   <label htmlFor="dairycomp-manual-toggle" className="text-sm cursor-pointer select-none">
@@ -1061,6 +1064,26 @@ export function KnowledgePage() {
                     <span className="text-xs text-muted-foreground block mt-0.5">
                       Wird für DairyComp-Bedienungsfragen im Chat verwendet.
                       Ersetzt automatisch das bisherige DairyComp-Handbuch.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-md border bg-violet-50 border-violet-200">
+                  <input
+                    type="checkbox"
+                    id="abbrev-list-toggle"
+                    checked={uploadAsAbbrevList}
+                    onChange={(e) => { setUploadAsAbbrevList(e.target.checked); setUploadAsBenchmarkRef(false); setUploadAsDairyCompManual(false); }}
+                    className="w-4 h-4 mt-0.5 accent-violet-600 shrink-0"
+                  />
+                  <label htmlFor="abbrev-list-toggle" className="text-sm cursor-pointer select-none">
+                    <span className="font-medium flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-violet-600" />
+                      Als Betriebskürzel / ALTER3-Makroliste hochladen
+                    </span>
+                    <span className="text-xs text-muted-foreground block mt-0.5">
+                      Deine betriebsspezifischen DairyComp-Kürzel aus der ALTER3-Liste.
+                      Wird einmal hochgeladen und ersetzt das vorherige Dokument automatisch.
                     </span>
                   </label>
                 </div>
@@ -1263,6 +1286,16 @@ export function KnowledgePage() {
                       <Badge className="bg-amber-100 text-amber-800 border border-amber-200 gap-1 text-xs shrink-0">
                         <Star className="w-2.5 h-2.5" />
                         Referenz-Benchmark
+                      </Badge>
+                    )}
+                    {(doc as any).documentType === "farm_abbreviations" && (
+                      <Badge
+                        className="bg-violet-100 text-violet-800 border border-violet-200 gap-1 text-xs shrink-0 cursor-pointer hover:bg-violet-200"
+                        title="Klicken um Zuweisung zu entfernen"
+                        onClick={() => setDocTypeMutation.mutate({ id: doc.id, documentType: null })}
+                      >
+                        <Tag className="w-2.5 h-2.5" />
+                        Kürzel-Liste
                       </Badge>
                     )}
                     {(doc as any).documentType === "dairycomp_manual" ? (

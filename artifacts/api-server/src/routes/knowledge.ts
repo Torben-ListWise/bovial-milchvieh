@@ -120,7 +120,7 @@ router.post(
     }
 
     // Single-active-document types: uploading a new version replaces the existing one.
-    const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual"] as const;
+    const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual", "farm_abbreviations"] as const;
     if (documentType && (SINGLE_ACTIVE_TYPES as readonly string[]).includes(documentType)) {
       const [existingDoc] = await db
         .select()
@@ -341,7 +341,7 @@ router.patch(
 
     // SINGLE_ACTIVE_TYPES: if setting a type that only allows one active doc,
     // clear the same type from all other documents first.
-    const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual"] as const;
+    const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual", "farm_abbreviations"] as const;
     if (
       typeof documentType === "string" &&
       (SINGLE_ACTIVE_TYPES as readonly string[]).includes(documentType)
