@@ -182,7 +182,7 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
                 r={5}
                 fill="hsl(var(--primary))"
                 stroke="none"
-                label={{ value: `Peak: ${peakPoint.y} kg, Tag ${peakPoint.x}`, position: 'top', fontSize: 11 }}
+                label={{ value: `Peak: ${peakPoint.y}${unit ? ` ${unit}` : ''}, ${xKey || 'x'} ${peakPoint.x}`, position: 'top', fontSize: 11 }}
                 {...(hasDualAxis ? { yAxisId: 'left' } : {})}
               />
             )}

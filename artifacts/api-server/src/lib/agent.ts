@@ -1568,19 +1568,18 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           type GlossarRow = { chunk_text: string };
           let glossarHits: GlossarRow[] = [];
           if (tokens.length > 0) {
-            const likeConditions = tokens
-              .map((t) => `kc.chunk_text ILIKE '%${t}%'`)
-              .join(" OR ");
+            const likeFragments = tokens.map((t) => sql`kc.chunk_text ILIKE ${'%' + t + '%'}`);
+            const likeCondition = sql.join(likeFragments, sql` OR `);
             const glossarResult = await db.execute(
-              sql.raw(`
+              sql`
                 SELECT kc.chunk_text
                 FROM knowledge_chunks kc
                 JOIN knowledge_documents kd ON kd.id = kc.doc_id
                 WHERE kd.status = 'ready'
                   AND kd.document_type = 'dairycomp_glossar'
-                  AND (${likeConditions})
+                  AND (${likeCondition})
                 LIMIT 5
-              `),
+              `,
             );
             glossarHits = glossarResult.rows as GlossarRow[];
           }
