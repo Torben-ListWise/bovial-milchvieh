@@ -2,7 +2,7 @@ import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGe
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock, Sun, Moon, Monitor } from "lucide-react";
+import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock, Sun, Moon, Monitor, Thermometer } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -682,6 +682,145 @@ function TeamSectionWrapper() {
   return <TeamSection billingPlan={status?.plan ?? null} />;
 }
 
+function StallstandortSection() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+  const [cooling, setCooling] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const token = await getToken();
+        const res = await fetch("/api/thi/settings", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.lat != null) setLat(String(data.lat));
+        if (data.lng != null) setLng(String(data.lng));
+        if (data.stallCoolingCorrection != null) setCooling(Number(data.stallCoolingCorrection));
+      } catch {}
+      if (!cancelled) setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  async function handleSave() {
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+      toast({ variant: "destructive", title: "Ungültige Koordinaten", description: "Breitengrad muss zwischen -90 und 90 liegen." });
+      return;
+    }
+    if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+      toast({ variant: "destructive", title: "Ungültige Koordinaten", description: "Längengrad muss zwischen -180 und 180 liegen." });
+      return;
+    }
+    setSaving(true);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/thi/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ lat: latNum, lng: lngNum, stallCoolingCorrection: cooling }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: "Standort gespeichert", description: "THI-Vorhersagen werden ab jetzt für deinen Betrieb berechnet." });
+    } catch {
+      toast({ variant: "destructive", title: "Fehler", description: "Standort konnte nicht gespeichert werden." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Thermometer className="w-5 h-5 text-primary" />
+          Stallstandort & Hitzestress (THI)
+        </CardTitle>
+        <CardDescription>
+          GPS-Koordinaten deines Betriebs für automatische Wetterprognosen und THI-Berechnung. Der THI-Korrekturfaktor berücksichtigt Kühlung im Stall.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> Lade Einstellungen…
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Breitengrad (Lat)</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="z.B. 48.1374"
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">z.B. München: 48.1374</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Längengrad (Lng)</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="z.B. 11.5755"
+                  value={lng}
+                  onChange={(e) => setLng(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">z.B. München: 11.5755</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Stallkühlung / Korrekturfaktor</label>
+                <span className="text-sm font-semibold tabular-nums" style={{ fontFamily: "var(--app-font-display)" }}>
+                  {cooling > 0 ? `+${cooling}` : cooling}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={-15}
+                max={0}
+                step={1}
+                value={cooling}
+                onChange={(e) => setCooling(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>−15 (stark gekühlt)</span>
+                <span>0 (keine Kühlung)</span>
+              </div>
+              <p className="text-xs text-muted-foreground pt-1">
+                Beispiele: Keine Kühlung → 0 · Ventilatoren → −3 bis −5 · Sprüh­kühlung → −8 bis −10 · Klimaanlage → −12 bis −15
+              </p>
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto">
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Speichern…</> : "Standort speichern"}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ThemeSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -823,6 +962,8 @@ export function SettingsPage() {
       </Card>
 
       <FocusAreasSection />
+
+      <StallstandortSection />
 
       <ThemeSection />
 

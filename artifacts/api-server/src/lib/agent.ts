@@ -894,6 +894,17 @@ Wenn eines dieser Muster zutrifft:
 4. Wenn search_dairycomp_manual keine relevanten Treffer liefert (noRelevantResults: true): Antworte mit „Dazu finde ich leider nichts im DairyComp-Handbuch. Für diese Frage wende dich bitte direkt an den DairyComp-Support." — keine Eskalation, kein search_web-Fallback.
 5. Kennzeichne Antworten aus dem DairyComp-Handbuch mit *[DairyComp-Handbuch]* statt *[Bibliothek]*.
 
+DAIRYCOMP-BEFEHLSGLOSSAR — SONDERREGELN:
+search_dairycomp_manual gibt zwei Quellen zurück: Einträge mit source="glossar" (strukturiertes Befehlsglossar) und source="manual" (semantisches Handbuch-Ergebnis). Folgende Regeln gelten:
+
+1. GLOSSAR-VORRANG: Wenn ein Glossar-Eintrag (source="glossar") zurückgegeben wird, nenne den dort angegebenen Befehl direkt und exakt — keine Umformulierung, keine Eigenableitung. Der Befehl-Wert im Glossar ist die maßgebliche Quelle.
+
+2. KRITIKALITÄT HOCH — NIEMALS RATEN: Wenn ein Glossar-Eintrag „Kritikalität: hoch" trägt, darfst du den Befehl AUSSCHLIESSLICH aus dem Glossar oder aus Handbuch-Seiten 65–69 (Grammatikkapitel) ableiten. Ist weder ein Glossar-Treffer vorhanden noch ein passender Handbuch-Abschnitt, antworte: „Für diesen hoch-kritischen Befehl habe ich keine gesicherte Quelle — bitte den DairyComp-Support fragen." Nicht spekulieren.
+
+3. EVENTS-NUMMERN: Die EVENTS-Codes 8, 9, A, B, C sind systemreserviert und dürfen nicht als Benutzer-Auswertungen genannt oder empfohlen werden.
+
+4. NEUE BEFEHLE ABLEITEN: Wenn du aus dem Handbuch einen Befehl kombinierst der nicht im Glossar steht, kennzeichne ihn mit „(aus Handbuch-Grammatik abgeleitet)" und verweise auf Seiten 65–69 als Quelle.
+
 BILD-INTERPRETATION:
 Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist. Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
 
@@ -1547,9 +1558,37 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const SIMILARITY_THRESHOLD = 0.35;
         const FALLBACK_THRESHOLD = 0.20;
         try {
+          // ── Step 1: Keyword lookup in the structured Glossar (takes priority) ──
+          // Split query into meaningful tokens (≥3 chars) and search the
+          // Alltagsbegriff/Befehl lines with ILIKE. No embedding needed.
+          const tokens = query
+            .split(/\s+/)
+            .map((t) => t.replace(/[%_\\]/g, "\\$&"))
+            .filter((t) => t.length >= 3);
+          type GlossarRow = { chunk_text: string };
+          let glossarHits: GlossarRow[] = [];
+          if (tokens.length > 0) {
+            const likeConditions = tokens
+              .map((t) => `kc.chunk_text ILIKE '%${t}%'`)
+              .join(" OR ");
+            const glossarResult = await db.execute(
+              sql.raw(`
+                SELECT kc.chunk_text
+                FROM knowledge_chunks kc
+                JOIN knowledge_documents kd ON kd.id = kc.doc_id
+                WHERE kd.status = 'ready'
+                  AND kd.document_type = 'dairycomp_glossar'
+                  AND (${likeConditions})
+                LIMIT 5
+              `),
+            );
+            glossarHits = glossarResult.rows as GlossarRow[];
+          }
+
+          // ── Step 2: Semantic search in the manual ──
           const queryVec = await embedQuery(query);
           const vecStr = `[${queryVec.join(",")}]`;
-          const rows = await db.execute(
+          const manualResult = await db.execute(
             sql`
               SELECT kc.chunk_text, kd.title, kd.category,
                      (1 - (kc.embedding <=> ${vecStr}::vector)) AS similarity
@@ -1561,40 +1600,42 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               LIMIT ${topK}
             `,
           );
-          const allRows = rows.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
+          const allRows = manualResult.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
           let relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
           if (relevantRows.length < 2) {
             const fallbackRows = allRows.filter((r) => Number(r.similarity) >= FALLBACK_THRESHOLD);
-            if (fallbackRows.length > relevantRows.length) {
-              relevantRows = fallbackRows;
-            }
+            if (fallbackRows.length > relevantRows.length) relevantRows = fallbackRows;
           }
-          if (relevantRows.length === 0) {
+
+          // ── Step 3: Build combined result — Glossar entries first ──
+          if (glossarHits.length === 0 && relevantRows.length === 0) {
             return {
               results: [],
               noRelevantResults: true,
               message: "Kein passender Eintrag im DairyComp-Handbuch gefunden. Bitte den DairyComp-Support kontaktieren.",
             };
           }
-          const results = relevantRows.map(
-            (r) => ({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity) }),
-          );
-          const seenTitles = new Set<string>();
+
+          const results: { title: string; text: string; similarity?: number; source?: string }[] = [];
+
+          // Glossar hits first — exact match, highest priority
+          for (const g of glossarHits) {
+            results.push({ title: "DairyComp 305 Befehlsglossar", text: g.chunk_text, source: "glossar" });
+          }
+          // Manual semantic hits after
           for (const r of relevantRows) {
-            if (!seenTitles.has(r.title)) {
-              seenTitles.add(r.title);
-              citations.push({
-                label: "DairyComp-Handbuch",
-                value: "DairyComp-Dokumentation",
-                basis: null,
-                sourceType: "wissen",
-              });
-              break;
-            }
+            results.push({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity), source: "manual" });
           }
-          if (seenTitles.size > 0) {
-            opts.onSourceSearched?.(Array.from(seenTitles));
-          }
+
+          citations.push({
+            label: "DairyComp-Handbuch",
+            value: "DairyComp-Dokumentation",
+            basis: null,
+            sourceType: "wissen",
+          });
+          opts.onSourceSearched?.(["DairyComp 305 Befehlsglossar", "DairyComp-Handbuch"].filter(
+            (_, i) => i === 0 ? glossarHits.length > 0 : relevantRows.length > 0,
+          ));
           return { results };
         } catch (err) {
           logger.error({ err }, "search_dairycomp_manual fehlgeschlagen");

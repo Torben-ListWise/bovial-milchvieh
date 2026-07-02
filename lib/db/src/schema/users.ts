@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, doublePrecision, integer } from "drizzle-orm/pg-core";
 
 export const usersTable = pgTable("users", {
   id: text("id").primaryKey(),
@@ -12,6 +12,9 @@ export const usersTable = pgTable("users", {
   onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
   digestOptOut: boolean("digest_opt_out").notNull().default(false),
   themePreference: text("theme_preference"),
+  lat: doublePrecision("lat"),
+  lng: doublePrecision("lng"),
+  stallCoolingCorrection: integer("stall_cooling_correction").notNull().default(0),
 });
 
 export type User = typeof usersTable.$inferSelect;

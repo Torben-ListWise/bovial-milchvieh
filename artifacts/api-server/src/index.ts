@@ -5,6 +5,7 @@ import { startScheduler } from "./lib/scheduler";
 import { startDunningScheduler } from "./lib/dunning";
 import { startDigestScheduler } from "./lib/digestScheduler";
 import { startNewsScheduler } from "./lib/newsWeeklyBatch";
+import { startThiScheduler } from "./lib/thi";
 import { ensureExtensions, setupAnalystSandbox, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
@@ -200,6 +201,7 @@ ensureExtensions()
       startDunningScheduler();
       startDigestScheduler();
       startNewsScheduler();
+      startThiScheduler();
       void clearOrphanedAnalyses();
 
       // Warm up the embedding model in the background so the health check

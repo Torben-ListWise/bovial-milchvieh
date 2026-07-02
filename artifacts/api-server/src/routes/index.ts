@@ -22,6 +22,7 @@ import farmNotesRouter from "./farm-notes";
 import betaRouter from "./beta";
 import feedbackRouter from "./feedback";
 import newsRouter from "./news";
+import thiRouter from "./thi";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(farmNotesRouter);
 router.use(betaRouter);
 router.use(feedbackRouter);
 router.use(newsRouter);
+router.use(thiRouter);
 
 export default router;

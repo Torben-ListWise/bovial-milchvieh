@@ -29,7 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText } from "lucide-react";
+import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -38,6 +38,57 @@ import { DynamicChart } from "@/components/DynamicChart";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { PageLayout } from "@/components/PageLayout";
 import { useListFiles, getListFilesQueryKey, useListDatasets, getListDatasetsQueryKey } from "@workspace/api-client-react";
+import { DataTile } from "@/components/DataTile";
+
+const THI_STATUS_MAP: Record<string, "normal" | "warning" | "critical"> = {
+  normal: "normal",
+  alert: "warning",
+  warning: "warning",
+  critical: "critical",
+  severe: "critical",
+  danger: "critical",
+};
+
+function ThiTile() {
+  const { getToken } = useAuth();
+  const [data, setData] = useState<{
+    thiOutdoor: number;
+    thiEffective: number;
+    status: string;
+    hasCoords: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/api/thi/current`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled) setData(json);
+      } catch {}
+    }
+    load();
+  }, [getToken]);
+
+  if (!data || !data.hasCoords) return null;
+
+  const status = THI_STATUS_MAP[data.status] ?? "normal";
+  const effectiveDiff = Math.round(data.thiEffective - data.thiOutdoor);
+  const unitSuffix = effectiveDiff < 0 ? ` (Stall ${effectiveDiff})` : "";
+
+  return (
+    <DataTile
+      label={`THI Hitzestress${unitSuffix}`}
+      value={data.thiOutdoor.toFixed(1)}
+      source="wetter"
+      status={status}
+    />
+  );
+}
 
 function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; datasetId: string }) {
   const [dismissed, setDismissed] = useState<boolean>(() => {
@@ -468,41 +519,22 @@ export function DatasetOverview() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {overview.kpis.map((kpi) => (
-          <Card key={kpi.key} className="bg-gradient-to-b from-card to-muted/20">
-            <CardContent className="p-6">
-              <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-bold">
-                  {kpi.value !== null ? kpi.value.toLocaleString('de-DE') : '-'}
-                  {kpi.unit ? ` ${kpi.unit}` : ''}
-                </span>
-              </div>
-              {kpi.deltaPct !== null && kpi.deltaPct !== undefined && (
-                <div className="mt-2">
-                  {kpi.trend === 'up' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                      <TrendingUp className="w-3 h-3" />
-                      +{Math.abs(kpi.deltaPct).toLocaleString('de-DE')}%
-                    </span>
-                  )}
-                  {kpi.trend === 'down' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                      <TrendingDown className="w-3 h-3" />
-                      -{Math.abs(kpi.deltaPct).toLocaleString('de-DE')}%
-                    </span>
-                  )}
-                  {kpi.trend === 'flat' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
-                      <Minus className="w-3 h-3" />
-                      {Math.abs(kpi.deltaPct).toLocaleString('de-DE')}%
-                    </span>
-                  )}
-                </div>
-              )}
-              {kpi.basis && <p className="mt-1 text-xs text-muted-foreground">Basis: {kpi.basis}</p>}
-            </CardContent>
-          </Card>
+          <DataTile
+            key={kpi.key}
+            label={kpi.label}
+            value={kpi.value !== null ? kpi.value.toLocaleString('de-DE') : '–'}
+            unit={kpi.unit ?? undefined}
+            trend={
+              kpi.trend === 'up' ? 'up' :
+              kpi.trend === 'down' ? 'down' :
+              kpi.trend === 'flat' ? 'neutral' :
+              undefined
+            }
+            source="betrieb"
+            basis={kpi.basis ?? undefined}
+          />
         ))}
+        <ThiTile />
       </div>
 
       {datasetId && (
