@@ -36,6 +36,7 @@ export interface DataTileProps {
   status?: "normal" | "warning" | "critical";
   basis?: string;
   className?: string;
+  "data-testid"?: string;
 }
 
 export function DataTile({
@@ -47,9 +48,11 @@ export function DataTile({
   status = "normal",
   basis,
   className,
+  "data-testid": dataTestId,
 }: DataTileProps) {
   return (
     <div
+      data-testid={dataTestId}
       className={cn(
         "relative rounded-xl border bg-card flex flex-col justify-between gap-2 px-5 py-4 min-h-[96px]",
         STATUS_BORDER[status] ?? "border-border",
@@ -63,6 +66,7 @@ export function DataTile({
         </p>
         <div className="flex items-baseline gap-1.5">
           <span
+            data-testid="kpi-value"
             className="text-[2rem] font-semibold leading-none text-foreground tabular-nums"
             style={{ fontFamily: "var(--app-font-display)" }}
           >

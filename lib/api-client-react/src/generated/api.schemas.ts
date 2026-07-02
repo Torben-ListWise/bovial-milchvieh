@@ -21,9 +21,10 @@ export const CurrentUserRole = {
   operator: 'operator',
 } as const;
 
-export type ThemePreference = typeof ThemePreference[keyof typeof ThemePreference];
+export type CurrentUserThemePreference = typeof CurrentUserThemePreference[keyof typeof CurrentUserThemePreference] | null;
 
-export const ThemePreference = {
+
+export const CurrentUserThemePreference = {
   light: 'light',
   dark: 'dark',
 } as const;
@@ -35,19 +36,21 @@ export interface CurrentUser {
   /** @nullable */
   name?: string | null;
   role: CurrentUserRole;
-  /** @nullable */
   focusAreas?: string[] | null;
-  /** @nullable */
-  onboardingCompletedAt?: string | null;
-  /** @nullable */
-  themePreference?: 'light' | 'dark' | null;
+  themePreference?: CurrentUserThemePreference;
 }
 
+export type UpdateMeBodyThemePreference = typeof UpdateMeBodyThemePreference[keyof typeof UpdateMeBodyThemePreference] | null;
+
+
+export const UpdateMeBodyThemePreference = {
+  light: 'light',
+  dark: 'dark',
+} as const;
+
 export interface UpdateMeBody {
-  /** @nullable */
   focusAreas?: string[] | null;
-  /** @nullable */
-  themePreference?: 'light' | 'dark' | null;
+  themePreference?: UpdateMeBodyThemePreference;
 }
 
 export interface UploadUrlRequest {
@@ -90,10 +93,6 @@ export interface Dataset {
   periodStart?: string | null;
   /** @nullable */
   periodEnd?: string | null;
-  /** @nullable */
-  detectedFocusArea?: string | null;
-  /** @nullable */
-  detectedFocusAreaConfidence?: number | null;
 }
 
 export interface DatasetInput {
@@ -349,7 +348,6 @@ export interface Analysis {
   /** @nullable */
   agentProgress?: string | null;
   agentSteps?: string[];
-  contextFileIds?: string[];
   messageCount?: number;
   createdAt: string;
   /** @nullable */
@@ -359,8 +357,6 @@ export interface Analysis {
 export interface AnalysisInput {
   title?: string;
   question?: string;
-  contextFileIds?: string[];
-  depthLevel?: 'quick' | 'deep' | null;
 }
 
 export interface AnalysisUpdate {
@@ -368,16 +364,24 @@ export interface AnalysisUpdate {
   category?: string;
   pinned?: boolean;
   tags?: string[];
-  contextFileIds?: string[];
-  depthLevel?: 'quick' | 'deep' | null;
 }
+
+export type CitationSourceType = typeof CitationSourceType[keyof typeof CitationSourceType] | null;
+
+
+export const CitationSourceType = {
+  betriebsdaten: 'betriebsdaten',
+  pdf: 'pdf',
+  wissen: 'wissen',
+  web: 'web',
+} as const;
 
 export interface Citation {
   label: string;
   value: string;
   /** @nullable */
   basis?: string | null;
-  sourceType?: 'betriebsdaten' | 'pdf' | 'wissen' | 'web' | null;
+  sourceType?: CitationSourceType;
   /** @nullable */
   shortLabel?: string | null;
 }
@@ -404,11 +408,7 @@ export interface AnalysisMessage {
   citations?: Citation[];
   followUpQuestions?: string[];
   /** @nullable */
-  backQuestions?: Array<{ text: string; options?: string[] }> | null;
-  /** @nullable */
   error?: string | null;
-  /** @nullable */
-  imageObjectPath?: string | null;
   createdAt: string;
 }
 
@@ -440,7 +440,6 @@ export interface AnalysisDetail {
   /** @nullable */
   agentProgress?: string | null;
   agentSteps?: string[];
-  contextFileIds?: string[];
   createdAt: string;
   messages: AnalysisMessage[];
 }
@@ -448,7 +447,6 @@ export interface AnalysisDetail {
 export interface QuestionInput {
   /** @minLength 1 */
   question: string;
-  imageObjectPath?: string;
 }
 
 /**
@@ -866,25 +864,6 @@ export type ForbiddenResponse = ErrorEnvelope;
  * Resource not found.
  */
 export type NotFoundResponse = ErrorEnvelope;
-
-export interface FarmNote {
-  id: string;
-  content: string;
-  enabled: boolean;
-  createdAt: string;
-}
-
-export interface FarmNoteInput {
-  /** @minLength 1 */
-  content: string;
-  enabled?: boolean;
-}
-
-export interface FarmNoteUpdate {
-  /** @minLength 1 */
-  content?: string;
-  enabled?: boolean;
-}
 
 /**
  * Server error.

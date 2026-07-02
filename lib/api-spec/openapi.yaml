@@ -1309,7 +1309,7 @@ components:
           type: string
         type:
           type: string
-          enum: [line, bar, area, pie, scatter, table]
+          enum: [line, bar, area, pie, scatter, table, kpi]
         title:
           type: string
         description:

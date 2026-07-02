@@ -1722,6 +1722,7 @@ const ResultCard = memo(function ResultCard({
         >
           <div className="flex items-center gap-2 min-w-0">
             <span
+              data-testid="answer-badge"
               className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none"
               style={{ backgroundColor: badgeColor }}
             >
@@ -3206,6 +3207,7 @@ export function AnalysesPage() {
         />
         <Button
           type="submit"
+          data-testid="question-submit"
           size="icon"
           className="w-11 h-11 shrink-0"
           disabled={isPending || chatQuotaExceeded || !question.trim() || pendingImage?.uploading}

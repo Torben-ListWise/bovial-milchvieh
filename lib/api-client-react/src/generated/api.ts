@@ -32,15 +32,11 @@ import type {
   BadRequestResponse,
   ColumnMappingUpdate,
   CurrentUser,
-  UpdateMeBody,
   DataExport,
   Dataset,
   DatasetInput,
   DatasetOverview,
   DatasetUpdate,
-  FarmNote,
-  FarmNoteInput,
-  FarmNoteUpdate,
   ForbiddenResponse,
   HealthStatus,
   MasterDataEntry,
@@ -64,6 +60,7 @@ import type {
   TemplateReorderBody,
   TemplateUpdate,
   UnauthorizedResponse,
+  UpdateMeBody,
   UploadUrlRequest,
   UploadUrlResponse,
   Warning,
@@ -238,6 +235,10 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 
 
 export const getUpdateMeUrl = () => {
+
+
+
+
   return `/api/me`
 }
 
@@ -245,35 +246,64 @@ export const getUpdateMeUrl = () => {
  * @summary Update current user's profile (focus_areas only)
  */
 export const updateMe = async (updateMeBody: UpdateMeBody, options?: RequestInit): Promise<CurrentUser> => {
-  return customFetch<CurrentUser>(getUpdateMeUrl(), {
+
+  return customFetch<CurrentUser>(getUpdateMeUrl(),
+  {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateMeBody),
-  });
-}
+    body: JSON.stringify(
+      updateMeBody,)
+  }
+);}
 
-export type UpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof updateMe>>>
-export type UpdateMeMutationBody = UpdateMeBody
-export type UpdateMeMutationError = ErrorType<UnauthorizedResponse>
 
-/**
+
+
+export const getUpdateMeMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,{data: BodyType<UpdateMeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,{data: BodyType<UpdateMeBody>}, TContext> => {
+
+const mutationKey = ['updateMe'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMe>>, {data: BodyType<UpdateMeBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMe(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof updateMe>>>
+    export type UpdateMeMutationBody = BodyType<UpdateMeBody>
+    export type UpdateMeMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
  * @summary Update current user's profile (focus_areas only)
  */
-export const useUpdateMe = <TError = ErrorType<UnauthorizedResponse>, TContext = unknown>(
-  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError, UpdateMeBody, TContext>, request?: SecondParameter<typeof customFetch> }
-): UseMutationResult<Awaited<ReturnType<typeof updateMe>>, TError, UpdateMeBody, TContext> => {
-  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
-
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMe>>, UpdateMeBody> = (props) => {
-    return updateMe(props, requestOptions);
-  };
-
-  return useMutation<Awaited<ReturnType<typeof updateMe>>, TError, UpdateMeBody, TContext>({
-    mutationFn,
-    ...mutationOptions,
-  });
-};
+export const useUpdateMe = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,{data: BodyType<UpdateMeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMe>>,
+        TError,
+        {data: BodyType<UpdateMeBody>},
+        TContext
+      > => {
+      return useMutation(getUpdateMeMutationOptions(options));
+    }
 
 export const getRequestUploadUrlUrl = () => {
 
@@ -3590,127 +3620,4 @@ export const useDeleteMyData = <TError = ErrorType<UnauthorizedResponse>,
       > => {
       return useMutation(getDeleteMyDataMutationOptions(options));
     }
-
-
-// ─── Farm Notes ───────────────────────────────────────────────────────────────
-
-export const getListFarmNotesUrl = () => `/api/farm-notes`
-
-export const listFarmNotes = async (options?: RequestInit): Promise<FarmNote[]> => {
-  return customFetch<FarmNote[]>(getListFarmNotesUrl(), { ...options })
-}
-
-export const getListFarmNotesQueryKey = () => [`/api/farm-notes`] as const
-
-export const getListFarmNotesQueryOptions = <TData = Awaited<ReturnType<typeof listFarmNotes>>, TError = ErrorType<unknown>>(options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listFarmNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch> }) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {}
-  const queryKey = queryOptions?.queryKey ?? getListFarmNotesQueryKey()
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFarmNotes>>> = ({ signal }) => listFarmNotes({ signal, ...requestOptions })
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listFarmNotes>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListFarmNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listFarmNotes>>>
-export type ListFarmNotesQueryError = ErrorType<unknown>
-
-export function useListFarmNotes<TData = Awaited<ReturnType<typeof listFarmNotes>>, TError = ErrorType<unknown>>(options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listFarmNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch> }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListFarmNotesQueryOptions(options)
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey }
-  return { ...query, queryKey: queryOptions.queryKey }
-}
-
-
-export const getCreateFarmNoteUrl = () => `/api/farm-notes`
-
-export const createFarmNote = async (farmNoteInput: FarmNoteInput, options?: RequestInit): Promise<FarmNote> => {
-  return customFetch<FarmNote>(getCreateFarmNoteUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(farmNoteInput)
-  })
-}
-
-export const getCreateFarmNoteMutationOptions = <TError = ErrorType<BadRequestResponse>, TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createFarmNote>>, TError, { data: BodyType<FarmNoteInput> }, TContext>, request?: SecondParameter<typeof customFetch> }): UseMutationOptions<Awaited<ReturnType<typeof createFarmNote>>, TError, { data: BodyType<FarmNoteInput> }, TContext> => {
-  const mutationKey = ['createFarmNote']
-  const { mutation: mutationOptions, request: requestOptions } = options ?
-    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined }
-
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createFarmNote>>, { data: BodyType<FarmNoteInput> }> = (props) => {
-    const { data } = props ?? {}
-    return createFarmNote(data, requestOptions)
-  }
-  return { mutationFn, ...mutationOptions }
-}
-
-export type CreateFarmNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createFarmNote>>>
-export type CreateFarmNoteMutationBody = BodyType<FarmNoteInput>
-export type CreateFarmNoteMutationError = ErrorType<BadRequestResponse>
-
-export const useCreateFarmNote = <TError = ErrorType<BadRequestResponse>, TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createFarmNote>>, TError, { data: BodyType<FarmNoteInput> }, TContext>, request?: SecondParameter<typeof customFetch> }): UseMutationResult<Awaited<ReturnType<typeof createFarmNote>>, TError, { data: BodyType<FarmNoteInput> }, TContext> => {
-  return useMutation(getCreateFarmNoteMutationOptions(options))
-}
-
-
-export const getUpdateFarmNoteUrl = (noteId: string) => `/api/farm-notes/${noteId}`
-
-export const updateFarmNote = async (noteId: string, farmNoteUpdate: FarmNoteUpdate, options?: RequestInit): Promise<FarmNote> => {
-  return customFetch<FarmNote>(getUpdateFarmNoteUrl(noteId), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(farmNoteUpdate)
-  })
-}
-
-export const getUpdateFarmNoteMutationOptions = <TError = ErrorType<NotFoundResponse>, TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateFarmNote>>, TError, { noteId: string; data: BodyType<FarmNoteUpdate> }, TContext>, request?: SecondParameter<typeof customFetch> }): UseMutationOptions<Awaited<ReturnType<typeof updateFarmNote>>, TError, { noteId: string; data: BodyType<FarmNoteUpdate> }, TContext> => {
-  const mutationKey = ['updateFarmNote']
-  const { mutation: mutationOptions, request: requestOptions } = options ?
-    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined }
-
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFarmNote>>, { noteId: string; data: BodyType<FarmNoteUpdate> }> = (props) => {
-    const { noteId, data } = props ?? {}
-    return updateFarmNote(noteId, data, requestOptions)
-  }
-  return { mutationFn, ...mutationOptions }
-}
-
-export type UpdateFarmNoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateFarmNote>>>
-export type UpdateFarmNoteMutationBody = BodyType<FarmNoteUpdate>
-export type UpdateFarmNoteMutationError = ErrorType<NotFoundResponse>
-
-export const useUpdateFarmNote = <TError = ErrorType<NotFoundResponse>, TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateFarmNote>>, TError, { noteId: string; data: BodyType<FarmNoteUpdate> }, TContext>, request?: SecondParameter<typeof customFetch> }): UseMutationResult<Awaited<ReturnType<typeof updateFarmNote>>, TError, { noteId: string; data: BodyType<FarmNoteUpdate> }, TContext> => {
-  return useMutation(getUpdateFarmNoteMutationOptions(options))
-}
-
-
-export const getDeleteFarmNoteUrl = (noteId: string) => `/api/farm-notes/${noteId}`
-
-export const deleteFarmNote = async (noteId: string, options?: RequestInit): Promise<void> => {
-  return customFetch<void>(getDeleteFarmNoteUrl(noteId), { ...options, method: 'DELETE' })
-}
-
-export const getDeleteFarmNoteMutationOptions = <TError = ErrorType<NotFoundResponse>, TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteFarmNote>>, TError, { noteId: string }, TContext>, request?: SecondParameter<typeof customFetch> }): UseMutationOptions<Awaited<ReturnType<typeof deleteFarmNote>>, TError, { noteId: string }, TContext> => {
-  const mutationKey = ['deleteFarmNote']
-  const { mutation: mutationOptions, request: requestOptions } = options ?
-    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined }
-
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFarmNote>>, { noteId: string }> = (props) => {
-    const { noteId } = props ?? {}
-    return deleteFarmNote(noteId, requestOptions)
-  }
-  return { mutationFn, ...mutationOptions }
-}
-
-export type DeleteFarmNoteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFarmNote>>>
-export type DeleteFarmNoteMutationError = ErrorType<NotFoundResponse>
-
-export const useDeleteFarmNote = <TError = ErrorType<NotFoundResponse>, TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteFarmNote>>, TError, { noteId: string }, TContext>, request?: SecondParameter<typeof customFetch> }): UseMutationResult<Awaited<ReturnType<typeof deleteFarmNote>>, TError, { noteId: string }, TContext> => {
-  return useMutation(getDeleteFarmNoteMutationOptions(options))
-}
 

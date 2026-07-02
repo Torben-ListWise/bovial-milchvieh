@@ -26,19 +26,26 @@ export const GetCurrentUserResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['customer', 'operator']),
   "focusAreas": zod.array(zod.string()).nullish(),
-  "onboardingCompletedAt": zod.string().nullish(),
   "themePreference": zod.enum(['light', 'dark']).nullish()
 })
 
+
 /**
- * @summary Update current user's profile
+ * @summary Update current user's profile (focus_areas only)
  */
 export const UpdateMeBody = zod.object({
   "focusAreas": zod.array(zod.string()).nullish(),
   "themePreference": zod.enum(['light', 'dark']).nullish()
 })
 
-export const UpdateMeResponse = GetCurrentUserResponse
+export const UpdateMeResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['customer', 'operator']),
+  "focusAreas": zod.array(zod.string()).nullish(),
+  "themePreference": zod.enum(['light', 'dark']).nullish()
+})
 
 
 /**
@@ -102,11 +109,8 @@ export const ListDatasetsResponseItem = zod.object({
   "fileCount": zod.number(),
   "rowCount": zod.number().optional(),
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
-  "periodEnd": zod.coerce.date().nullish(),
-  "detectedFocusArea": zod.string().nullish(),
-  "detectedFocusAreaConfidence": zod.number().nullish()
+  "periodEnd": zod.coerce.date().nullish()
 })
 export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem)
 
@@ -119,8 +123,7 @@ export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem)
 
 export const CreateDatasetBody = zod.object({
   "name": zod.string().min(1),
-  "description": zod.string().optional(),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy')
+  "description": zod.string().optional()
 })
 
 
@@ -140,11 +143,8 @@ export const GetDatasetResponse = zod.object({
   "fileCount": zod.number(),
   "rowCount": zod.number().optional(),
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
-  "periodEnd": zod.coerce.date().nullish(),
-  "detectedFocusArea": zod.string().nullish(),
-  "detectedFocusAreaConfidence": zod.number().nullish()
+  "periodEnd": zod.coerce.date().nullish()
 })
 
 
@@ -160,8 +160,7 @@ export const UpdateDatasetParams = zod.object({
 
 export const UpdateDatasetBody = zod.object({
   "name": zod.string().min(1).optional(),
-  "description": zod.string().optional(),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional()
+  "description": zod.string().optional()
 })
 
 export const UpdateDatasetResponse = zod.object({
@@ -173,11 +172,8 @@ export const UpdateDatasetResponse = zod.object({
   "fileCount": zod.number(),
   "rowCount": zod.number().optional(),
   "status": zod.enum(['empty', 'ingesting', 'ready', 'error']),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).optional().default('dairy'),
   "periodStart": zod.coerce.date().nullish(),
-  "periodEnd": zod.coerce.date().nullish(),
-  "detectedFocusArea": zod.string().nullish(),
-  "detectedFocusAreaConfidence": zod.number().nullish()
+  "periodEnd": zod.coerce.date().nullish()
 })
 
 
@@ -210,7 +206,7 @@ export const GetDatasetOverviewResponse = zod.object({
 })),
   "charts": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),
+  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table', 'kpi']),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "xKey": zod.string().nullish(),
@@ -258,11 +254,10 @@ export const ListFilesResponseItem = zod.object({
   "contentType": zod.string().nullish(),
   "size": zod.number().nullish(),
   "status": zod.enum(['uploaded', 'parsing', 'mapping', 'ready', 'error']),
-  "kind": zod.union([zod.literal('excel'),zod.literal('csv'),zod.literal('herd_export'),zod.literal('pdf'),zod.literal('ppt'),zod.literal('other'),zod.literal('livestock_events'),zod.literal(null)]).nullish(),
+  "kind": zod.union([zod.literal('excel'),zod.literal('csv'),zod.literal('herd_export'),zod.literal('pdf'),zod.literal('ppt'),zod.literal('other'),zod.literal(null)]).nullish(),
   "rowCount": zod.number().nullish(),
   "errorMessage": zod.string().nullish(),
-  "createdAt": zod.coerce.date(),
-  "previewRows": zod.array(zod.record(zod.string(), zod.unknown())).optional()
+  "createdAt": zod.coerce.date()
 })
 export const ListFilesResponse = zod.array(ListFilesResponseItem)
 
@@ -377,8 +372,6 @@ export const ListAnalysesResponseItem = zod.object({
   "templateRef": zod.string().nullish(),
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
-  "contextFileIds": zod.array(zod.string()).default([]),
-  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional(),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()
@@ -395,9 +388,7 @@ export const CreateAnalysisParams = zod.object({
 
 export const CreateAnalysisBody = zod.object({
   "title": zod.string().optional(),
-  "question": zod.string().optional(),
-  "contextFileIds": zod.array(zod.string().uuid()).optional(),
-  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional()
+  "question": zod.string().optional()
 })
 
 
@@ -419,7 +410,6 @@ export const GetAnalysisResponse = zod.object({
   "templateRef": zod.string().nullish(),
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
-  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional(),
   "createdAt": zod.coerce.date(),
   "messages": zod.array(zod.object({
   "id": zod.string(),
@@ -428,7 +418,7 @@ export const GetAnalysisResponse = zod.object({
   "content": zod.string().nullish(),
   "charts": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),
+  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table', 'kpi']),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "xKey": zod.string().nullish(),
@@ -446,17 +436,11 @@ export const GetAnalysisResponse = zod.object({
   "label": zod.string(),
   "value": zod.string(),
   "basis": zod.string().nullish(),
-  "sourceType": zod.enum(["betriebsdaten", "pdf", "wissen", "web"]).nullish(),
+  "sourceType": zod.enum(['betriebsdaten', 'pdf', 'wissen', 'web']).nullish(),
   "shortLabel": zod.string().nullish()
 })).optional(),
   "followUpQuestions": zod.array(zod.string()).optional(),
-  "backQuestions": zod.array(zod.object({ text: zod.string(), options: zod.array(zod.string()).optional() })).nullish(),
-  "widgetSpec": zod.object({
-  "type": zod.enum(["heat_abatement", "fresh_cow"]),
-  "prefill": zod.record(zod.number()),
-}).nullish(),
   "error": zod.string().nullish(),
-  "imageObjectPath": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -473,9 +457,7 @@ export const UpdateAnalysisBody = zod.object({
   "title": zod.string().optional(),
   "category": zod.string().optional(),
   "pinned": zod.boolean().optional(),
-  "tags": zod.array(zod.string()).optional(),
-  "contextFileIds": zod.array(zod.string().uuid()).optional(),
-  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional()
+  "tags": zod.array(zod.string()).optional()
 })
 
 export const UpdateAnalysisResponse = zod.object({
@@ -489,8 +471,6 @@ export const UpdateAnalysisResponse = zod.object({
   "templateRef": zod.string().nullish(),
   "agentProgress": zod.string().nullish(),
   "agentSteps": zod.array(zod.string()).optional(),
-  "contextFileIds": zod.array(zod.string()).default([]),
-  "depthLevel": zod.union([zod.literal("quick"), zod.literal("deep"), zod.null()]).optional(),
   "messageCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date().nullish()
@@ -516,8 +496,7 @@ export const AskQuestionParams = zod.object({
 
 
 export const AskQuestionBody = zod.object({
-  "question": zod.string().min(1),
-  "imageObjectPath": zod.string().optional(),
+  "question": zod.string().min(1)
 })
 
 export const AskQuestionResponse = zod.object({
@@ -671,7 +650,7 @@ export const ListReportsResponseItem = zod.object({
   "content": zod.string().nullish(),
   "charts": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),
+  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table', 'kpi']),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "xKey": zod.string().nullish(),
@@ -723,7 +702,7 @@ export const GetReportResponse = zod.object({
   "content": zod.string().nullish(),
   "charts": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table']),
+  "type": zod.enum(['line', 'bar', 'area', 'pie', 'scatter', 'table', 'kpi']),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "xKey": zod.string().nullish(),
@@ -753,7 +732,6 @@ export const ListMasterDataResponseItem = zod.object({
   "value": zod.string(),
   "unit": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional(),
   "createdAt": zod.coerce.date()
 })
 export const ListMasterDataResponse = zod.array(ListMasterDataResponseItem)
@@ -772,8 +750,7 @@ export const CreateMasterDataBody = zod.object({
   "key": zod.string().min(1),
   "value": zod.string().min(1),
   "unit": zod.string().optional(),
-  "notes": zod.string().optional(),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional()
+  "notes": zod.string().optional()
 })
 
 
@@ -794,8 +771,7 @@ export const UpdateMasterDataBody = zod.object({
   "key": zod.string().min(1).optional(),
   "value": zod.string().min(1).optional(),
   "unit": zod.string().optional(),
-  "notes": zod.string().optional(),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional()
+  "notes": zod.string().optional()
 })
 
 export const UpdateMasterDataResponse = zod.object({
@@ -805,7 +781,6 @@ export const UpdateMasterDataResponse = zod.object({
   "value": zod.string(),
   "unit": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "sector": zod.enum(['dairy', 'biogas', 'arable']).nullable().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -974,47 +949,6 @@ export const UpdateAdminTemplateResponse = zod.object({
  */
 export const DeleteAdminTemplateParams = zod.object({
   "templateId": zod.coerce.string()
-})
-
-
-/**
- * @summary List farm notes (free-text operator hints)
- */
-export const FarmNoteItem = zod.object({
-  "id": zod.string(),
-  "content": zod.string(),
-  "enabled": zod.boolean(),
-  "createdAt": zod.coerce.date()
-})
-export const ListFarmNotesResponse = zod.array(FarmNoteItem)
-
-/**
- * @summary Create a farm note
- */
-export const CreateFarmNoteBody = zod.object({
-  "content": zod.string().min(1).max(2000),
-  "enabled": zod.boolean().optional()
-})
-
-/**
- * @summary Update a farm note
- */
-export const UpdateFarmNoteParams = zod.object({
-  "noteId": zod.coerce.string()
-})
-
-export const UpdateFarmNoteBody = zod.object({
-  "content": zod.string().min(1).max(2000).optional(),
-  "enabled": zod.boolean().optional()
-})
-
-export const UpdateFarmNoteResponse = FarmNoteItem
-
-/**
- * @summary Delete a farm note
- */
-export const DeleteFarmNoteParams = zod.object({
-  "noteId": zod.coerce.string()
 })
 
 

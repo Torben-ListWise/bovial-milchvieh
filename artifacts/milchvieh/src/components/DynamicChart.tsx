@@ -109,13 +109,14 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
   if (type === 'kpi') {
     const tiles = (data ?? []).slice(0, 3);
     return (
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3" data-testid="kpi-grid">
         {tiles.map((row, i) => (
           <KpiTile
             key={i}
             label={String(row['label'] ?? '')}
             value={row['value'] as number | string ?? '—'}
             unit={String(row['unit'] ?? '')}
+            data-testid="kpi-tile"
           />
         ))}
       </div>
