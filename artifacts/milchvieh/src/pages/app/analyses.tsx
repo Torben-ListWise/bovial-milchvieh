@@ -2338,14 +2338,21 @@ export function AnalysesPage() {
     }
   }, [mobileTab]);
 
-  // Auto-switch to results tab on mobile when agent finishes
+  // Auto-switch tab on mobile when agent finishes.
+  // If the response is a back-question, stay on (or switch to) "chat" so the
+  // BackQuestionForm is visible. Otherwise go to "chart" to show the result.
   const wasWorkingForTabRef = useRef(false);
   useEffect(() => {
     if (!isAgentWorking && wasWorkingForTabRef.current) {
       const isMobile = window.innerWidth < 768;
-      if (isMobile) setMobileTab("chart");
+      if (isMobile) {
+        const lastMsg = (analysis?.messages ?? []).at(-1);
+        const endsWithBackQuestion = lastMsg ? msgIsBackQuestion(lastMsg) : false;
+        setMobileTab(endsWithBackQuestion ? "chat" : "chart");
+      }
     }
     wasWorkingForTabRef.current = isAgentWorking;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAgentWorking]);
 
   // Mobile swipe between tabs
