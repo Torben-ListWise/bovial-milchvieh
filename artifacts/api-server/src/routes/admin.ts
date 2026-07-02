@@ -21,7 +21,7 @@ import {
 import { requireAuth, requireOperator } from "../lib/auth";
 import { runScheduledReports } from "../lib/scheduler";
 import { runMonthlyDigest } from "../lib/digestScheduler";
-import { getCacheStats, estimateCostEur } from "../lib/agent";
+import { getCacheStats, estimateCostEur, getEffectiveModelPricing, EUR_PER_USD, MODEL_PRICING_USD_PER_1M } from "../lib/agent";
 
 const router: IRouter = Router();
 
@@ -382,17 +382,20 @@ router.get(
       since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    const rows = await db
-      .select({
-        model: apiUsageLogTable.modelUsed,
-        calls: sql<number>`count(*)::int`,
-        inputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.inputTokens}), 0)::bigint`,
-        outputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.outputTokens}), 0)::bigint`,
-      })
-      .from(apiUsageLogTable)
-      .where(since ? gte(apiUsageLogTable.createdAt, since) : sql`true`)
-      .groupBy(apiUsageLogTable.modelUsed)
-      .orderBy(desc(sql`count(*)`));
+    const [rows, { pricing }] = await Promise.all([
+      db
+        .select({
+          model: apiUsageLogTable.modelUsed,
+          calls: sql<number>`count(*)::int`,
+          inputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.inputTokens}), 0)::bigint`,
+          outputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.outputTokens}), 0)::bigint`,
+        })
+        .from(apiUsageLogTable)
+        .where(since ? gte(apiUsageLogTable.createdAt, since) : sql`true`)
+        .groupBy(apiUsageLogTable.modelUsed)
+        .orderBy(desc(sql`count(*)`)),
+      getEffectiveModelPricing(),
+    ]);
 
     res.json(
       rows.map((r) => ({
@@ -404,10 +407,27 @@ router.get(
           r.model,
           Number(r.inputTokens),
           Number(r.outputTokens),
+          pricing,
         ),
         window: windowParam,
       })),
     );
+  },
+);
+
+// GET /api/admin/pricing-config — current effective model pricing and its source
+router.get(
+  "/admin/pricing-config",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    const { pricing, source } = await getEffectiveModelPricing();
+    res.json({
+      source,
+      eurPerUsd: EUR_PER_USD,
+      hardcodedPricing: MODEL_PRICING_USD_PER_1M,
+      effectivePricing: pricing,
+    });
   },
 );
 

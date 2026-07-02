@@ -76,14 +76,68 @@ export const MODEL_PRICING_USD_PER_1M: Record<string, { input: number; output: n
 };
 
 // Fixed EUR/USD conversion rate for approximate cost display.
-const EUR_PER_USD = 0.92;
+export const EUR_PER_USD = 0.92;
+
+export type PricingSource = "env" | "db" | "hardcoded";
+
+/**
+ * Returns the effective model pricing and its source.
+ * Priority: OPERATOR_MODEL_PRICING env var → master_data DB row → hardcoded defaults.
+ *
+ * The env var format is a JSON object keyed by model name:
+ *   OPERATOR_MODEL_PRICING='{"claude-sonnet-4-6":{"input":3,"output":15}}'
+ * Partial overrides are merged on top of the hardcoded defaults.
+ *
+ * The DB row uses master_data with category='system_config', key='model_pricing_json',
+ * value= same JSON string format as the env var.
+ */
+export async function getEffectiveModelPricing(): Promise<{
+  pricing: Record<string, { input: number; output: number }>;
+  source: PricingSource;
+}> {
+  const envValue = process.env["OPERATOR_MODEL_PRICING"];
+  if (envValue) {
+    try {
+      const parsed = JSON.parse(envValue) as Record<string, { input: number; output: number }>;
+      return {
+        pricing: { ...MODEL_PRICING_USD_PER_1M, ...parsed },
+        source: "env",
+      };
+    } catch {
+      logger.warn("OPERATOR_MODEL_PRICING env var is not valid JSON — falling through to DB/hardcoded");
+    }
+  }
+
+  try {
+    const { masterDataTable } = await import("@workspace/db");
+    const { and, eq } = await import("drizzle-orm");
+    const rows = await db
+      .select({ value: masterDataTable.value })
+      .from(masterDataTable)
+      .where(and(eq(masterDataTable.category, "system_config"), eq(masterDataTable.key, "model_pricing_json")))
+      .limit(1);
+    if (rows.length > 0 && rows[0]?.value) {
+      const parsed = JSON.parse(rows[0].value) as Record<string, { input: number; output: number }>;
+      return {
+        pricing: { ...MODEL_PRICING_USD_PER_1M, ...parsed },
+        source: "db",
+      };
+    }
+  } catch {
+    // DB unavailable or row malformed — continue to hardcoded fallback
+  }
+
+  return { pricing: MODEL_PRICING_USD_PER_1M, source: "hardcoded" };
+}
 
 export function estimateCostEur(
   model: string,
   inputTokens: number,
   outputTokens: number,
+  pricingOverride?: Record<string, { input: number; output: number }>,
 ): number {
-  const pricing = MODEL_PRICING_USD_PER_1M[model];
+  const table = pricingOverride ?? MODEL_PRICING_USD_PER_1M;
+  const pricing = table[model];
   if (!pricing) return 0;
   const usd =
     (inputTokens / 1_000_000) * pricing.input +

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Database, FileText, AlertTriangle, Zap, DollarSign } from "lucide-react";
+import { Users, Database, FileText, AlertTriangle, Zap, DollarSign, Settings2 } from "lucide-react";
 
 interface CacheStatsResponse {
   totalCalls: number;
@@ -23,6 +23,18 @@ interface ModelUsageRow {
   inputTokens: number;
   outputTokens: number;
   estimatedCostEur: number;
+}
+
+interface PricingEntry {
+  input: number;
+  output: number;
+}
+
+interface PricingConfigResponse {
+  source: "env" | "db" | "hardcoded";
+  eurPerUsd: number;
+  hardcodedPricing: Record<string, PricingEntry>;
+  effectivePricing: Record<string, PricingEntry>;
 }
 
 async function fetchCacheStats(signal?: AbortSignal): Promise<CacheStatsResponse> {
@@ -46,6 +58,12 @@ async function fetchModelUsage(window: WindowParam, signal?: AbortSignal): Promi
   return res.json() as Promise<ModelUsageRow[]>;
 }
 
+async function fetchPricingConfig(signal?: AbortSignal): Promise<PricingConfigResponse> {
+  const res = await fetch("/api/admin/pricing-config", { signal, credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<PricingConfigResponse>;
+}
+
 function useGetAdminCacheStats() {
   return useQuery<CacheStatsResponse>({
     queryKey: ["admin", "cache-stats"],
@@ -60,6 +78,13 @@ function useGetModelUsage(window: WindowParam) {
   });
 }
 
+function useGetPricingConfig() {
+  return useQuery<PricingConfigResponse>({
+    queryKey: ["admin", "pricing-config"],
+    queryFn: ({ signal }) => fetchPricingConfig(signal),
+  });
+}
+
 function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)} M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)} K`;
@@ -70,11 +95,24 @@ function fmtEur(n: number): string {
   return n.toLocaleString("de-DE", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
+const PRICING_SOURCE_LABELS: Record<string, string> = {
+  env:        "Env-Variable (OPERATOR_MODEL_PRICING)",
+  db:         "Datenbank (master_data)",
+  hardcoded:  "Standard (Hardcoded)",
+};
+
+const PRICING_SOURCE_VARIANTS: Record<string, "default" | "secondary" | "outline"> = {
+  env:        "default",
+  db:         "default",
+  hardcoded:  "outline",
+};
+
 export function OperatorDashboard() {
   const { data: stats, isLoading } = useGetAdminStats();
   const { data: cacheStats, isLoading: cacheLoading } = useGetAdminCacheStats();
   const [modelWindow, setModelWindow] = useState<WindowParam>("all");
   const { data: modelUsage, isLoading: modelLoading } = useGetModelUsage(modelWindow);
+  const { data: pricingConfig, isLoading: pricingLoading } = useGetPricingConfig();
 
   if (isLoading) return <div className="p-8">Laden...</div>;
 
@@ -82,6 +120,10 @@ export function OperatorDashboard() {
     (cacheStats?.consecutiveZeroReadStreak ?? 0) >= 3;
 
   const totalEstCost = (modelUsage ?? []).reduce((s, r) => s + r.estimatedCostEur, 0);
+
+  const pricingSource = pricingConfig?.source ?? "hardcoded";
+  const effectivePricing = pricingConfig?.effectivePricing ?? {};
+  const isCustomPricing = pricingSource !== "hardcoded";
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -153,9 +195,16 @@ export function OperatorDashboard() {
         </div>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              API-Kosten (Schätzung, Anthropic-Preise 07/2025, Kurs 0,92 €/USD) · {WINDOW_LABELS[modelWindow]}
-            </CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                API-Kosten (Schätzung, Kurs {pricingConfig?.eurPerUsd ?? 0.92} €/USD) · {WINDOW_LABELS[modelWindow]}
+              </CardTitle>
+              {!pricingLoading && (
+                <Badge variant={PRICING_SOURCE_VARIANTS[pricingSource] ?? "outline"} className="text-xs">
+                  Preisquelle: {PRICING_SOURCE_LABELS[pricingSource] ?? pricingSource}
+                </Badge>
+              )}
+            </div>
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -205,6 +254,73 @@ export function OperatorDashboard() {
                   Cache-Creation- und Cache-Read-Tokens sind nicht im Input-Token-Wert enthalten; Kosten-Schätzung basiert auf Basis-Input- und Output-Preisen.
                 </p>
               </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Modell-Preiskonfiguration</h2>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Aktive Preise (USD pro 1 Mio. Tokens)
+              </CardTitle>
+              {!pricingLoading && isCustomPricing && (
+                <Badge variant="default" className="text-xs">
+                  Benutzerdefiniert
+                </Badge>
+              )}
+            </div>
+            <Settings2 className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {pricingLoading ? (
+              <div className="text-muted-foreground text-sm">Laden...</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Modell</th>
+                        <th className="text-right py-2 px-4 font-medium text-muted-foreground">Input ($/1M)</th>
+                        <th className="text-right py-2 pl-4 font-medium text-muted-foreground">Output ($/1M)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(effectivePricing).map(([model, rates]) => {
+                        const hardcoded = pricingConfig?.hardcodedPricing[model];
+                        const isOverridden = hardcoded && (rates.input !== hardcoded.input || rates.output !== hardcoded.output);
+                        return (
+                          <tr key={model} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="py-2 pr-4 font-mono text-xs">
+                              {model}
+                              {isOverridden && (
+                                <Badge variant="secondary" className="ml-2 text-xs">geändert</Badge>
+                              )}
+                            </td>
+                            <td className="text-right py-2 px-4 tabular-nums">
+                              {rates.input.toFixed(2)}
+                            </td>
+                            <td className="text-right py-2 pl-4 tabular-nums">
+                              {rates.output.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  {pricingSource === "hardcoded"
+                    ? "Standard-Preise (Anthropic 07/2025). Zum Überschreiben die Env-Variable OPERATOR_MODEL_PRICING (JSON) oder einen master_data-Eintrag mit category='system_config', key='model_pricing_json' setzen."
+                    : pricingSource === "env"
+                    ? "Preise aus Env-Variable OPERATOR_MODEL_PRICING. Werden bei Server-Neustart neu eingelesen."
+                    : "Preise aus Datenbank (master_data, category='system_config', key='model_pricing_json')."}
+                </p>
+              </>
             )}
           </CardContent>
         </Card>
