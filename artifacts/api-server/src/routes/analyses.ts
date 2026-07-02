@@ -1,6 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { verifyToken } from "@clerk/express";
 import {
   db,
   datasetsTable,
@@ -36,40 +35,16 @@ import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
 
-const DEV_BYPASS_USER_ID = process.env.DEV_BYPASS_USER_ID ?? "";
-
-async function resolveUserIdFromToken(token: string): Promise<string> {
-  if (
-    process.env.NODE_ENV === "development" &&
-    DEV_BYPASS_USER_ID &&
-    token === `dev-bypass-${DEV_BYPASS_USER_ID}`
-  ) {
-    return DEV_BYPASS_USER_ID;
-  }
-  const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY! });
-  if (!payload?.sub) throw new Error("No sub in token payload");
-  return payload.sub;
-}
-
 // ── SSE streaming endpoint ────────────────────────────────────────────────────
-// The browser opens GET /api/stream?analysisId=X&token=Y and receives
+// The browser opens GET /api/stream?analysisId=X and receives
 // text/event-stream events (delta, progress, chart, sources, done, error).
-// This replaces the WebSocket approach which the Replit dev proxy does not
-// forward for cross-port artifact setups.
-router.get("/stream", async (req: Request, res: Response) => {
+// Uses the same cookie-based Clerk session as all other endpoints (requireAuth),
+// which is the only transport that works reliably through the Replit dev proxy.
+router.get("/stream", requireAuth, async (req: Request, res: Response) => {
   const analysisId = req.query.analysisId as string | undefined;
-  const token = req.query.token as string | undefined;
 
-  if (!analysisId || !token) {
-    res.status(400).json({ error: "Missing analysisId or token" });
-    return;
-  }
-
-  try {
-    await resolveUserIdFromToken(token);
-  } catch (err) {
-    logger.warn({ err }, "SSE stream auth failed");
-    res.status(403).json({ error: "Authentication failed" });
+  if (!analysisId) {
+    res.status(400).json({ error: "Missing analysisId" });
     return;
   }
 
