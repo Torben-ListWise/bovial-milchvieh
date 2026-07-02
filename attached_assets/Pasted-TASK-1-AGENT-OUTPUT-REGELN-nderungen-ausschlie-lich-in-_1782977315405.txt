@@ -1,0 +1,118 @@
+TASK 1 — AGENT OUTPUT-REGELN
+Änderungen ausschließlich in SYSTEM_PROMPT_BASE
+
+REGEL 1 — KEIN EINLEITUNGSTEXT
+Verboten: Sätze die mit "Basierend auf", "Die Literatur",
+"Ich kann dir", "Gerne" beginnen.
+Erlaubt: Direkt mit dem ersten Inhaltselement starten.
+
+REGEL 2 — FORMAT NACH FRAGETYP (zwingend, keine Ausnahmen)
+
+Fragetyp "Maße/Grenzwerte/Vergleich":
+→ HTML-Tabelle mit max. 2 Spalten (Begriff / Wert).
+  Kein Text davor oder danach außer Regel 4.
+
+Fragetyp "Zeitverlauf/Kurve":
+→ emit_chart, kein erklärender Text davor.
+  Direkt nach Chart: Regel 4.
+
+Fragetyp "Investition":
+→ Drei nebeneinanderstehende Kacheln (emit_chart 
+  mit type="kpi"):
+  Kachel 1: Gesamtinvestition in €
+  Kachel 2: Kosten pro Kuh pro Jahr in €
+  Kachel 3: Break-even in Jahren
+  Detailtabelle NUR wenn Nutzer explizit fragt.
+
+Fragetyp "Empfehlung/Maßnahme":
+→ Exakt ein Satz Befund.
+  Dann maximal 3 Bulletpoints, je maximal 8 Wörter.
+  Danach Stopp.
+
+Fragetyp "Wissensfrage ohne Betriebsdaten":
+→ Maximal 4 Sätze. Danach Stopp.
+
+REGEL 3 — KEINE DOPPLUNG
+Wenn ein Wert in einer Tabelle oder Kachel steht,
+darf er nicht nochmals im Fließtext erscheinen.
+
+REGEL 4 — EINE FOLGEFRAGE
+Jede Antwort endet mit genau einer Folgefrage.
+Die Frage muss logisch aus der Antwort folgen.
+Verboten: "Kann ich noch helfen?", 
+"Hast du weitere Fragen?", offene Sammelformulierungen.
+
+REGEL 5 — DATENLÜCKE
+Wenn die Frage Betriebsdaten erfordert die nicht 
+vorliegen: eine einzige gezielte Datenfrage stellen.
+Kein Ersatz-Fließtext aus Allgemeinwissen generieren.
+Beispiel: "Welche Tagesmilchmenge haben deine Kühe 
+aktuell im Schnitt?" — danach warten.
+
+TESTS (alle fünf müssen bestehen):
+a) "Wie sollen Boxenmaße für Kühe sein?" 
+   → Tabelle, kein Einleitungssatz, eine Folgefrage
+b) "Lohnt die Investition in Sand-Einstreu?" 
+   → 3 Kacheln, keine Detailtabelle ohne Nachfrage
+c) "Zeige eine typische Laktationskurve" 
+   → Chart direkt, kein Text davor
+d) "Wie verbessere ich meine Pregnancy Rate?" 
+   → 1 Satz + max. 3 Bullets
+e) "Analysiere meine Herde" ohne hochgeladene Daten
+   → eine Datenfrage, kein Allgemeinwissen-Text
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TASK 2 — FRONTEND REDESIGN
+Voraussetzung: Task 1 abgeschlossen und alle 5 
+Tests bestanden. Erst dann Frontend anfassen.
+
+1. CARD-DESIGN PRO ANTWORTTYP
+Jede Agentenantwort wird in eine Card eingebettet.
+Card-Aufbau von oben nach unten:
+- Typ-Badge oben links (16px, farbig):
+  "Empfehlung" → #22c55e (grün)
+  "Analyse"    → #3b82f6 (blau)
+  "Investition"→ #f97316 (orange)
+  "Wissen"     → #6b7280 (grau)
+- Inhalt (Tabelle, Chart oder Bullets)
+- Trennlinie
+- Folgefrage als klickbarer Button (volle Breite,
+  outlined, erscheint direkt nach Streaming-Ende,
+  Klick füllt das Eingabefeld vor)
+
+2. KPI-KACHELN
+Komponente <KpiTile> mit drei Props: 
+label (string), value (number), unit (string),
+optional: trend ("up"|"down"|"neutral") → Pfeil.
+Darstellung: value in 28px bold, unit in 14px,
+label in 12px grau darunter.
+Kacheln erscheinen nebeneinander in einem 
+3-Spalten-Grid, volle Breite der Card.
+Pflicht-Einsatz: jede Investitionsantwort zeigt
+genau diese drei Kacheln:
+- label:"Gesamtinvestition" unit:"€"
+- label:"Kosten/Kuh/Jahr"   unit:"€"
+- label:"Break-even"        unit:"Jahre"
+
+3. INTERAKTIVE CHARTS
+Bestehende emit_chart-Ausgaben erweitern:
+- Hover-Tooltip: zeigt exakten X- und Y-Wert
+  beim Überfahren eines Datenpunkts
+- Referenzlinie: gestrichelte horizontale Linie
+  für Herdendurchschnitt, ein/ausblendbar per 
+  Toggle-Button oberhalb des Charts
+- Peak-Markierung bei Laktationskurven:
+  Datenpunkt mit höchstem Y-Wert bekommt ein
+  Label "Peak: [Wert] kg, Tag [X]"
+
+TESTS:
+a) Investitionsantwort → 3 KpiTiles korrekt befüllt,
+   Detailtabelle nicht sichtbar ohne Nachfrage
+b) Chart-Antwort → Tooltip erscheint bei Hover,
+   Referenzlinie-Toggle funktioniert
+c) Laktationskurve → Peak-Label korrekt auf 
+   höchstem Punkt
+d) Folgefrage-Button erscheint ohne Seitenreload
+   direkt nach letztem Streaming-Token
+e) Typ-Badge zeigt korrekte Farbe für alle 
+   vier Antworttypen
