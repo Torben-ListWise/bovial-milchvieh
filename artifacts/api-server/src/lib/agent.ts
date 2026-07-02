@@ -180,7 +180,7 @@ export interface ChartSeries {
 }
 export interface Chart {
   id: string;
-  type: "line" | "bar" | "area" | "pie" | "scatter" | "table";
+  type: "line" | "bar" | "area" | "pie" | "scatter" | "table" | "kpi";
   title: string;
   description?: string | null;
   xKey?: string | null;
@@ -548,8 +548,15 @@ const TOOLS: Tool[] = [
         limit: { type: "number" },
         data: {
           type: "array",
-          description: "Für source='document': Array von Datenpunkten, z.B. [{name:'Remontierungsrate', wert:28}]",
-          items: { type: "object" },
+          description: "Für source='document': Array von Datenpunkten, z.B. [{name:'Remontierungsrate', wert:28}]. Für chartType='kpi': genau 3 Objekte mit den Pflichtfeldern { label: string, value: number|string, unit: string }, z.B. [{label:'Gesamtinvestition',value:120000,unit:'€'},{label:'Kosten/Kuh/Jahr',value:240,unit:'€'},{label:'Break-even',value:7,unit:'Jahre'}]",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              value: {},
+              unit: { type: "string" },
+            },
+          },
         },
         xKey: { type: "string", description: "Schlüssel für die X-Achse im data-Array, z.B. 'name'" },
         series: {
@@ -1883,6 +1890,25 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         // source === "document": agent passes pre-built data from PDF text
         if (source === "document") {
           const rawData = input.data as Record<string, unknown>[] | undefined;
+          // KPI tiles: no series needed; accept 1–3 {label, value, unit} items
+          if (chartType === "kpi") {
+            if (!rawData || rawData.length < 1) {
+              return { error: "Keine KPI-Daten übergeben (mind. 1 Eintrag benötigt)" };
+            }
+            const kpiChart: Chart = {
+              id: `chart_${Math.random().toString(36).slice(2, 10)}`,
+              type: "kpi",
+              title,
+              xKey: null,
+              series: [],
+              data: rawData.slice(0, 3),
+              unit: null,
+              basis: null,
+            };
+            charts.push(kpiChart);
+            opts.onChart?.(kpiChart);
+            return { ok: true, points: kpiChart.data.length, basis: "Investitionsrechnung" };
+          }
           if (!rawData || rawData.length < 2) {
             return { error: "Zu wenige Datenpunkte für ein Diagramm (mind. 2 benötigt)" };
           }
@@ -2245,7 +2271,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "search_web":
         return { query: typeof input.query === "string" ? input.query.slice(0, 80) : null };
       case "emit_chart":
-        return { chartType: input.type ?? null, metric: input.metric ?? null };
+        return { chartType: input.chartType ?? null, metric: input.metric ?? null };
       case "signal_escalation":
         return {
           trigger_type: input.trigger_type ?? null,
