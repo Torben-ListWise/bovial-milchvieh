@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area, PieChart, Pie,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
+  ReferenceLine, ReferenceDot,
 } from 'recharts';
 import type { Chart as ChartType } from '@workspace/api-client-react';
+import { KpiTile } from './KpiTile';
 
 const COLORS = [
   'hsl(152 68% 54%)',
@@ -28,12 +30,42 @@ const Y_AXIS_COMMON = {
 
 export function DynamicChart({ chart, height = 300, fillContainer = false }: DynamicChartProps) {
   const { type, xKey, series, data, unit } = chart;
+  const [showRef, setShowRef] = useState(false);
 
   // Dual-axis: at least one series explicitly has yAxisId="right"
   const hasDualAxis = useMemo(
     () => (series ?? []).some((s) => s.yAxisId === 'right'),
     [series]
   );
+
+  // Average of first series for reference line
+  const avg = useMemo(() => {
+    if (!data || data.length === 0) return 0;
+    const firstKey = series?.[0]?.key;
+    if (!firstKey) return 0;
+    const values = data.map((d) => Number(d[firstKey])).filter((v) => !isNaN(v));
+    if (values.length === 0) return 0;
+    return values.reduce((sum, v) => sum + v, 0) / values.length;
+  }, [data, series]);
+
+  // Peak data point of first series (for line charts)
+  const peakPoint = useMemo(() => {
+    if (type !== 'line' || !data || data.length === 0) return null;
+    const firstKey = series?.[0]?.key;
+    if (!firstKey) return null;
+    let peakVal = -Infinity;
+    let peakRow: { [key: string]: unknown } | null = null;
+    for (const row of data) {
+      const v = Number(row[firstKey]);
+      if (!isNaN(v) && v > peakVal) {
+        peakVal = v;
+        peakRow = row;
+      }
+    }
+    if (!peakRow) return null;
+    const xVal = peakRow[xKey || 'name'];
+    return { x: xVal, y: peakVal, key: firstKey };
+  }, [type, data, series, xKey]);
 
   const renderTooltip = useMemo(() => {
     return ({ active, payload, label }: any) => {
@@ -72,6 +104,25 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
     if (!hasDualAxis) return undefined;
     return s.yAxisId === 'right' ? 'right' : 'left';
   };
+
+  // KPI type: render tiles grid, no ResponsiveContainer
+  if (type === 'kpi') {
+    const tiles = (data ?? []).slice(0, 3);
+    return (
+      <div className="grid grid-cols-3 gap-3">
+        {tiles.map((row, i) => (
+          <KpiTile
+            key={i}
+            label={String(row['label'] ?? '')}
+            value={row['value'] as number | string ?? '—'}
+            unit={String(row['unit'] ?? '')}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const hasToggle = type === 'line' || type === 'bar' || type === 'area';
 
   const renderChart = () => {
     switch (type) {
@@ -116,6 +167,25 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
                 />
               );
             })}
+            {showRef && (
+              <ReferenceLine
+                y={avg}
+                strokeDasharray="4 4"
+                stroke="hsl(var(--muted-foreground))"
+                {...(hasDualAxis ? { yAxisId: 'left' } : {})}
+              />
+            )}
+            {peakPoint && (
+              <ReferenceDot
+                x={peakPoint.x as any}
+                y={peakPoint.y}
+                r={5}
+                fill="hsl(var(--primary))"
+                stroke="none"
+                label={{ value: `Peak: ${peakPoint.y} kg, Tag ${peakPoint.x}`, position: 'top', fontSize: 11 }}
+                {...(hasDualAxis ? { yAxisId: 'left' } : {})}
+              />
+            )}
           </LineChart>
         );
 
@@ -157,6 +227,14 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
                 />
               );
             })}
+            {showRef && (
+              <ReferenceLine
+                y={avg}
+                strokeDasharray="4 4"
+                stroke="hsl(var(--muted-foreground))"
+                {...(hasDualAxis ? { yAxisId: 'left' } : {})}
+              />
+            )}
           </BarChart>
         );
 
@@ -201,6 +279,14 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
                 />
               );
             })}
+            {showRef && (
+              <ReferenceLine
+                y={avg}
+                strokeDasharray="4 4"
+                stroke="hsl(var(--muted-foreground))"
+                {...(hasDualAxis ? { yAxisId: 'left' } : {})}
+              />
+            )}
           </AreaChart>
         );
 
@@ -284,7 +370,25 @@ export function DynamicChart({ chart, height = 300, fillContainer = false }: Dyn
   };
 
   return (
-    <div style={{ width: '100%', height: fillContainer ? '100%' : height }}>
+    <div
+      className={hasToggle ? 'flex flex-col gap-1' : undefined}
+      style={{ width: '100%', height: fillContainer ? '100%' : hasToggle ? height + 32 : height }}
+    >
+      {hasToggle && (
+        <div className="shrink-0 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowRef((v) => !v)}
+            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+              showRef
+                ? 'border-primary text-primary bg-primary/5'
+                : 'border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            ⌀ Referenz
+          </button>
+        </div>
+      )}
       {type === 'table' ? (
         renderChart()
       ) : (

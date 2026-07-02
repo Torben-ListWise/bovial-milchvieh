@@ -755,15 +755,45 @@ function LiveSourcesActivity({ sources }: { sources: string[] }) {
   );
 }
 
+// ── Answer type badge helpers ─────────────────────────────────────────────────
+
+type AnswerType = "Empfehlung" | "Analyse" | "Investition" | "Wissen";
+
+const BADGE_COLORS: Record<AnswerType, string> = {
+  Investition: "#f97316",
+  Analyse: "#3b82f6",
+  Empfehlung: "#22c55e",
+  Wissen: "#6b7280",
+};
+
+function inferAnswerType(content: string, charts?: Chart[]): AnswerType {
+  if (charts && charts.some((c) => c.type === "kpi")) return "Investition";
+  if (charts && charts.some((c) => c.type !== "kpi")) return "Analyse";
+  const bulletLines = (content ?? "").split("\n").filter((l) => /^[-*] /.test(l));
+  if (bulletLines.length >= 2) return "Empfehlung";
+  return "Wissen";
+}
+
 // ── Streaming Result Card ─────────────────────────────────────────────────────
 
 function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] }) {
+  const answerType = useMemo(() => inferAnswerType(text, charts), [charts]);
+  const badgeColor = BADGE_COLORS[answerType];
+
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
         <AiIcon size={14} working className="text-primary" />
       </div>
       <div className="flex-1 rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 space-y-3">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span
+            className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none"
+            style={{ backgroundColor: badgeColor }}
+          >
+            {answerType}
+          </span>
+        </div>
         {text ? (
           <div className="text-sm leading-relaxed">
             <MarkdownContent text={text} />
@@ -779,9 +809,13 @@ function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] 
                 {chart.title && (
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">{chart.title}</p>
                 )}
-                <div className="h-64">
-                  <DynamicChart chart={chart} fillContainer />
-                </div>
+                {chart.type === "kpi" ? (
+                  <DynamicChart chart={chart} />
+                ) : (
+                  <div className="h-64">
+                    <DynamicChart chart={chart} fillContainer />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1634,15 +1668,21 @@ const ResultCard = memo(function ResultCard({
   msg,
   analysisId,
   cardRef,
+  onFollowUpClick,
+  isAgentWorking,
 }: {
   questionTitle: string | null;
   msg: AnalysisMessage;
   analysisId: string;
   cardRef?: React.Ref<HTMLDivElement>;
+  onFollowUpClick?: (q: string) => void;
+  isAgentWorking?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const headerLabel = questionTitle ?? "Ergebnis";
   const { toast } = useToast();
+  const answerType = useMemo(() => inferAnswerType(msg.content ?? "", msg.charts ?? undefined), [msg.charts, msg.content]);
+  const badgeColor = BADGE_COLORS[answerType];
 
   async function handleShare() {
     // Generate a share URL that goes through the API share route so social
@@ -1680,9 +1720,17 @@ const ResultCard = memo(function ResultCard({
           className="flex-1 flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition-colors text-left"
           aria-expanded={!collapsed}
         >
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
-            {headerLabel}
-          </p>
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none"
+              style={{ backgroundColor: badgeColor }}
+            >
+              {answerType}
+            </span>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">
+              {headerLabel}
+            </p>
+          </div>
           <ChevronDown
             className={`w-3.5 h-3.5 text-muted-foreground shrink-0 ml-2 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
           />
@@ -1753,12 +1801,25 @@ const ResultCard = memo(function ResultCard({
                       {chart.title}
                     </p>
                   )}
-                  <div className="h-64">
-                    <DynamicChart chart={chart} fillContainer />
-                  </div>
+                  {chart.type === "kpi" ? (
+                    <DynamicChart chart={chart} />
+                  ) : (
+                    <div className="h-64">
+                      <DynamicChart chart={chart} fillContainer />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+          )}
+          {!isAgentWorking && onFollowUpClick && (msg.followUpQuestions as string[] | null)?.[0] && (
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => onFollowUpClick((msg.followUpQuestions as string[])[0])}
+            >
+              {(msg.followUpQuestions as string[])[0]}
+            </Button>
           )}
         </div>
       )}
@@ -1774,12 +1835,14 @@ function AnalysisResultsPanel({
   pendingQuestion,
   streamingText,
   streamingCharts,
+  onFollowUpClick,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
   pendingQuestion?: string;
   streamingText?: string;
   streamingCharts?: Chart[];
+  onFollowUpClick?: (q: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
@@ -1928,6 +1991,8 @@ function AnalysisResultsPanel({
             msg={pair.msg}
             analysisId={analysis.id}
             cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
+            onFollowUpClick={onFollowUpClick}
+            isAgentWorking={isWorking}
           />
         ))}
 
@@ -2066,10 +2131,6 @@ export function AnalysesPage() {
   });
   const [isDragOver, setIsDragOver] = useState(false);
   const [systemMessages, setSystemMessages] = useState<SystemMsg[]>([]);
-  const [pinnedChips, setPinnedChips] = useState<string[]>([]);
-  const [chipsExiting, setChipsExiting] = useState(false);
-  const lastChipsRef = useRef<string[]>([]);
-  const chipsExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatWidth, setChatWidth] = useState<number>(() => {
     const saved = sessionStorage.getItem("chatPanelWidth");
     return saved ? Math.max(200, Math.min(700, parseInt(saved, 10))) : 320;
@@ -2387,18 +2448,6 @@ export function AnalysesPage() {
     return () => vv.removeEventListener("resize", onResize);
   }, []);
 
-  // Step 2 — Compute follow-up chips for the chat panel
-  const lastResultMsg = [...(analysis?.messages ?? [])]
-    .reverse()
-    .find((m) => m.role === "assistant" && !m.error && !msgIsBackQuestion(m));
-  const lastMsg_ = (analysis?.messages ?? []).at(-1);
-  const chatFollowUpQuestions: string[] =
-    !isAgentWorking &&
-    lastResultMsg &&
-    !(lastMsg_ && msgIsBackQuestion(lastMsg_))
-      ? ((lastResultMsg.followUpQuestions as string[] | null)?.slice(0, 3) ?? [])
-      : [];
-
   // Helper: is this message new (created after this component mounted)?
   function isNewMessage(msg: AnalysisMessage): boolean {
     return new Date(msg.createdAt).getTime() > mountedAtRef.current;
@@ -2441,13 +2490,6 @@ export function AnalysesPage() {
     }
   }, [isAgentWorking]);
 
-  // Step 4 — Scroll to bottom when follow-up chips appear
-  const followUpQuestionsKey = (lastResultMsg?.id ?? "") + chatFollowUpQuestions.length;
-  useEffect(() => {
-    if (chatFollowUpQuestions.length === 0) return;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [followUpQuestionsKey]);
-
   // Scroll to bottom when a BackQuestionForm appears (agent finished with a question)
   const lastAssistantMsgIdForForm = (() => {
     if (isAgentWorking) return null;
@@ -2460,43 +2502,6 @@ export function AnalysesPage() {
     if (!lastAssistantMsgIdForForm) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lastAssistantMsgIdForForm]);
-
-  // Step 5 — Pin chips: update pinned set whenever fresh chips arrive
-  useEffect(() => {
-    if (chatFollowUpQuestions.length > 0) {
-      if (chipsExitTimerRef.current) {
-        clearTimeout(chipsExitTimerRef.current);
-        chipsExitTimerRef.current = null;
-      }
-      setChipsExiting(false);
-      lastChipsRef.current = chatFollowUpQuestions;
-      setPinnedChips(chatFollowUpQuestions);
-    }
-  }, [followUpQuestionsKey]);
-
-  // Clear pinned chips when the analysis switches (no animation — full UI refresh)
-  useEffect(() => {
-    if (chipsExitTimerRef.current) {
-      clearTimeout(chipsExitTimerRef.current);
-      chipsExitTimerRef.current = null;
-    }
-    setChipsExiting(false);
-    setPinnedChips([]);
-  }, [activeAnalysisId]);
-
-  // Clear pinned chips once a new assistant message starts arriving — animate out first
-  const lastMsgId = (analysis?.messages ?? []).at(-1)?.id;
-  const lastMsgRole = (analysis?.messages ?? []).at(-1)?.role;
-  useEffect(() => {
-    if (lastMsgRole === "assistant" && pinnedChips.length > 0) {
-      setChipsExiting(true);
-      chipsExitTimerRef.current = setTimeout(() => {
-        setPinnedChips([]);
-        setChipsExiting(false);
-        chipsExitTimerRef.current = null;
-      }, 350);
-    }
-  }, [lastMsgId]);
 
   // ── Panel resize drag handlers ────────────────────────────────────────────
   useEffect(() => {
@@ -3096,15 +3101,6 @@ export function AnalysesPage() {
               <AgentWorkingBanner currentStep={currentStep} />
             ) : null}
 
-          {(pinnedChips.length > 0 || chipsExiting) && (
-            <FollowUpChips
-              questions={pinnedChips.length > 0 ? pinnedChips : lastChipsRef.current}
-              onAsk={handleSubmit}
-              fading={isAgentWorking}
-              exiting={chipsExiting}
-            />
-          )}
-
             <div ref={bottomRef} />
           </div>
         </div>
@@ -3410,7 +3406,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { setQuestion(q); inputRef.current?.focus(); }} />
           </div>
         </div>
       </div>
@@ -3432,7 +3428,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { setQuestion(q); inputRef.current?.focus(); }} />
             </div>
           )}
         </div>

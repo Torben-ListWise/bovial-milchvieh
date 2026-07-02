@@ -155,6 +155,7 @@ export const ChartType = {
   pie: 'pie',
   scatter: 'scatter',
   table: 'table',
+  kpi: 'kpi',
 } as const;
 
 export interface ChartSeries {
