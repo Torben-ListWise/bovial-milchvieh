@@ -6,7 +6,6 @@ import { useGetDataset, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKe
 import { useQueryClient } from "@tanstack/react-query";
 import { 
   Home, 
-  BarChart2, 
   Upload, 
   MessageSquare, 
   AlertTriangle, 
@@ -241,9 +240,9 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
   const isGuestMode = !!hostId;
 
   const allCustomerNav = [
+    { name: "Start", href: "/app/overview", icon: Home, preserveDataset: true, guestHidden: false },
     { name: "Betriebe", href: "/app/datasets", icon: Home, preserveDataset: false, guestHidden: false },
     { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true, guestHidden: false },
-    { name: "Start", href: "/app/overview", icon: BarChart2, preserveDataset: true, guestHidden: false },
     { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true, guestHidden: true },
     { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false, guestHidden: false },
   ];
