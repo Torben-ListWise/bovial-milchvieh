@@ -22,19 +22,18 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
   const stoppedRef = useRef(false);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const doStream = useCallback((analysisId: string) => {
     if (stoppedRef.current) return;
 
-    // Close any existing WebSocket
-    if (wsRef.current) {
-      wsRef.current.onclose = null;
-      wsRef.current.onerror = null;
-      wsRef.current.onmessage = null;
-      wsRef.current.close();
-      wsRef.current = null;
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
+
+    const abort = new AbortController();
+    abortRef.current = abort;
 
     (async () => {
       try {
@@ -42,69 +41,66 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
         if (!token) throw new Error("No auth token");
         if (stoppedRef.current) return;
 
-        // Construct WebSocket URL — same host as the page, wss:// protocol
-        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const host = window.location.host;
-        const url = `${proto}//${host}/api/ws/stream?analysisId=${encodeURIComponent(analysisId)}&token=${encodeURIComponent(token)}`;
+        const url = `/api/stream?analysisId=${encodeURIComponent(analysisId)}&token=${encodeURIComponent(token)}`;
 
-        const ws = new WebSocket(url);
-        wsRef.current = ws;
+        const response = await fetch(url, { signal: abort.signal });
 
-        ws.onopen = () => {
-          retryCountRef.current = 0;
-        };
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.body) throw new Error("No response body");
 
-        ws.onmessage = (evt) => {
-          if (stoppedRef.current) return;
-          try {
-            const msg = JSON.parse(evt.data as string) as Record<string, unknown>;
-            const event = msg.event as string;
-            const cb = callbacksRef.current;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-            if (event === "delta") {
-              cb.onDelta((msg.text as string) ?? "");
-            } else if (event === "progress") {
-              cb.onProgress((msg.step as string) ?? "");
-            } else if (event === "chart") {
-              cb.onChart(msg.chart as Chart);
-            } else if (event === "sources") {
-              cb.onSources((msg.sources as string[]) ?? []);
-            } else if (event === "done") {
-              if (wsRef.current === ws) wsRef.current = null;
-              ws.close();
-              cb.onDone();
-            } else if (event === "error") {
-              if (wsRef.current === ws) wsRef.current = null;
-              ws.close();
-              throw new Error((msg.message as string) ?? "Stream error");
+        retryCountRef.current = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (stoppedRef.current) {
+            reader.cancel();
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+
+          const cb = callbacksRef.current;
+          for (const event of events) {
+            for (const line of event.split("\n")) {
+              if (!line.startsWith("data: ")) continue;
+              let msg: Record<string, unknown>;
+              try {
+                msg = JSON.parse(line.slice(6)) as Record<string, unknown>;
+              } catch {
+                continue;
+              }
+              const evName = msg.event as string;
+
+              if (evName === "delta") {
+                cb.onDelta((msg.text as string) ?? "");
+              } else if (evName === "progress") {
+                cb.onProgress((msg.step as string) ?? "");
+              } else if (evName === "chart") {
+                cb.onChart(msg.chart as Chart);
+              } else if (evName === "sources") {
+                cb.onSources((msg.sources as string[]) ?? []);
+              } else if (evName === "done") {
+                cb.onDone();
+                reader.cancel();
+                return;
+              } else if (evName === "error") {
+                throw new Error((msg.message as string) ?? "Stream error");
+              }
             }
-            // "connected" event: no action needed, just confirmation
-          } catch (parseErr) {
-            // ignore malformed frames
           }
-        };
-
-        ws.onerror = () => {
-          // onerror is always followed by onclose — handle retry in onclose
-        };
-
-        ws.onclose = (evt) => {
-          if (wsRef.current === ws) wsRef.current = null;
-          if (stoppedRef.current) return;
-          // 1000 = normal close (done/error events send this), 4001/4003 = auth errors
-          if (evt.code === 1000 || evt.code === 4001 || evt.code === 4003) return;
-          // Abnormal close — retry
-          const n = retryCountRef.current;
-          if (n < MAX_RETRIES) {
-            retryCountRef.current = n + 1;
-            const delay = BACKOFF_DELAYS_MS[n] ?? 4000;
-            retryTimerRef.current = setTimeout(() => doStream(analysisId), delay);
-          } else {
-            callbacksRef.current.onFallback?.();
-          }
-        };
-      } catch (err) {
+        }
+      } catch (err: unknown) {
         if (stoppedRef.current) return;
+        if (err instanceof Error && err.name === "AbortError") return;
+
         const n = retryCountRef.current;
         if (n < MAX_RETRIES) {
           retryCountRef.current = n + 1;
@@ -136,12 +132,9 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    if (wsRef.current) {
-      wsRef.current.onclose = null;
-      wsRef.current.onerror = null;
-      wsRef.current.onmessage = null;
-      wsRef.current.close();
-      wsRef.current = null;
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
   }, []);
 

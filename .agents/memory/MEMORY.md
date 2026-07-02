@@ -8,7 +8,7 @@
 - [Milchvieh CORS config](milchvieh-cors.md) — never use origin:true with credentials:true; use REPLIT_DEV_DOMAIN + ALLOWED_ORIGINS allowlist
 - [Milchvieh PDF extraction](milchvieh-pdf-extraction.md) — use pdfjs-dist legacy/build directly; pdf-parse v1 bundles break on Node.js v24
 - [Milchvieh local embeddings](milchvieh-local-embeddings.md) — use Xenova/multilingual-e5-base via @huggingface/transformers (NOT nomic-embed-text-v1.5 — gated/401)
-- [Milchvieh SSE auth](milchvieh-sse-auth.md) — SSE fetch needs Bearer token (not cookies); every processQuestion background call needs SSE callbacks wired
+- [Milchvieh streaming transport](milchvieh-streaming-transport.md) — use SSE (GET /api/stream?analysisId&token) NOT WebSocket; Replit dev proxy does not forward WS upgrades across artifact ports
 - [Milchvieh agent streaming](milchvieh-agent-streaming.md) — use messages.stream() + stream.on("text") for real-time deltas; no verification step (adds 15-30s with no UX benefit)
 - [Milchvieh DB migration idempotency](milchvieh-migration-idempotency.md) — use CREATE INDEX IF NOT EXISTS not ADD CONSTRAINT for unique indexes; ADD CONSTRAINT has no IF NOT EXISTS in PG
 - [Milchvieh conception rate linking](milchvieh-conception-rate.md) — conception rate must join BRED→PREG via animal_id+date window; result='P' on BRED is never set in German HMS exports

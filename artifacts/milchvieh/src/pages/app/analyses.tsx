@@ -1812,15 +1812,6 @@ const ResultCard = memo(function ResultCard({
               ))}
             </div>
           )}
-          {!isAgentWorking && onFollowUpClick && (msg.followUpQuestions as string[] | null)?.[0] && (
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={() => onFollowUpClick((msg.followUpQuestions as string[])[0])}
-            >
-              {(msg.followUpQuestions as string[])[0]}
-            </Button>
-          )}
         </div>
       )}
     </div>
@@ -3100,6 +3091,17 @@ export function AnalysesPage() {
             ) : isAgentWorking ? (
               <AgentWorkingBanner currentStep={currentStep} />
             ) : null}
+
+            {!isAgentWorking &&
+              ((lastAssistantMsg?.followUpQuestions as string[] | null | undefined)?.length ?? 0) > 0 && (
+                <FollowUpChips
+                  questions={lastAssistantMsg!.followUpQuestions as string[]}
+                  onAsk={(q) => {
+                    setQuestion(q);
+                    setTimeout(() => inputRef.current?.focus(), 0);
+                  }}
+                />
+              )}
 
             <div ref={bottomRef} />
           </div>

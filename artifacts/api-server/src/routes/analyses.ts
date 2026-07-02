@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { verifyToken } from "@clerk/express";
 import {
   db,
   datasetsTable,
@@ -34,6 +35,87 @@ import { getOrBufferWriter, registerWriter, removeWriter, type SseWriter } from 
 import { canReadDataset } from "../lib/teamAccess";
 
 const router: IRouter = Router();
+
+const DEV_BYPASS_USER_ID = process.env.DEV_BYPASS_USER_ID ?? "";
+
+async function resolveUserIdFromToken(token: string): Promise<string> {
+  if (
+    process.env.NODE_ENV === "development" &&
+    DEV_BYPASS_USER_ID &&
+    token === `dev-bypass-${DEV_BYPASS_USER_ID}`
+  ) {
+    return DEV_BYPASS_USER_ID;
+  }
+  const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY! });
+  if (!payload?.sub) throw new Error("No sub in token payload");
+  return payload.sub;
+}
+
+// ── SSE streaming endpoint ────────────────────────────────────────────────────
+// The browser opens GET /api/stream?analysisId=X&token=Y and receives
+// text/event-stream events (delta, progress, chart, sources, done, error).
+// This replaces the WebSocket approach which the Replit dev proxy does not
+// forward for cross-port artifact setups.
+router.get("/stream", async (req: Request, res: Response) => {
+  const analysisId = req.query.analysisId as string | undefined;
+  const token = req.query.token as string | undefined;
+
+  if (!analysisId || !token) {
+    res.status(400).json({ error: "Missing analysisId or token" });
+    return;
+  }
+
+  try {
+    await resolveUserIdFromToken(token);
+  } catch (err) {
+    logger.warn({ err }, "SSE stream auth failed");
+    res.status(403).json({ error: "Authentication failed" });
+    return;
+  }
+
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders();
+
+  const keepalive = setInterval(() => {
+    res.write(": keepalive\n\n");
+  }, 15_000);
+
+  function sendSseEvent(data: object): void {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  const writer: SseWriter = {
+    sendDelta: (text) => sendSseEvent({ event: "delta", text }),
+    sendSources: (sources) => sendSseEvent({ event: "sources", sources }),
+    sendProgress: (step) => sendSseEvent({ event: "progress", step }),
+    sendChart: (chart) => sendSseEvent({ event: "chart", chart }),
+    sendDone: () => {
+      sendSseEvent({ event: "done" });
+      clearInterval(keepalive);
+      removeWriter(analysisId);
+      res.end();
+    },
+    sendError: (message) => {
+      sendSseEvent({ event: "error", message });
+      clearInterval(keepalive);
+      removeWriter(analysisId);
+      res.end();
+    },
+  };
+
+  registerWriter(analysisId, writer);
+  sendSseEvent({ event: "connected" });
+
+  req.on("close", () => {
+    clearInterval(keepalive);
+    removeWriter(analysisId);
+  });
+});
 const chatObjectStorage = new ObjectStorageService();
 
 async function ownDatasetId(datasetId: string, userId: string): Promise<boolean> {
