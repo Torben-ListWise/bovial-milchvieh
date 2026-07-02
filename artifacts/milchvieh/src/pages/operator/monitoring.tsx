@@ -1,5 +1,6 @@
 import { useGetAdminStats } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Database, FileText, AlertTriangle, Zap, DollarSign } from "lucide-react";
@@ -30,8 +31,17 @@ async function fetchCacheStats(signal?: AbortSignal): Promise<CacheStatsResponse
   return res.json() as Promise<CacheStatsResponse>;
 }
 
-async function fetchModelUsage(signal?: AbortSignal): Promise<ModelUsageRow[]> {
-  const res = await fetch("/api/admin/model-usage", { signal, credentials: "include" });
+type WindowParam = "24h" | "7d" | "30d" | "all";
+
+const WINDOW_LABELS: Record<WindowParam, string> = {
+  "24h": "24 Stunden",
+  "7d": "7 Tage",
+  "30d": "30 Tage",
+  "all": "Gesamt",
+};
+
+async function fetchModelUsage(window: WindowParam, signal?: AbortSignal): Promise<ModelUsageRow[]> {
+  const res = await fetch(`/api/admin/model-usage?window=${window}`, { signal, credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<ModelUsageRow[]>;
 }
@@ -43,10 +53,10 @@ function useGetAdminCacheStats() {
   });
 }
 
-function useGetModelUsage() {
+function useGetModelUsage(window: WindowParam) {
   return useQuery<ModelUsageRow[]>({
-    queryKey: ["admin", "model-usage"],
-    queryFn: ({ signal }) => fetchModelUsage(signal),
+    queryKey: ["admin", "model-usage", window],
+    queryFn: ({ signal }) => fetchModelUsage(window, signal),
   });
 }
 
@@ -63,7 +73,8 @@ function fmtEur(n: number): string {
 export function OperatorDashboard() {
   const { data: stats, isLoading } = useGetAdminStats();
   const { data: cacheStats, isLoading: cacheLoading } = useGetAdminCacheStats();
-  const { data: modelUsage, isLoading: modelLoading } = useGetModelUsage();
+  const [modelWindow, setModelWindow] = useState<WindowParam>("all");
+  const { data: modelUsage, isLoading: modelLoading } = useGetModelUsage(modelWindow);
 
   if (isLoading) return <div className="p-8">Laden...</div>;
 
@@ -122,11 +133,28 @@ export function OperatorDashboard() {
       </div>
 
       <div>
-        <h2 className="text-xl font-semibold mb-4">Token-Verbrauch nach Modell</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Token-Verbrauch nach Modell</h2>
+          <div className="flex gap-1 bg-muted rounded-lg p-1">
+            {(["24h", "7d", "30d", "all"] as WindowParam[]).map((w) => (
+              <button
+                key={w}
+                onClick={() => setModelWindow(w)}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  modelWindow === w
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {WINDOW_LABELS[w]}
+              </button>
+            ))}
+          </div>
+        </div>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              API-Kosten (Schätzung, Anthropic-Preise 07/2025, Kurs 0,92 €/USD)
+              API-Kosten (Schätzung, Anthropic-Preise 07/2025, Kurs 0,92 €/USD) · {WINDOW_LABELS[modelWindow]}
             </CardTitle>
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>

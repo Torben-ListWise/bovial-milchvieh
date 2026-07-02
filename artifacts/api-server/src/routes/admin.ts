@@ -365,11 +365,23 @@ router.post(
 );
 
 // GET /api/admin/model-usage — per-model token counts and estimated cost
+// Query params:
+//   ?window=24h|7d|30d|all  (default: all)
 router.get(
   "/admin/model-usage",
   requireAuth,
   requireOperator,
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
+    const windowParam = (req.query["window"] as string | undefined) ?? "all";
+    let since: Date | null = null;
+    if (windowParam === "24h") {
+      since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    } else if (windowParam === "7d") {
+      since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    } else if (windowParam === "30d") {
+      since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
+
     const rows = await db
       .select({
         model: apiUsageLogTable.modelUsed,
@@ -378,6 +390,7 @@ router.get(
         outputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.outputTokens}), 0)::bigint`,
       })
       .from(apiUsageLogTable)
+      .where(since ? gte(apiUsageLogTable.createdAt, since) : sql`true`)
       .groupBy(apiUsageLogTable.modelUsed)
       .orderBy(desc(sql`count(*)`));
 
@@ -392,6 +405,7 @@ router.get(
           Number(r.inputTokens),
           Number(r.outputTokens),
         ),
+        window: windowParam,
       })),
     );
   },
