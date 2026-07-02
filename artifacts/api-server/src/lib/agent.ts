@@ -848,11 +848,20 @@ BEFEHLSTYPEN:
 - LIST / SHOW — Tierliste mit gewählten Feldern anzeigen
 - SUM — statistische Zusammenfassung / Aggregation (z.B. nach Gruppe, Monat, Laktation)
 - EVENTS — Ereignishistorie (Besamungen, Behandlungen, Abkalbungen…)
+- BREDSUM\\E — Besamungs-/Reproduktions-Zusammenfassung (erweiterter Modus): zeigt 21-Tage-Trächtigkeitsrate (Pregrate), Konzeptionsrate nach Besamungsnummer, Brunsterkennungsrate, aufgeschlüsselt nach 21-Tage-Besamungsperioden. Dies ist der Standardbefehl für Pregrate-Auswertungen in DairyComp 305.
 - ENTER — manuelle Dateneingabe
 - FILEOUT — Export in Datei
 - EXEC — externes Programm ausführen
 - SETUP\\5RC:DATEI — Ausgabedatei umleiten
 - EC=N EDAY [REM] [CAR] — Ereignis-Schnelleingabe (EC=Ereigniscode, EDAY=Datum heute, REM=Bemerkung)
+
+REPRODUKTIONSAUSWERTUNGEN — STANDARDBEFEHLE:
+- Pregrate (21-Tage-Trächtigkeitsrate): BREDSUM\\E
+- Pregrate gefiltert (z.B. nur laktierende Kühe ab Tag 50): BREDSUM\\E FOR LACT>0 AND DIM>50
+- Pregrate nach Zeitraum (letzte 365 Tage): BREDSUM\\E \\LAST365
+- Besamungsübersicht mit Konzeptionsrate nach Besamungsnummer: BREDSUM\\E BY PPER
+- Einzeltier-Besamungshistorie: EVENTS FOR ID=TIERNUMMER
+- Offene Kühe auflisten: LIST ID DIM LACT RPRO FOR LACT>0 AND RPRO=OPEN DOWNBY DIM
 
 HÄUFIGE FELDER:
 ID, EID, PEN (Gruppe), DIM (Laktationstage), LACT (Laktationsnr.), DCC/SCC (Zellzahl), WMLK1/DMLK1 (Wochenmilch/Tagesmilch), RPRO (Reproduktionsstatus-Code), RC (Status-Code), 5STEL (5-stellige Tiernummer), REG1 (Herdbuchnummer), DUE (Abkalbe-Termin), SBRED/LSIR (letzter Besamungsstier), A2A2 (Beta-Kasein-Status), DSLH (Tage seit letztem Brunst), TBRD (Trächtigkeitstage), BCS/BCSV (BCS-Wert), AGED (Alter in Tagen), GENDE (Geschlecht), RASSE (Rasse), AREA (Melkbereich/Selektionstor), CUT (Abmelkung), PPEN (vorherige Gruppe), STALL (Stallnummer)
