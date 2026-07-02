@@ -987,6 +987,53 @@ async function callWithRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<
   throw lastErr;
 }
 
+/**
+ * Returns true when a follow-up question is too simple to warrant Opus escalation.
+ * Mirrors the classifyQuestion() heuristic in analysisService.ts — kept here to
+ * avoid a circular import (analysisService imports runAgent/getModelForTask from this file).
+ * A question is "trivial" only when it has NO investment/complex signals AND refers to
+ * exactly one concrete dairy KPI (i.e. classifyQuestion would return "chat_analysis_simple").
+ */
+function isTrivialFollowUp(question: string): boolean {
+  const lower = question.toLowerCase().trim();
+  if (!lower) return false;
+
+  const investmentStallKeywords = [
+    "investition", "investier", "investiere",
+    "stall", "umbau", "neubau", "bauplanung",
+    "finanzier", "businessplan",
+    "langfristig", "rentabilit",
+    "strategie", "planung",
+  ];
+  if (investmentStallKeywords.some((k) => lower.includes(k))) return false;
+
+  const complexKeywords = [
+    "trend", "verlauf", "entwicklung", "zeitverlauf", "zeitreihe", "prognose",
+    "vergleich", "gegenüber", "unterschied", "vorjahr", "vormonat",
+    "kosten", "warum", "ursache", "erklär",
+    "optimier",
+    "korrelation", "zusammenhang", "anomalie", "ausreißer",
+    "ranking", "top", "flop", "benchmark", "bericht",
+    "alle", "gesamt", "übersicht",
+  ];
+  if (complexKeywords.some((k) => lower.includes(k))) return false;
+
+  const kpiKeywords = [
+    "milchleistung", "milchmenge", "ecm",
+    "zellzahl", "scc", "zellgehalt",
+    "fettgehalt", "eiweißgehalt", "proteingehalt",
+    "melkung", "gemelk",
+    "trächtig", "conception", "befruchtung", "brunst",
+    "zwischenkalb", "kalbung", "abkalbung",
+    "trockensteher", "laktationstag",
+    "remontierung", "abgang", "nutzungsdauer",
+    "futteraufnahme",
+  ];
+  const kpiMatches = kpiKeywords.filter((k) => lower.includes(k));
+  // Simple only when exactly one KPI is referenced
+  return kpiMatches.length === 1;
+}
+
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const client = getClient();
   const charts: Chart[] = [];
@@ -2088,6 +2135,17 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   let askFarmerEverCalled = opts.askFarmerCalledInPriorRound ?? false;
   const turnToolCounts: number[] = [];
 
+  // Extract the current user question text (last user message in the conversation)
+  // so we can classify follow-up turns and skip Opus for trivial replies.
+  const lastUserMsg = [...opts.conversation].reverse().find((m) => m.role === "user");
+  const lastUserText =
+    typeof lastUserMsg?.content === "string"
+      ? lastUserMsg.content
+      : ((lastUserMsg?.content as Anthropic.ContentBlockParam[] | undefined) ?? [])
+          .filter((b): b is Anthropic.TextBlockParam => b.type === "text")
+          .map((b) => b.text)
+          .join(" ");
+
   // Grounding: tools that prove real data was accessed
   const groundedTools = new Set([
     "get_schema",
@@ -2112,9 +2170,18 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     // askFarmerCalledInPriorRound means the user has just answered a back-question
     // from the previous conversation message — this is already conversational Turn N+1,
     // so we allow escalation even on turn 0 of this runAgent() invocation.
-    const shouldEscalate =
+    //
+    // However, if ask_farmer is the ONLY escalation trigger (no heavy tool-call volume
+    // and not explicitly in deep mode) and the follow-up question is classified as
+    // trivial (single KPI, no complex signals), we skip Opus to avoid wasting cost on
+    // simple replies like "yes", "ok", or a one-word answer.
+    const askFarmerTriggered =
       (opts.askFarmerCalledInPriorRound === true && turn === 0) ||
-      (turn > 0 && (askFarmerEverCalled || recentToolCalls > 6 || opts.depthLevel === "deep"));
+      (turn > 0 && askFarmerEverCalled);
+    const heavySignalTriggered = recentToolCalls > 6 || opts.depthLevel === "deep";
+    const followUpIsSimple =
+      askFarmerTriggered && !heavySignalTriggered && isTrivialFollowUp(lastUserText);
+    const shouldEscalate = (askFarmerTriggered || heavySignalTriggered) && !followUpIsSimple;
 
     let turnTaskType: ModelTaskType = opts.initialTaskType ?? "chat_analysis";
     // Turn-0 Opus is only used when pre-routing already classified the question
