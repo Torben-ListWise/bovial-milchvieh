@@ -21,7 +21,7 @@ import {
 import { requireAuth, requireOperator } from "../lib/auth";
 import { runScheduledReports } from "../lib/scheduler";
 import { runMonthlyDigest } from "../lib/digestScheduler";
-import { getCacheStats } from "../lib/agent";
+import { getCacheStats, estimateCostEur } from "../lib/agent";
 
 const router: IRouter = Router();
 
@@ -361,6 +361,39 @@ router.post(
     }
     const result = await runMonthlyDigest().catch(() => ({ sent: -1, skipped: -1 }));
     res.json({ ok: true, ...result });
+  },
+);
+
+// GET /api/admin/model-usage — per-model token counts and estimated cost
+router.get(
+  "/admin/model-usage",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    const rows = await db
+      .select({
+        model: apiUsageLogTable.modelUsed,
+        calls: sql<number>`count(*)::int`,
+        inputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.inputTokens}), 0)::bigint`,
+        outputTokens: sql<number>`coalesce(sum(${apiUsageLogTable.outputTokens}), 0)::bigint`,
+      })
+      .from(apiUsageLogTable)
+      .groupBy(apiUsageLogTable.modelUsed)
+      .orderBy(desc(sql`count(*)`));
+
+    res.json(
+      rows.map((r) => ({
+        model: r.model,
+        calls: Number(r.calls),
+        inputTokens: Number(r.inputTokens),
+        outputTokens: Number(r.outputTokens),
+        estimatedCostEur: estimateCostEur(
+          r.model,
+          Number(r.inputTokens),
+          Number(r.outputTokens),
+        ),
+      })),
+    );
   },
 );
 

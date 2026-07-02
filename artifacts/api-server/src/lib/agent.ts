@@ -66,6 +66,32 @@ export function getModelForTask(taskType: ModelTaskType): string {
 }
 
 // ---------------------------------------------------------------------------
+// Pricing constants — Anthropic published prices (2025-07), per 1M tokens (USD).
+// Used by the operator monitoring page to estimate cost; never shown to customers.
+// ---------------------------------------------------------------------------
+export const MODEL_PRICING_USD_PER_1M: Record<string, { input: number; output: number }> = {
+  "claude-haiku-4-5-20251001": { input: 0.80, output: 4.00 },
+  "claude-sonnet-4-6":         { input: 3.00, output: 15.00 },
+  "claude-opus-4-6":           { input: 15.00, output: 75.00 },
+};
+
+// Fixed EUR/USD conversion rate for approximate cost display.
+const EUR_PER_USD = 0.92;
+
+export function estimateCostEur(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const pricing = MODEL_PRICING_USD_PER_1M[model];
+  if (!pricing) return 0;
+  const usd =
+    (inputTokens / 1_000_000) * pricing.input +
+    (outputTokens / 1_000_000) * pricing.output;
+  return Math.round(usd * EUR_PER_USD * 10000) / 10000;
+}
+
+// ---------------------------------------------------------------------------
 // Prompt-cache metrics accumulator (in-memory, per process, resets on restart)
 // ---------------------------------------------------------------------------
 export interface CacheStats {
