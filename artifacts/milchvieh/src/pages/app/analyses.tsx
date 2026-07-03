@@ -3154,16 +3154,28 @@ export function AnalysesPage() {
             />
           )}
           <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto min-h-0">
-            <StarterQuestions
-              hasFiles={hasFiles}
-              datasetId={datasetId!}
-              onTemplateRun={(id) => {
-                setActiveAnalysisId(id);
-                queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId!) });
-                openSseStream(id);
-              }}
-              onAsk={handleStarterQuestion}
-            />
+            {!hasFiles ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4">
+                  <UploadCloud className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Noch keine Daten hochgeladen</h3>
+                <p className="text-muted-foreground mb-6 max-w-sm">
+                  Lade zuerst deine Herdenmanagement-Exporte hoch, bevor du Analysen startest.
+                </p>
+                <Button asChild>
+                  <Link href={`/app/upload?datasetId=${datasetId}`}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Zur Upload-Seite
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground text-sm p-8 text-center">
+                <AiIcon size={28} className="text-primary/40 mb-1" />
+                <span>Stelle eine Frage oder wähle eine Vorlage in der Übersicht.</span>
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
           {scrollToBottomButton}
