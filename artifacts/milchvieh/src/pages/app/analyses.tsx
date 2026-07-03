@@ -3278,9 +3278,6 @@ export function AnalysesPage() {
           Tipp: Dateien direkt auf diese Seite ziehen zum Hochladen
         </p>
       )}
-      <p className="text-xs text-muted-foreground/70 mt-1.5 px-1 text-center">
-        KI-Analysen können Fehler enthalten – bitte Ergebnisse stets fachlich prüfen.
-      </p>
     </form>
   );
 
