@@ -1838,7 +1838,20 @@ function AnalysisResultsPanel({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
+  const resultBottomRef = useRef<HTMLDivElement>(null);
   const streamingCardRef = useRef<HTMLDivElement>(null);
+  const [showResultScrollButton, setShowResultScrollButton] = useState(false);
+
+  function handleResultScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowResultScrollButton(distFromBottom > 100);
+  }
+
+  function scrollResultToBottom() {
+    resultBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
 
   const msgs = analysis?.messages ?? [];
 
@@ -1884,9 +1897,15 @@ function AnalysisResultsPanel({
     }
   }, [isWorking]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to top when switching to a different analysis
+  // Scroll to newest result when switching to a different analysis.
+  // If results exist → jump to last card; if empty → reset to top.
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    if (lastCardRef.current) {
+      lastCardRef.current.scrollIntoView({ behavior: "instant", block: "end" });
+    } else {
+      scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    }
+    setShowResultScrollButton(false);
   }, [analysis?.id]);
 
   // Pending question to show in loading indicators:
@@ -1974,8 +1993,8 @@ function AnalysisResultsPanel({
   ) : null;
 
   return (
-    <div className="h-full flex flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+    <div className="relative h-full flex flex-col">
+      <div ref={scrollRef} onScroll={handleResultScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {resultPairs.map((pair, idx) => (
           <div key={pair.msg.id}>
             <ResultCard
@@ -2022,8 +2041,17 @@ function AnalysisResultsPanel({
           </div>
         )}
 
-        <div className="h-2" />
+        <div ref={resultBottomRef} className="h-2" />
       </div>
+      {showResultScrollButton && (
+        <button
+          onClick={scrollResultToBottom}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border shadow-md text-xs text-foreground hover:bg-accent transition-colors"
+        >
+          <ArrowDown className="w-3.5 h-3.5" />
+          Zur neuesten Antwort
+        </button>
+      )}
       {stickyCalculatorPanel}
     </div>
   );
@@ -2162,6 +2190,7 @@ export function AnalysesPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const hasScrolledOnLoadRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2468,11 +2497,22 @@ export function AnalysesPage() {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = 0;
   }, [analysis?.messages?.length]);
 
-  // Scroll to bottom immediately when the user switches to a different analysis.
+  // Reset the one-shot scroll guard whenever the active analysis changes so the
+  // effect below fires again for the newly loaded messages.
   useEffect(() => {
-    if (!activeAnalysisId) return;
-    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    hasScrolledOnLoadRef.current = false;
   }, [activeAnalysisId]);
+
+  // Scroll to bottom once the first batch of messages arrives after opening an
+  // analysis. This fires after the async query resolves, so bottomRef is in the DOM.
+  // The hasScrolledOnLoadRef guard prevents this from re-firing on every new message.
+  useEffect(() => {
+    const msgCount = analysis?.messages?.length ?? 0;
+    if (hasScrolledOnLoadRef.current) return;
+    if (msgCount === 0) return;
+    hasScrolledOnLoadRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+  }, [analysis?.messages?.length]);
 
   // Auto-scroll to bottom when new messages or system messages arrive.
   // Skip when the newest message is a user message — the effect above
