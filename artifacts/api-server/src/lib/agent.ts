@@ -950,7 +950,7 @@ search_dairycomp_manual gibt zwei Quellen zurück: Einträge mit source="glossar
 
 3. EVENTS-NUMMERN: Die EVENTS-Codes 8, 9, A, B, C sind systemreserviert und dürfen nicht als Benutzer-Auswertungen genannt oder empfohlen werden.
 
-4. NEUE BEFEHLE ABLEITEN: Wenn du aus dem Handbuch einen Befehl kombinierst der nicht im Glossar steht, kennzeichne ihn mit „(aus Handbuch-Grammatik abgeleitet)" und verweise auf Seiten 65–69 als Quelle.
+4. NEUE BEFEHLE ABLEITEN: Nur erlaubt wenn search_dairycomp_manual tatsächlich Chunks zurückgegeben hat (source="glossar" oder source="manual" im Ergebnis vorhanden). In diesem Fall: Befehl kennzeichnen mit „(aus Handbuch-Grammatik abgeleitet)" und auf Seiten 65–69 verweisen. — VERBOTEN wenn noRelevantResults: true: Dann greift ausschließlich Regel 4 oben (Stopp-Antwort). Aus eigenem Trainingswissen über DairyComp darf NIEMALS Syntax abgeleitet oder erfunden werden — auch nicht als Näherung, Beispiel oder Hinweis. Kein „vermutlich", kein „typischerweise lautet der Befehl".
 
 BILD-INTERPRETATION:
 Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist. Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
