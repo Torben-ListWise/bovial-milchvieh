@@ -119,7 +119,9 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
           }
         }
       } catch (err: unknown) {
-        if ((err as Error)?.name === "AbortError") return;
+        const e = err as Error;
+        if (e?.name === "AbortError") return;
+        if (e?.message?.includes("aborted") || e?.message?.includes("Aborted")) return;
         if (stoppedRef.current) return;
         scheduleRetry(analysisId);
       } finally {
@@ -165,6 +167,7 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
   }
 
   function cleanup() {
+    stoppedRef.current = true;
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
