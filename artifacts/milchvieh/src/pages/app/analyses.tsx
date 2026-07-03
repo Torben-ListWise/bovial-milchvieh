@@ -1280,17 +1280,50 @@ function relativeDay(date: Date | string | null | undefined): string | null {
   return `vor ${diffDays} Tagen`;
 }
 
+// Daily rotating chips — primary display. Falls back to top-3 templates only if the API request fails.
 function ChatStartChips({
   datasetId,
+  onAsk,
   onTemplateRun,
 }: {
   datasetId: string;
+  onAsk: (question: string) => void;
   onTemplateRun: (analysisId: string) => void;
 }) {
+  const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+  const { getToken } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [dailyChips, setDailyChips] = useState<{ chipText: string; category: string }[] | null>(null);
+  const [chipsError, setChipsError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/api/chips/daily`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!cancelled) {
+          if (res.ok) {
+            const data = await res.json();
+            setDailyChips(data.chips ?? []);
+          } else {
+            setChipsError(true);
+          }
+        }
+      } catch {
+        if (!cancelled) setChipsError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [datasetId]);
+
+  // Template fallback (used only when daily chips API fails)
   const { data: templates } = useListTemplates(datasetId, {
-    query: { queryKey: getListTemplatesQueryKey(datasetId), staleTime: 60_000 },
+    query: { queryKey: getListTemplatesQueryKey(datasetId), staleTime: 60_000, enabled: chipsError },
   });
   const { data: currentUser } = useGetCurrentUser();
   const runTemplate = useRunTemplate({
@@ -1305,23 +1338,43 @@ function ChatStartChips({
       },
     },
   });
-  const top3 = filterTemplatesByFocusAreas(templates ?? [], currentUser?.focusAreas).slice(0, 3);
-  if (top3.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-2 justify-center">
-      {top3.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => runTemplate.mutate({ datasetId, templateId: t.id })}
-          disabled={runTemplate.isPending}
-          className="px-4 py-2 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:border-primary/60 hover:bg-primary/5 hover:text-primary transition-all disabled:opacity-60 whitespace-nowrap"
-        >
-          {t.title}
-        </button>
-      ))}
-    </div>
-  );
+
+  const chipClass = "px-4 py-2 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:border-primary/60 hover:bg-primary/5 hover:text-primary transition-all disabled:opacity-60 whitespace-nowrap";
+
+  if (!chipsError && dailyChips !== null) {
+    if (dailyChips.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-2 justify-center">
+        {dailyChips.map((c, i) => (
+          <button key={i} type="button" onClick={() => onAsk(c.chipText)} className={chipClass}>
+            {c.chipText}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  if (chipsError) {
+    const top3 = filterTemplatesByFocusAreas(templates ?? [], currentUser?.focusAreas).slice(0, 3);
+    if (top3.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-2 justify-center">
+        {top3.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => runTemplate.mutate({ datasetId, templateId: t.id })}
+            disabled={runTemplate.isPending}
+            className={chipClass}
+          >
+            {t.title}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function StarterQuestions({
@@ -3227,6 +3280,7 @@ export function AnalysesPage() {
                 <p className="text-sm text-muted-foreground">Stelle eine Frage oder starte eine Vorlage:</p>
                 <ChatStartChips
                   datasetId={datasetId!}
+                  onAsk={(q) => { handleSubmit(q); }}
                   onTemplateRun={(id) => {
                     setActiveAnalysisId(id);
                     queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId!) });

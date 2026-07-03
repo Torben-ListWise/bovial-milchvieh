@@ -24,6 +24,7 @@ import feedbackRouter from "./feedback";
 import newsRouter from "./news";
 import thiRouter from "./thi";
 import chipsRouter from "./chips";
+import semenPlanningRouter from "./semen-planning";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(feedbackRouter);
 router.use(newsRouter);
 router.use(thiRouter);
 router.use(chipsRouter);
+router.use(semenPlanningRouter);
 
 export default router;

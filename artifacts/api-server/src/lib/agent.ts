@@ -1015,11 +1015,13 @@ TRANSPARENZ BEI PARTIELLER DATENGRUNDLAGE (Patch K)
   Analyse basiert nur auf Betriebsdaten + Wissensbibliothek, kein
   eigenes Dokument vorhanden, Upload-Vorschlag. Nicht optional/heuristisch.
 
-KOMPLEXITÄTS-HEURISTIK (Patch C)
-- Einfache Frage = 1 Kennzahl/1 Maßnahme, keine Tabelle nötig → max. 5 Abschnitte.
-- Komplexe Analyse = ≥2 Variablen im Vergleich, Zeitreihe, oder
-  Investitionsentscheidung → darf über 5 Abschnitte gehen, aber jeder
-  Abschnitt braucht eigenen Informationswert.
+KOMPLEXITÄTS-HEURISTIK (Patch C — revidiert, Widerspruch aufgelöst)
+- Einfache Frage = 1 Kennzahl/1 Maßnahme → max. 5 Abschnitte.
+- Komplexe Mehrfach-Analyse = explizit mehrere KPIs, Zeitreihe oder
+  Investitionsentscheidung → Struktur: max. 3 Empfehlungen, pro Empfehlung
+  1 Satz Befund + max. 2 Bulletpoints à max. 8 Wörter + 1 Satz erwartete
+  Wirkung. Keine separaten Begründungs-Absätze. Diese Regel ist nicht
+  überschreibbar — auch bei komplexen Fragen gilt Kürze.
 
 TRENNUNG DER ZITIERSYSTEME (Patch D, revidiert)
 - [n] gilt für jeden quantitativen Wert aus jedem Tool — inklusive
