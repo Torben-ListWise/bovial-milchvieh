@@ -63,7 +63,7 @@ import {
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
   Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
   Pin, MoreHorizontal, Trash2,
-  ThumbsUp, ThumbsDown, ImagePlus,
+  ThumbsUp, ThumbsDown, Image as ImageIcon,
 } from "lucide-react";
 
 const FEEDBACK_API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -2164,6 +2164,8 @@ export function AnalysesPage() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const askIsPendingRef = useRef(false);
   const pendingQuestionRef = useRef("");
   const answeredMsgIdsRef = useRef<Set<string>>(new Set());
@@ -2620,6 +2622,37 @@ export function AnalysesPage() {
       setPendingImage(null);
       URL.revokeObjectURL(preview);
       toast({ variant: "destructive", title: "Bild-Upload fehlgeschlagen", description: "Bitte erneut versuchen." });
+    }
+  }
+
+  async function handleFileClickSelect(file: File) {
+    if (!datasetId) return;
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      toast({
+        variant: "destructive",
+        title: "Datei zu groß",
+        description: `Maximale Dateigröße: ${MAX_FILE_SIZE_MB} MB. Deine Datei hat ${(file.size / 1024 / 1024).toFixed(1)} MB.`,
+      });
+      return;
+    }
+    const msgId = crypto.randomUUID();
+    setSystemMessages((prev) => [...prev, { id: msgId, fileName: file.name, status: "uploading" }]);
+    try {
+      const { uploadURL, objectPath } = await requestUrl.mutateAsync({
+        data: { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
+      });
+      if (activeAnalysisId) {
+        setScopePickerChoice("all");
+        setScopePicker({ file, uploadURL, objectPath, msgId });
+        scopePickerTimerRef.current = setTimeout(() => {
+          void completeScopedUpload({ file, uploadURL, objectPath, msgId }, "all");
+          setScopePicker(null);
+        }, 5000);
+        return;
+      }
+      await doUpload(file, uploadURL, objectPath, msgId, null);
+    } catch {
+      updateSystemMsg(msgId, { status: "error" });
     }
   }
 
@@ -3180,7 +3213,7 @@ export function AnalysesPage() {
         </div>
       )}
       <div className="flex gap-2 items-center">
-        {/* Hidden file input for image selection */}
+        {/* Hidden inputs */}
         <input
           ref={imageInputRef}
           type="file"
@@ -3192,15 +3225,61 @@ export function AnalysesPage() {
             e.target.value = "";
           }}
         />
-        <button
-          type="button"
-          onClick={() => imageInputRef.current?.click()}
-          disabled={isPending || chatQuotaExceeded || !!pendingImage}
-          title="Bild anhängen (JPEG, PNG, WEBP, max. 20 MB)"
-          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <ImagePlus className="w-4 h-4" />
-        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,.xlsx,.xls,.txt,.pdf,.doc,.docx"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleFileClickSelect(file);
+            e.target.value = "";
+          }}
+        />
+        {/* + button with Foto / Datei dropdown */}
+        {plusMenuOpen && (
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setPlusMenuOpen(false)}
+          />
+        )}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setPlusMenuOpen((o) => !o)}
+            disabled={isPending || chatQuotaExceeded}
+            title="Foto oder Datei anhängen"
+            className="w-9 h-9 flex items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          {plusMenuOpen && (
+            <div className="absolute bottom-full left-0 mb-1.5 bg-card border border-border/60 rounded-xl shadow-lg overflow-hidden z-20 min-w-[130px]">
+              <button
+                type="button"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors"
+                onClick={() => {
+                  setPlusMenuOpen(false);
+                  imageInputRef.current?.click();
+                }}
+              >
+                <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                Foto
+              </button>
+              <button
+                type="button"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors"
+                onClick={() => {
+                  setPlusMenuOpen(false);
+                  fileInputRef.current?.click();
+                }}
+              >
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Datei
+              </button>
+            </div>
+          )}
+        </div>
         <Input
           ref={inputRef}
           value={question}
@@ -3254,11 +3333,6 @@ export function AnalysesPage() {
           </button>
         ))}
       </div>
-      {!activeAnalysisId && (
-        <p className="hidden md:block text-xs text-muted-foreground mt-1.5 px-1">
-          Tipp: Dateien direkt auf diese Seite ziehen zum Hochladen
-        </p>
-      )}
     </form>
   );
 
