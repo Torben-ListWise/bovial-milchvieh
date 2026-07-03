@@ -57,9 +57,11 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
   const doStream = useCallback((analysisId: string) => {
     if (stoppedRef.current) return;
 
-    // Abort any existing fetch stream
+    // Abort any existing fetch stream. Wrap in try/catch — in some browsers
+    // abort() on a live ReadableStream reader synchronously throws
+    // "BodyStreamBuffer was aborted" which would escape as an unhandled rejection.
     if (abortRef.current) {
-      abortRef.current.abort();
+      try { abortRef.current.abort(); } catch { /* ignore */ }
       abortRef.current = null;
     }
 
@@ -203,7 +205,7 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
       retryTimerRef.current = null;
     }
     if (abortRef.current) {
-      abortRef.current.abort();
+      try { abortRef.current.abort(); } catch { /* ignore */ }
       abortRef.current = null;
     }
   }, []);

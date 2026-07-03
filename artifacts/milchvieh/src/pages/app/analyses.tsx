@@ -2525,6 +2525,10 @@ export function AnalysesPage() {
   const isAgentWorking =
     (ask.isPending && !!activeAnalysisId) ||
     analysis?.agentProgress != null ||
+    // SSE stream is actively delivering progress — covers the gap between stream
+    // start and the first DB poll returning agentProgress (e.g. template runs
+    // where pendingQuestionRef is never set)
+    streaming.progressStep != null ||
     // Background agent started but no messages in DB yet
     (!!activeAnalysisId && (analysis?.messages?.length ?? 0) === 0 && !!pendingQuestionRef.current);
 
