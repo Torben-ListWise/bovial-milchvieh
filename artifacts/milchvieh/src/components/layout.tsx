@@ -241,7 +241,6 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
 
   const allCustomerNav = [
     { name: "Start", href: "/app/overview", icon: Home, preserveDataset: true, guestHidden: false },
-    { name: "Betriebe", href: "/app/datasets", icon: Home, preserveDataset: false, guestHidden: false },
     { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true, guestHidden: false },
     { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true, guestHidden: true },
     { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false, guestHidden: false },
@@ -273,13 +272,10 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
       <>
         <ul className="space-y-0.5 px-2">
           {navItems.map((item) => {
-            const isActive = currentPath.startsWith(item.href) && !(item.href === '/app/datasets' && isGuestMode);
+            const isActive = currentPath.startsWith(item.href);
             const Icon = item.icon;
-            // In guest mode: "Betriebe" goes back to host datasets list; other items preserve hostId
             let href: string;
-            if (item.href === '/app/datasets' && isGuestMode) {
-              href = `/app/datasets?hostId=${hostId}`;
-            } else if (item.preserveDataset) {
+            if (item.preserveDataset) {
               href = `${item.href}${datasetQuery}`;
             } else {
               href = item.href;
@@ -511,12 +507,10 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
         <nav className="flex-1 overflow-y-auto py-3">
           <ul className="space-y-1 px-3">
             {navItems.map((item) => {
-              const isActive = currentPath.startsWith(item.href) && !(item.href === '/app/datasets' && isGuestMode);
+              const isActive = currentPath.startsWith(item.href);
               const Icon = item.icon;
               let href: string;
-              if (item.href === '/app/datasets' && isGuestMode) {
-                href = `/app/datasets?hostId=${hostId}`;
-              } else if (item.preserveDataset) {
+              if (item.preserveDataset) {
                 href = `${item.href}${datasetQuery}`;
               } else {
                 href = item.href;

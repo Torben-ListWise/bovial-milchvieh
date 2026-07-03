@@ -29,7 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText } from "lucide-react";
+import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -37,8 +37,9 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ""
 import { DynamicChart } from "@/components/DynamicChart";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { PageLayout } from "@/components/PageLayout";
-import { useListFiles, getListFilesQueryKey, useListDatasets, getListDatasetsQueryKey } from "@workspace/api-client-react";
+import { useListFiles, getListFilesQueryKey } from "@workspace/api-client-react";
 import { DataTile } from "@/components/DataTile";
+import { DatasetList } from "@/pages/app/datasets";
 
 const THI_STATUS_MAP: Record<string, "normal" | "warning" | "critical"> = {
   normal: "normal",
@@ -403,50 +404,12 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
   );
 }
 
-function NoDatasetOverview() {
-  return (
-    <PageLayout size="wide">
-      <h1 className="text-3xl font-bold text-foreground">Übersicht</h1>
-      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-4 text-center">
-        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-          <AiIcon size={22} className="text-primary" />
-        </div>
-        <div className="space-y-1">
-          <p className="font-semibold text-lg text-foreground">Noch keine Daten hochgeladen</p>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Lade deine erste Datei hoch, um Auswertungen, KPIs und Benchmarks zu sehen.
-          </p>
-        </div>
-        <Link href="/app/datasets">
-          <span className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors cursor-pointer">
-            Daten hochladen <ArrowRight className="w-4 h-4" />
-          </span>
-        </Link>
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-foreground">Aktuelle Nachrichten</h2>
-        <NewsPreviewCard datasetId={null} />
-      </div>
-    </PageLayout>
-  );
-}
-
 export function DatasetOverview() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const search = useSearch();
-  const datasetId = new URLSearchParams(search).get("datasetId") || null;
-
-  const { data: datasets, isLoading: datasetsLoading } = useListDatasets({
-    query: { enabled: !datasetId, queryKey: getListDatasetsQueryKey() },
-  });
-
-  useEffect(() => {
-    if (datasetId || datasetsLoading) return;
-    if (datasets && datasets.length > 0) {
-      const path = location.split("?")[0];
-      setLocation(`${path}?datasetId=${datasets[0].id}`);
-    }
-  }, [datasetId, datasets, datasetsLoading, location, setLocation]);
+  const searchParams = new URLSearchParams(search);
+  const datasetId = searchParams.get("datasetId") || null;
+  const hostId = searchParams.get("hostId") || null;
 
   const { data: currentUser } = useGetCurrentUser();
   const { data: files } = useListFiles(datasetId!, {
@@ -472,16 +435,20 @@ export function DatasetOverview() {
 
   const autoAnalysis = analyses?.find((a) => a.source === "auto" && a.templateRef === "auto_erstanalyse");
 
+  // State A: no dataset selected — show dataset picker
   if (!datasetId) {
-    if (datasetsLoading) {
-      return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
-    }
-    if (!datasets || datasets.length === 0) {
-      return <NoDatasetOverview />;
-    }
-    return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
+    return (
+      <PageLayout size="wide">
+        <DatasetList />
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold text-foreground">Aktuelle Nachrichten</h2>
+          <NewsPreviewCard datasetId={null} />
+        </div>
+      </PageLayout>
+    );
   }
 
+  // State B: dataset selected — show dashboard
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -509,12 +476,21 @@ export function DatasetOverview() {
 
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-foreground">Start</h1>
-        {overview.warningCount > 0 && (
-          <div className="flex items-center text-destructive bg-destructive/10 px-4 py-2 rounded-lg font-medium">
-            <AlertTriangle className="w-5 h-5 mr-2" />
-            {overview.warningCount} offene Warnungen
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {overview.warningCount > 0 && (
+            <div className="flex items-center text-destructive bg-destructive/10 px-4 py-2 rounded-lg font-medium">
+              <AlertTriangle className="w-5 h-5 mr-2" />
+              {overview.warningCount} offene Warnungen
+            </div>
+          )}
+          <button
+            onClick={() => setLocation(hostId ? `/app/overview?hostId=${hostId}` : '/app/overview')}
+            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground bg-secondary hover:bg-secondary/80 hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+            Betrieb wechseln
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
