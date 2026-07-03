@@ -370,7 +370,7 @@ function StartChipsSection({ datasetId }: { datasetId: string }) {
           disabled={runTemplate.isPending}
           className="px-4 py-2 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:border-primary/60 hover:bg-primary/5 hover:text-primary transition-all disabled:opacity-60 whitespace-nowrap"
         >
-          {t.emoji} {t.title}
+          {t.title}
         </button>
       ))}
     </div>
