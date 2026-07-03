@@ -20,93 +20,93 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
   const stoppedRef = useRef(false);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
   const doStream = useCallback((analysisId: string) => {
     if (stoppedRef.current) return;
 
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
+    // Close any existing EventSource before opening a new one
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
     }
 
-    const abort = new AbortController();
-    abortRef.current = abort;
+    const url = `/api/stream?analysisId=${encodeURIComponent(analysisId)}`;
 
-    (async () => {
+    // Native EventSource: the browser sends this as a proper SSE request with
+    // `Accept: text/event-stream`. Browsers and proxies handle this transport
+    // more correctly than a fetch+ReadableStream reader.
+    const es = new EventSource(url, { withCredentials: true });
+    esRef.current = es;
+
+    // Guard against onerror firing after we intentionally closed
+    let settled = false;
+
+    function close() {
+      settled = true;
+      es.close();
+      if (esRef.current === es) esRef.current = null;
+    }
+
+    es.addEventListener("delta", (e: MessageEvent) => {
+      if (stoppedRef.current || settled) return;
       try {
-        if (stoppedRef.current) return;
+        const data = JSON.parse(e.data) as { text?: string };
+        callbacksRef.current.onDelta(data.text ?? "");
+      } catch { /* ignore malformed */ }
+    });
 
-        const url = `/api/stream?analysisId=${encodeURIComponent(analysisId)}`;
+    es.addEventListener("progress", (e: MessageEvent) => {
+      if (stoppedRef.current || settled) return;
+      try {
+        const data = JSON.parse(e.data) as { step?: string };
+        callbacksRef.current.onProgress(data.step ?? "");
+      } catch { /* ignore */ }
+    });
 
-        const response = await fetch(url, { signal: abort.signal, credentials: "include" });
+    es.addEventListener("chart", (e: MessageEvent) => {
+      if (stoppedRef.current || settled) return;
+      try {
+        const data = JSON.parse(e.data) as { chart?: Chart };
+        if (data.chart) callbacksRef.current.onChart(data.chart);
+      } catch { /* ignore */ }
+    });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        if (!response.body) throw new Error("No response body");
+    es.addEventListener("sources", (e: MessageEvent) => {
+      if (stoppedRef.current || settled) return;
+      try {
+        const data = JSON.parse(e.data) as { sources?: string[] };
+        if (data.sources) callbacksRef.current.onSources(data.sources);
+      } catch { /* ignore */ }
+    });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+    es.addEventListener("done", () => {
+      if (stoppedRef.current || settled) return;
+      close();
+      callbacksRef.current.onDone();
+    });
 
-        retryCountRef.current = 0;
+    // Server-sent error event (agent failed, not a connection drop)
+    es.addEventListener("agenterror", () => {
+      if (stoppedRef.current || settled) return;
+      close();
+      callbacksRef.current.onFallback?.();
+    });
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (stoppedRef.current) {
-            reader.cancel();
-            break;
-          }
+    // Connection-level error (network drop, HTTP non-2xx, proxy closed)
+    es.onerror = () => {
+      if (stoppedRef.current || settled) return;
+      close();
 
-          buffer += decoder.decode(value, { stream: true });
-
-          const events = buffer.split("\n\n");
-          buffer = events.pop() ?? "";
-
-          const cb = callbacksRef.current;
-          for (const event of events) {
-            for (const line of event.split("\n")) {
-              if (!line.startsWith("data: ")) continue;
-              let msg: Record<string, unknown>;
-              try {
-                msg = JSON.parse(line.slice(6)) as Record<string, unknown>;
-              } catch {
-                continue;
-              }
-              const evName = msg.event as string;
-
-              if (evName === "delta") {
-                cb.onDelta((msg.text as string) ?? "");
-              } else if (evName === "progress") {
-                cb.onProgress((msg.step as string) ?? "");
-              } else if (evName === "chart") {
-                cb.onChart(msg.chart as Chart);
-              } else if (evName === "sources") {
-                cb.onSources((msg.sources as string[]) ?? []);
-              } else if (evName === "done") {
-                cb.onDone();
-                reader.cancel();
-                return;
-              } else if (evName === "error") {
-                throw new Error((msg.message as string) ?? "Stream error");
-              }
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if (stoppedRef.current) return;
-        if (err instanceof Error && err.name === "AbortError") return;
-
-        const n = retryCountRef.current;
-        if (n < MAX_RETRIES) {
-          retryCountRef.current = n + 1;
-          const delay = BACKOFF_DELAYS_MS[n] ?? 4000;
-          retryTimerRef.current = setTimeout(() => doStream(analysisId), delay);
-        } else {
-          callbacksRef.current.onFallback?.();
-        }
+      const n = retryCountRef.current;
+      if (n < MAX_RETRIES) {
+        retryCountRef.current = n + 1;
+        const delay = BACKOFF_DELAYS_MS[n] ?? 4000;
+        retryTimerRef.current = setTimeout(() => doStream(analysisId), delay);
+      } else {
+        callbacksRef.current.onFallback?.();
       }
-    })();
+    };
   }, []);
 
   const startStream = useCallback(
@@ -128,9 +128,9 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
     }
   }, []);
 

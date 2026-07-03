@@ -73,25 +73,28 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
     if (!res.writableEnded) { res.write(": keepalive\n\n"); flush(); }
   }, 10_000);
 
-  function sendSseEvent(data: object): void {
+  // Named SSE events: `event: <name>\ndata: <json>\n\n`
+  // Named events are required for the native EventSource API to dispatch
+  // them to the correct addEventListener listeners without buffering.
+  function sendSseEvent(name: string, data: object): void {
     if (res.writableEnded) return;
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
     flush();
   }
 
   const writer: SseWriter = {
-    sendDelta: (text) => sendSseEvent({ event: "delta", text }),
-    sendSources: (sources) => sendSseEvent({ event: "sources", sources }),
-    sendProgress: (step) => sendSseEvent({ event: "progress", step }),
-    sendChart: (chart) => sendSseEvent({ event: "chart", chart }),
+    sendDelta: (text) => sendSseEvent("delta", { text }),
+    sendSources: (sources) => sendSseEvent("sources", { sources }),
+    sendProgress: (step) => sendSseEvent("progress", { step }),
+    sendChart: (chart) => sendSseEvent("chart", { chart }),
     sendDone: () => {
-      sendSseEvent({ event: "done" });
+      sendSseEvent("done", {});
       clearInterval(keepalive);
       removeWriter(analysisId);
       res.end();
     },
     sendError: (message) => {
-      sendSseEvent({ event: "error", message });
+      sendSseEvent("agenterror", { message });
       clearInterval(keepalive);
       removeWriter(analysisId);
       res.end();
@@ -99,7 +102,7 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
   };
 
   registerWriter(analysisId, writer);
-  sendSseEvent({ event: "connected" });
+  sendSseEvent("connected", {});
 
   req.on("close", () => {
     clearInterval(keepalive);
