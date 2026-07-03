@@ -662,6 +662,22 @@ export async function setupAnalystSandbox(): Promise<void> {
     "CREATE UNIQUE INDEX IF NOT EXISTS newsletter_editions_scheduled_date_unique ON newsletter_editions (scheduled_date)"
   );
 
+  // Migration: semen_planning table — stores Besamungs- & Sperma-Kostenplanung per farm/dataset
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS semen_planning (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      dataset_id  UUID        NOT NULL UNIQUE,
+      user_id     TEXT        NOT NULL,
+      inputs      JSONB       NOT NULL,
+      outputs     JSONB       NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS semen_planning_dataset_id_idx ON semen_planning (dataset_id)"
+  );
+
   // Seed default news topics if table is empty
   const { rows: topicRows } = await pool.query(
     "SELECT COUNT(*)::int AS c FROM news_topics"

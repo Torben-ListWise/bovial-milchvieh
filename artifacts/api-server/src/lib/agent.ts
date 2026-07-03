@@ -16,6 +16,7 @@ import {
   knowledgeChunksTable,
   knowledgeMissedQueriesTable,
   apiUsageLogTable,
+  semenPlanningTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -647,6 +648,45 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "get_semen_planning",
+    description: "Lädt die gespeicherte Besamungs- und Sperma-Kostenplanung für diesen Betrieb. Aufrufen wenn der Nutzer Fragen zur Besamungsplanung, Spermakosten, Sperma-Kategorien oder Kälbererlösen stellt — um zu prüfen ob bereits Parameter gespeichert sind.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "calculate_semen_planning",
+    description: "Berechnet und speichert die Besamungs- und Sperma-Kostenplanung für den Betrieb: Jahresbedarf Portionen, Kosten je Sperma-Kategorie, Kälbererlöse, Nettokosten, Färsenbalance und Aufzuchtplatzbedarf. Aufrufen wenn alle Parameter vom Nutzer bestätigt wurden. Das Ergebnis wird persistent pro Betrieb gespeichert.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summeKuehe: { type: "number", description: "Anzahl Kühe im Betrieb" },
+        konzRateKuehe: { type: "number", description: "Konzeptionsrate Kühe in % (1–100)" },
+        konzRateFaersen: { type: "number", description: "Konzeptionsrate Färsen in % (1–100)" },
+        prozentAbgaenge: { type: "number", description: "Abgangsrate Kühe in % (1–100)" },
+        eka: { type: "number", description: "Erstkalbealter in Monaten (z.B. 26)" },
+        verlusteKueheRate: { type: "number", description: "Verlustrate Kühe in % (Verendungen etc.)" },
+        verlusteRinderRate: { type: "number", description: "Verlustrate Rinder/Nachzucht in %" },
+        anteilHoGesext: { type: "number", description: "Anteil HO gesext Sperma in % (muss zusammen mit den anderen Anteilen 100 ergeben)" },
+        anteilHoKonv: { type: "number", description: "Anteil HO konventionell Sperma in %" },
+        anteilBeefGesext: { type: "number", description: "Anteil Beef gesext Sperma in %" },
+        anteilBeefKonv: { type: "number", description: "Anteil Beef konventionell Sperma in %" },
+        preisHoGesext: { type: "number", description: "Preis je Portion HO gesext in €" },
+        preisHoKonv: { type: "number", description: "Preis je Portion HO konventionell in €" },
+        preisBeefGesext: { type: "number", description: "Preis je Portion Beef gesext in €" },
+        preisBeefKonv: { type: "number", description: "Preis je Portion Beef konventionell in €" },
+        verkaufspreisHoBullkalb: { type: "number", description: "Verkaufspreis HO Bullenkalb (♂) in € (28 Tage)" },
+        verkaufspreisBeefWeiblich: { type: "number", description: "Verkaufspreis weibliches Beef-Kalb in € (28 Tage)" },
+        verkaufspreisBeefBullkalb: { type: "number", description: "Verkaufspreis Beef Bullenkalb (♂) in € (28 Tage)" },
+      },
+      required: [
+        "summeKuehe", "konzRateKuehe", "konzRateFaersen", "prozentAbgaenge",
+        "eka", "verlusteKueheRate", "verlusteRinderRate",
+        "anteilHoGesext", "anteilHoKonv", "anteilBeefGesext", "anteilBeefKonv",
+        "preisHoGesext", "preisHoKonv", "preisBeefGesext", "preisBeefKonv",
+        "verkaufspreisHoBullkalb", "verkaufspreisBeefWeiblich", "verkaufspreisBeefBullkalb",
+      ],
+    },
+  },
+  {
     name: "signal_escalation",
     description: "Rufe dieses Tool genau EINMAL auf, wenn einer der vier definierten Eskalationstrigger ausgelöst wird — BEVOR du die Antwort formulierst. Das Tool hat keine Auswirkung auf die Antwort, protokolliert aber den Trigger strukturiert für den Betreiber.",
     input_schema: {
@@ -670,7 +710,7 @@ const TOOLS: Tool[] = [
 /** Reduced toolset for simple single-KPI questions — no ask_farmer, no investment calc, no chart. */
 function getToolsForTask(taskType: ModelTaskType): Tool[] {
   if (taskType === "chat_analysis_simple") {
-    const exclude = new Set(["ask_farmer", "calculate_investment", "emit_chart"]);
+    const exclude = new Set(["ask_farmer", "calculate_investment", "calculate_semen_planning", "emit_chart"]);
     return TOOLS.filter((t) => !exclude.has(t.name));
   }
   return TOOLS;
@@ -1496,6 +1536,161 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           },
         };
       }
+      case "get_semen_planning": {
+        const existing = await db
+          .select()
+          .from(semenPlanningTable)
+          .where(eq(semenPlanningTable.datasetId, opts.datasetId))
+          .limit(1);
+        if (existing.length === 0) {
+          return { found: false, message: "Noch keine Besamungsplanung für diesen Betrieb gespeichert." };
+        }
+        return { found: true, inputs: existing[0].inputs, outputs: existing[0].outputs, updatedAt: existing[0].updatedAt };
+      }
+
+      case "calculate_semen_planning": {
+        const round = (n: number, d = 0) => Math.round(n * 10 ** d) / 10 ** d;
+        const inp = input as {
+          summeKuehe: number; konzRateKuehe: number; konzRateFaersen: number;
+          prozentAbgaenge: number; eka: number; verlusteKueheRate: number; verlusteRinderRate: number;
+          anteilHoGesext: number; anteilHoKonv: number; anteilBeefGesext: number; anteilBeefKonv: number;
+          preisHoGesext: number; preisHoKonv: number; preisBeefGesext: number; preisBeefKonv: number;
+          verkaufspreisHoBullkalb: number; verkaufspreisBeefWeiblich: number; verkaufspreisBeefBullkalb: number;
+        };
+
+        // ── Validation ──────────────────────────────────────────────────────
+        if (inp.summeKuehe <= 0)
+          return { error: "summeKuehe muss größer 0 sein." };
+        for (const [key, val] of Object.entries({
+          konzRateKuehe: inp.konzRateKuehe, konzRateFaersen: inp.konzRateFaersen,
+          prozentAbgaenge: inp.prozentAbgaenge,
+        })) {
+          if (val < 1 || val > 100) return { error: `${key} muss zwischen 1 und 100 liegen.` };
+        }
+        const anteilSum = inp.anteilHoGesext + inp.anteilHoKonv + inp.anteilBeefGesext + inp.anteilBeefKonv;
+        if (Math.abs(anteilSum - 100) > 0.01)
+          return { error: `Sperma-Anteile summieren sich zu ${anteilSum.toFixed(1)} %, müssen aber genau 100 % ergeben.` };
+
+        // ── Herd dynamics ────────────────────────────────────────────────────
+        const kuehe = inp.summeKuehe;
+        const kzKuehe = inp.konzRateKuehe / 100;
+        const kzFaersen = inp.konzRateFaersen / 100;
+
+        const benoetigteFaersen = round(kuehe * inp.prozentAbgaenge / 100);
+        const traechtigkeitenKuehe = round(kuehe * 0.9);
+        const traechtigkeitenFaersen = round(benoetigteFaersen * 1.05);
+
+        // ── Besamungen ───────────────────────────────────────────────────────
+        const totalBesamungenKuehe = traechtigkeitenKuehe / kzKuehe;
+        const totalBesamungenFaersen = traechtigkeitenFaersen / kzFaersen;
+        const totalBesamungen = totalBesamungenKuehe + totalBesamungenFaersen;
+
+        const aHoGes = inp.anteilHoGesext / 100;
+        const aHoKonv = inp.anteilHoKonv / 100;
+        const aBeefGes = inp.anteilBeefGesext / 100;
+        const aBeefKonv = inp.anteilBeefKonv / 100;
+
+        const portHoGes = round(totalBesamungen * aHoGes);
+        const portHoKonv = round(totalBesamungen * aHoKonv);
+        const portBeefGes = round(totalBesamungen * aBeefGes);
+        const portBeefKonv = round(totalBesamungen * aBeefKonv);
+        const portGesamt = round(portHoGes + portHoKonv + portBeefGes + portBeefKonv);
+
+        // ── Pregnancies per category (same split applies to Kühe & Färsen) ──
+        const pregHoGes = round(traechtigkeitenKuehe * aHoGes + traechtigkeitenFaersen * aHoGes);
+        const pregHoKonv = round(traechtigkeitenKuehe * aHoKonv + traechtigkeitenFaersen * aHoKonv);
+        const pregBeefGes = round(traechtigkeitenKuehe * aBeefGes + traechtigkeitenFaersen * aBeefGes);
+        const pregBeefKonv = round(traechtigkeitenKuehe * aBeefKonv + traechtigkeitenFaersen * aBeefKonv);
+
+        // ── Gender distribution (fixed) ──────────────────────────────────────
+        // HO gesext:  90 % ♀ / 10 % ♂
+        // HO konv:    50 % ♀ / 50 % ♂
+        // Beef gesext: 10 % ♀ / 90 % ♂
+        // Beef konv:  50 % ♀ / 50 % ♂
+        const maleHoGes = round(pregHoGes * 0.10);
+        const maleHoKonv = round(pregHoKonv * 0.50);
+        const maleBeefGes = round(pregBeefGes * 0.90);
+        const maleBeefKonv = round(pregBeefKonv * 0.50);
+
+        const femaleHoGes = round(pregHoGes * 0.90);
+        const femaleHoKonv = round(pregHoKonv * 0.50);
+        const femaleBeefGes = round(pregBeefGes * 0.10);
+        const femaleBeefKonv = round(pregBeefKonv * 0.50);
+
+        // ── Färsen balance ───────────────────────────────────────────────────
+        const verfuegbareHoFaersen = round(femaleHoGes + femaleHoKonv);
+        const faersenBalance = round(verfuegbareHoFaersen - benoetigteFaersen);
+        const moeglAbgangsrate = round((verfuegbareHoFaersen / kuehe) * 100, 1);
+
+        // ── Aufzuchtplatzbedarf ──────────────────────────────────────────────
+        const aufzuchtplaetze = round(benoetigteFaersen / 12 * inp.eka);
+
+        // ── Costs ────────────────────────────────────────────────────────────
+        const kostenHoGes = round(portHoGes * inp.preisHoGesext);
+        const kostenHoKonv = round(portHoKonv * inp.preisHoKonv);
+        const kostenBeefGes = round(portBeefGes * inp.preisBeefGesext);
+        const kostenBeefKonv = round(portBeefKonv * inp.preisBeefKonv);
+        const gesamtkosten = round(kostenHoGes + kostenHoKonv + kostenBeefGes + kostenBeefKonv);
+        const kostenProKuhJahr = round(gesamtkosten / kuehe);
+
+        // ── Revenue from calf sales ──────────────────────────────────────────
+        const erlösHoMaennlich = round((maleHoGes + maleHoKonv) * inp.verkaufspreisHoBullkalb);
+        const erlösBeefMaennlich = round((maleBeefGes + maleBeefKonv) * inp.verkaufspreisBeefBullkalb);
+        const erlösBeefWeiblich = round((femaleBeefGes + femaleBeefKonv) * inp.verkaufspreisBeefWeiblich);
+        const gesamterlös = round(erlösHoMaennlich + erlösBeefMaennlich + erlösBeefWeiblich);
+
+        // ── Net costs ────────────────────────────────────────────────────────
+        const nettokosten = round(gesamtkosten - gesamterlös);
+        const nettokostenProKuhJahr = round(nettokosten / kuehe);
+
+        // ── Sexing premium (HO gesext vs. HO konv) ──────────────────────────
+        const sexingMehrpreisProKuhMonat = round(
+          (inp.preisHoGesext - inp.preisHoKonv) * portHoGes / kuehe / 12, 2
+        );
+
+        const outputs = {
+          herdendynamik: {
+            benoetigteFaersen,
+            traechtigkeitenKuehe,
+            traechtigkeitenFaersen,
+            aufzuchtplaetze,
+          },
+          besamungen: {
+            totalBesamungenKuehe: round(totalBesamungenKuehe),
+            totalBesamungenFaersen: round(totalBesamungenFaersen),
+            portionen: { hoGesext: portHoGes, hoKonv: portHoKonv, beefGesext: portBeefGes, beefKonv: portBeefKonv, gesamt: portGesamt },
+          },
+          kaelber: {
+            maennlich: { hoGesext: maleHoGes, hoKonv: maleHoKonv, beefGesext: maleBeefGes, beefKonv: maleBeefKonv },
+            weiblichBeef: { beefGesext: femaleBeefGes, beefKonv: femaleBeefKonv },
+            verfuegbareHoFaersen,
+          },
+          faersenbalance: { verfuegbareHoFaersen, benoetigteFaersen, faersenBalance, moeglAbgangsratePct: moeglAbgangsrate },
+          kosten: {
+            hoGesext: kostenHoGes, hoKonv: kostenHoKonv, beefGesext: kostenBeefGes, beefKonv: kostenBeefKonv,
+            gesamt: gesamtkosten, proKuhJahr: kostenProKuhJahr,
+          },
+          erloese: {
+            hoMaennlich: erlösHoMaennlich, beefMaennlich: erlösBeefMaennlich, beefWeiblich: erlösBeefWeiblich,
+            gesamt: gesamterlös,
+          },
+          nettokosten,
+          nettokostenProKuhJahr,
+          sexingMehrpreisProKuhMonat,
+        };
+
+        const nowTs = new Date();
+        await db
+          .insert(semenPlanningTable)
+          .values({ datasetId: opts.datasetId, userId: opts.userId ?? "unknown", inputs: inp, outputs, updatedAt: nowTs })
+          .onConflictDoUpdate({
+            target: semenPlanningTable.datasetId,
+            set: { inputs: inp, outputs, updatedAt: nowTs },
+          });
+
+        return outputs;
+      }
+
       case "search_knowledge": {
         searchKnowledgeCalled = true;
         const query = input.query as string;
@@ -2235,6 +2430,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "search_dairycomp_manual": return "Durchsuche DairyComp-Handbuch";
       case "search_web": return "Durchsuche das Internet";
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
+      case "get_semen_planning": return "Lade gespeicherte Besamungsplanung";
+      case "calculate_semen_planning": return "Berechne Besamungs- und Spermakosten";
       case "emit_chart": return `Erstelle Diagramm`;
       case "ask_farmer": return "Formuliere Rückfragen";
       case "get_event_stats": return `Berechne Event-Statistik${metric ? ` für ${metric}` : ""}`;
@@ -2326,6 +2523,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "search_farm_abbreviations",
     "search_dairycomp_manual",
     "calculate_investment",
+    "get_semen_planning",
+    "calculate_semen_planning",
     "ask_farmer",
     "get_event_stats",
     "get_repro_kpis",
