@@ -3409,7 +3409,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { setQuestion(q); inputRef.current?.focus(); }} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} />
           </div>
         </div>
       </div>
@@ -3431,7 +3431,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { setQuestion(q); inputRef.current?.focus(); }} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} />
             </div>
           )}
         </div>
