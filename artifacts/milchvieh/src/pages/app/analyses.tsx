@@ -1977,15 +1977,19 @@ function AnalysisResultsPanel({
     <div className="h-full flex flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {resultPairs.map((pair, idx) => (
-          <ResultCard
-            key={pair.msg.id}
-            questionTitle={pair.questionTitle}
-            msg={pair.msg}
-            analysisId={analysis.id}
-            cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
-            onFollowUpClick={onFollowUpClick}
-            isAgentWorking={isWorking}
-          />
+          <div key={pair.msg.id}>
+            <ResultCard
+              questionTitle={pair.questionTitle}
+              msg={pair.msg}
+              analysisId={analysis.id}
+              cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
+              onFollowUpClick={onFollowUpClick}
+              isAgentWorking={isWorking}
+            />
+            <p className="text-[11px] text-muted-foreground/60 mt-1.5 px-1 text-center select-none">
+              KI-Analysen können Fehler enthalten – bitte Ergebnisse stets fachlich prüfen.
+            </p>
+          </div>
         ))}
 
         {isWorking && (
