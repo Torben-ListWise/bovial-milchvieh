@@ -1,42 +1,47 @@
 ---
 name: Milchvieh agent streaming
-description: How the agent streams text to the client in real-time via WebSocket
+description: How the agent streams text to the client in real-time via SSE
 ---
 
-## Current approach: WebSocket (not SSE)
+## Current approach: SSE via fetch+ReadableStream (NOT EventSource, NOT WebSocket)
 
-**Why WebSocket, not SSE**: The Replit proxy buffers SSE responses regardless of `setNoDelay(true)`, `X-Replit-Proxy-Buffering: no`, `X-Accel-Buffering: no`, or any other HTTP headers. Text arrives all at once when the stream completes. WebSocket is the only approach that delivers individual frames in real-time through the Replit proxy.
+**Why NOT EventSource**: EventSource cannot set Authorization headers. Clerk (even dev mode)
+returns `dev-browser-missing` and immediately closes the connection with 401. The client's
+`onerror` fires, retries 3x, then falls back to 1s polling — no live streaming visible.
 
-**Server endpoint**: `wss://[host]/api/ws/stream?analysisId=UUID&token=CLERK_JWT`
-- Token verified via `verifyToken(token, { secretKey })` from `@clerk/express`
-- On successful auth, registers a `SseWriter` in `sseWriters` map (same interface)
-- Sends `{"event":"connected"}` to confirm auth
-- Heartbeat is NOT needed (WebSocket has its own keepalive via ping/pong)
+**Why NOT WebSocket**: The Replit dev proxy does not forward WS upgrades across artifact ports.
 
-**Message format** (server → client):
-```json
-{"event":"delta","text":"hello"}
-{"event":"progress","step":"Berechne KPIs..."}
-{"event":"chart","chart":{...}}
-{"event":"sources","sources":["src1","src2"]}
-{"event":"done"}
-{"event":"error","message":"..."}
+**Why fetch+ReadableStream**: Can set `Authorization: Bearer <token>` header. Uses the same
+Clerk JWT that all other API calls use (via `getAuthToken()` from `@workspace/api-client-react`).
+
+## Server endpoint
+
+`GET /api/stream?analysisId=UUID`
+- Auth: `requireAuth` middleware reads Bearer JWT via `getAuth(req)` from `@clerk/express`
+- Response headers: `Content-Type: text/event-stream`, `X-Accel-Buffering: no`, `X-Replit-Proxy-Buffering: no`
+- Named SSE events: `event: <name>\ndata: <json>\n\n`
+- Events: `connected`, `delta {text}`, `progress {step}`, `chart {chart}`, `sources {sources}`, `done {}`, `agenterror {message}`
+- Keepalive: `: keepalive\n\n` every 10s
+
+## Client hook: use-analysis-stream.ts
+
+```typescript
+const token = await getAuthToken();  // from @workspace/api-client-react
+const headers: HeadersInit = { "Accept": "text/event-stream" };
+if (token) headers["Authorization"] = `Bearer ${token}`;
+const response = await fetch(url, { headers, credentials: "include", signal: controller.signal });
 ```
 
-**Frontend hook**: `use-analysis-stream.ts` uses `WebSocket` directly.
-- URL: `${proto}//${window.location.host}/api/ws/stream?analysisId=...&token=...`
-- `window.location.host` is correct because Replit uses same-domain path-based routing
-- Retry on abnormal close (not on 1000/4001/4003)
-- Token obtained via `callbacksRef.current.getToken()` before connecting
+SSE buffer parsed manually: split on `\n\n`, extract `event:` and `data:` fields per block.
 
-**Backend location**: `artifacts/api-server/src/lib/wsHandler.ts`
-- `attachWebSocketServer(httpServer)` called from `index.ts`
-- `index.ts` uses `http.createServer(app)` + `httpServer.listen(port)` (not `app.listen()`)
-- `ws` package version: installed as direct dependency
+**How to apply:**
+- Never switch back to EventSource — it will always fail Clerk auth in dev mode
+- `getAuthToken()` must be exported from `lib/api-client-react/src/index.ts` AND `dist/index.d.ts`
+- AbortController replaces es.close() for cancellation; retry logic (3x backoff) unchanged
 
 ## Agent streaming internals
 
-Use `client.messages.stream()` with `stream.on("text", delta => onTextDelta!(delta))` for token-by-token emission. Do NOT use `messages.create()`.
+Use `client.messages.stream()` with `stream.on("text", delta => onTextDelta!(delta))` for token-by-token emission.
 
 **How to apply:**
 - In the main turn loop: `client.messages.stream({...})` + `stream.on("text", cb)` + `return stream.finalMessage()`

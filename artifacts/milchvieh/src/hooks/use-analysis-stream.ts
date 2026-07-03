@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Chart } from "@workspace/api-client-react";
+import { getAuthToken } from "@workspace/api-client-react";
 
 export type StreamCallbacks = {
   onDelta: (text: string) => void;
@@ -13,6 +14,37 @@ export type StreamCallbacks = {
 const MAX_RETRIES = 3;
 const BACKOFF_DELAYS_MS = [1000, 2000, 4000] as const;
 
+// Parse SSE events from a raw text buffer.
+// Returns parsed events and any remaining incomplete data.
+function parseSSEBuffer(buffer: string): {
+  events: Array<{ type: string; data: string }>;
+  remaining: string;
+} {
+  const events: Array<{ type: string; data: string }> = [];
+  const blocks = buffer.split("\n\n");
+  // Last element may be incomplete — keep it in the buffer
+  const remaining = blocks.pop() ?? "";
+
+  for (const block of blocks) {
+    if (!block.trim()) continue;
+    let type = "message";
+    let data = "";
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) {
+        type = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        data = line.slice(5).trim();
+      }
+      // ignore `:` comment lines (keepalive)
+    }
+    if (data || type !== "message") {
+      events.push({ type, data });
+    }
+  }
+
+  return { events, remaining };
+}
+
 export function useAnalysisStream(callbacks: StreamCallbacks) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
@@ -20,94 +52,136 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
   const stoppedRef = useRef(false);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const esRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const doStream = useCallback((analysisId: string) => {
     if (stoppedRef.current) return;
 
-    // Close any existing EventSource before opening a new one
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
+    // Abort any existing fetch stream
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
 
     const url = `/api/stream?analysisId=${encodeURIComponent(analysisId)}`;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    // Native EventSource: the browser sends this as a proper SSE request with
-    // `Accept: text/event-stream`. Browsers and proxies handle this transport
-    // more correctly than a fetch+ReadableStream reader.
-    const es = new EventSource(url, { withCredentials: true });
-    esRef.current = es;
-
-    // Guard against onerror firing after we intentionally closed
-    let settled = false;
-
-    function close() {
-      settled = true;
-      es.close();
-      if (esRef.current === es) esRef.current = null;
-    }
-
-    es.addEventListener("delta", (e: MessageEvent) => {
-      if (stoppedRef.current || settled) return;
+    (async () => {
+      let response: Response;
       try {
-        const data = JSON.parse(e.data) as { text?: string };
-        callbacksRef.current.onDelta(data.text ?? "");
-      } catch { /* ignore malformed */ }
-    });
+        const token = await getAuthToken();
+        const headers: HeadersInit = { "Accept": "text/event-stream" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    es.addEventListener("progress", (e: MessageEvent) => {
-      if (stoppedRef.current || settled) return;
-      try {
-        const data = JSON.parse(e.data) as { step?: string };
-        callbacksRef.current.onProgress(data.step ?? "");
-      } catch { /* ignore */ }
-    });
-
-    es.addEventListener("chart", (e: MessageEvent) => {
-      if (stoppedRef.current || settled) return;
-      try {
-        const data = JSON.parse(e.data) as { chart?: Chart };
-        if (data.chart) callbacksRef.current.onChart(data.chart);
-      } catch { /* ignore */ }
-    });
-
-    es.addEventListener("sources", (e: MessageEvent) => {
-      if (stoppedRef.current || settled) return;
-      try {
-        const data = JSON.parse(e.data) as { sources?: string[] };
-        if (data.sources) callbacksRef.current.onSources(data.sources);
-      } catch { /* ignore */ }
-    });
-
-    es.addEventListener("done", () => {
-      if (stoppedRef.current || settled) return;
-      close();
-      callbacksRef.current.onDone();
-    });
-
-    // Server-sent error event (agent failed, not a connection drop)
-    es.addEventListener("agenterror", () => {
-      if (stoppedRef.current || settled) return;
-      close();
-      callbacksRef.current.onFallback?.();
-    });
-
-    // Connection-level error (network drop, HTTP non-2xx, proxy closed)
-    es.onerror = () => {
-      if (stoppedRef.current || settled) return;
-      close();
-
-      const n = retryCountRef.current;
-      if (n < MAX_RETRIES) {
-        retryCountRef.current = n + 1;
-        const delay = BACKOFF_DELAYS_MS[n] ?? 4000;
-        retryTimerRef.current = setTimeout(() => doStream(analysisId), delay);
-      } else {
-        callbacksRef.current.onFallback?.();
+        response = await fetch(url, {
+          headers,
+          credentials: "include",
+          signal: controller.signal,
+          // Prevent the browser from buffering the response
+          cache: "no-store",
+        });
+      } catch (err: unknown) {
+        if ((err as Error)?.name === "AbortError") return;
+        if (stoppedRef.current) return;
+        scheduleRetry(analysisId);
+        return;
       }
-    };
-  }, []);
+
+      if (!response.ok) {
+        if (stoppedRef.current) return;
+        scheduleRetry(analysisId);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        if (stoppedRef.current) return;
+        scheduleRetry(analysisId);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || stoppedRef.current) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const { events, remaining } = parseSSEBuffer(buffer);
+          buffer = remaining;
+
+          for (const ev of events) {
+            if (stoppedRef.current) break;
+            dispatch(ev.type, ev.data);
+          }
+        }
+      } catch (err: unknown) {
+        if ((err as Error)?.name === "AbortError") return;
+        if (stoppedRef.current) return;
+        scheduleRetry(analysisId);
+      } finally {
+        try { reader.cancel(); } catch { /* ignore */ }
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function dispatch(type: string, data: string) {
+    try {
+      switch (type) {
+        case "delta": {
+          const parsed = JSON.parse(data) as { text?: string };
+          callbacksRef.current.onDelta(parsed.text ?? "");
+          break;
+        }
+        case "progress": {
+          const parsed = JSON.parse(data) as { step?: string };
+          callbacksRef.current.onProgress(parsed.step ?? "");
+          break;
+        }
+        case "chart": {
+          const parsed = JSON.parse(data) as { chart?: Chart };
+          if (parsed.chart) callbacksRef.current.onChart(parsed.chart);
+          break;
+        }
+        case "sources": {
+          const parsed = JSON.parse(data) as { sources?: string[] };
+          if (parsed.sources) callbacksRef.current.onSources(parsed.sources);
+          break;
+        }
+        case "done":
+          callbacksRef.current.onDone();
+          cleanup();
+          break;
+        case "agenterror":
+          callbacksRef.current.onFallback?.();
+          cleanup();
+          break;
+        // "connected" and keepalive comments are silently ignored
+      }
+    } catch { /* ignore malformed JSON */ }
+  }
+
+  function cleanup() {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }
+
+  function scheduleRetry(analysisId: string) {
+    cleanup();
+    const n = retryCountRef.current;
+    if (n < MAX_RETRIES) {
+      retryCountRef.current = n + 1;
+      const delay = BACKOFF_DELAYS_MS[n] ?? 4000;
+      retryTimerRef.current = setTimeout(() => doStream(analysisId), delay);
+    } else {
+      callbacksRef.current.onFallback?.();
+    }
+  }
 
   const startStream = useCallback(
     (analysisId: string) => {
@@ -128,9 +202,9 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
   }, []);
 
