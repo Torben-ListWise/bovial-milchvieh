@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, useMemo } from "react";
+import { useState, useRef, useEffect, memo, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/react";
 import ReactMarkdown from "react-markdown";
@@ -42,7 +42,7 @@ function filterTemplatesByFocusAreas(
   );
 }
 import { useRequireDataset } from "@/hooks/use-require-dataset";
-import { type AnalysisMessage } from "@workspace/api-client-react";
+import { type AnalysisMessage, type Citation } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1711,6 +1711,7 @@ const ResultCard = memo(function ResultCard({
   return (
     <div
       ref={cardRef}
+      data-result-card={msg.id}
       className="rounded-xl border border-border bg-card shadow-sm overflow-hidden"
     >
       <div className="flex items-stretch border-b border-border bg-muted/30">
@@ -1819,6 +1820,122 @@ const ResultCard = memo(function ResultCard({
   );
 });
 
+// ── Selection → Chat feature ─────────────────────────────────────────────────
+// Shows "An Chat senden" near any text selection inside the results panel.
+// On click builds a structured message: selected text + resolved citation data.
+
+type ResolvedCitation = { index: number; citation: Citation };
+
+type SelectionSendState = {
+  text: string;
+  rect: DOMRect;
+  citations: ResolvedCitation[];
+};
+
+type ResultPair = { msg: AnalysisMessage; questionTitle: string | null };
+
+function buildSelectionMessage(text: string, citations: ResolvedCitation[]): string {
+  const trimmed = text.trim().replace(/\s+/g, " ");
+  if (!citations.length) return `Analysiere tiefer: „${trimmed}"`;
+  const sourceLabel: Record<string, string> = {
+    betriebsdaten: "Betriebsdaten",
+    pdf: "PDF",
+    wissen: "Wissensbibliothek",
+    web: "Web",
+  };
+  const lines = citations.map(({ index, citation: c }) => {
+    const type = c.sourceType ? ` · ${sourceLabel[c.sourceType] ?? c.sourceType}` : "";
+    const basis = c.basis ? ` (${c.basis})` : "";
+    return `[${index}] ${c.label}: ${c.value}${basis}${type}`;
+  });
+  return `Analysiere tiefer: „${trimmed}"\n\nKontext-Quellen:\n${lines.join("\n")}`;
+}
+
+function findCitationsInRange(range: Range, resultPairs: ResultPair[]): ResolvedCitation[] {
+  const container = range.commonAncestorContainer;
+  const root = (container.nodeType === Node.TEXT_NODE ? container.parentElement : container) as Element | null;
+  if (!root) return [];
+  const cardRoot = root.closest("[data-result-card]") ?? root;
+  const allSups = Array.from(cardRoot.querySelectorAll(".cite-sup"));
+  const resolved: ResolvedCitation[] = [];
+  const seen = new Set<string>();
+  for (const sup of allSups) {
+    if (!range.intersectsNode(sup)) continue;
+    const id = (sup as HTMLElement).id;
+    const match = id.match(/^cref-(.+)-(\d{1,2})$/);
+    if (!match || seen.has(id)) continue;
+    seen.add(id);
+    const msgId = match[1];
+    const n = parseInt(match[2], 10);
+    const pair = resultPairs.find((p) => p.msg.id === msgId);
+    const citation = pair?.msg.citations?.[n - 1];
+    if (citation) resolved.push({ index: n, citation });
+  }
+  return resolved;
+}
+
+function useSelectionSend(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  resultPairs: ResultPair[],
+  enabled: boolean,
+) {
+  const [state, setState] = useState<SelectionSendState | null>(null);
+  const resultPairsRef = useRef(resultPairs);
+  resultPairsRef.current = resultPairs;
+
+  useEffect(() => {
+    if (!enabled) { setState(null); return; }
+    function onSelectionChange() {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) { setState(null); return; }
+      const range = sel.getRangeAt(0);
+      const text = sel.toString().trim();
+      if (!text || text.length < 8) { setState(null); return; }
+      const c = containerRef.current;
+      if (!c || !c.contains(range.commonAncestorContainer)) { setState(null); return; }
+      const rect = range.getBoundingClientRect();
+      if (!rect.width && !rect.height) { setState(null); return; }
+      setState({ text, rect, citations: findCitationsInRange(range, resultPairsRef.current) });
+    }
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [enabled, containerRef]);
+
+  const clear = useCallback(() => {
+    setState(null);
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  return { selection: state, clear };
+}
+
+function SelectionSendButton({
+  selection,
+  onSend,
+  onClear,
+}: {
+  selection: SelectionSendState;
+  onSend: (q: string) => void;
+  onClear: () => void;
+}) {
+  const { rect, text, citations } = selection;
+  const cx = Math.min(Math.max(rect.left + rect.width / 2, 80), window.innerWidth - 80);
+  const top = rect.top < 50 ? rect.bottom + 6 : rect.top - 38;
+  return createPortal(
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => { onSend(buildSelectionMessage(text, citations)); onClear(); }}
+      style={{ position: "fixed", left: cx, top, transform: "translateX(-50%)", zIndex: 9999 }}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground shadow-lg text-xs font-semibold hover:bg-primary/90 transition-colors animate-in fade-in zoom-in-95 duration-150 whitespace-nowrap"
+    >
+      <Send className="w-3 h-3" />
+      An Chat senden
+    </button>,
+    document.body,
+  );
+}
+
 // ── Analysis results panel ────────────────────────────────────────────────────
 
 function AnalysisResultsPanel({
@@ -1864,6 +1981,13 @@ function AnalysisResultsPanel({
       resultPairs.push({ msg: m, questionTitle: prevUser?.content ?? null });
     }
   }
+
+  // Selection → Chat: only active when analysis is done (not streaming)
+  const { selection: selectionState, clear: clearSelection } = useSelectionSend(
+    scrollRef,
+    resultPairs,
+    !isWorking && !!onFollowUpClick,
+  );
 
   // Most recent widgetSpec across all messages — drives the sticky calculator panel
   const lastWidgetSpec = useMemo(() => {
@@ -2051,6 +2175,13 @@ function AnalysisResultsPanel({
           <ArrowDown className="w-3.5 h-3.5" />
           Zur neuesten Antwort
         </button>
+      )}
+      {selectionState && onFollowUpClick && (
+        <SelectionSendButton
+          selection={selectionState}
+          onSend={onFollowUpClick}
+          onClear={clearSelection}
+        />
       )}
       {stickyCalculatorPanel}
     </div>
