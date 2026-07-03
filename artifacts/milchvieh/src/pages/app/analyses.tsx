@@ -2559,6 +2559,9 @@ export function AnalysesPage() {
   useEffect(() => {
     if (!streamNonce || !streamingAnalysisIdRef.current) return;
     streaming.reset();
+    // Re-arm the guard so the auto-start effect (dep: agentProgress) doesn't
+    // fire a second openSseStream while this stream is already running.
+    sseStartedForRef.current.add(streamingAnalysisIdRef.current);
     startStream(streamingAnalysisIdRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamNonce]);
