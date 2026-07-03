@@ -5,6 +5,7 @@ import {
   datasetsTable,
   analysesTable,
   messagesTable,
+  questionLogTable,
   type Analysis,
   type Message,
 } from "@workspace/db";
@@ -295,6 +296,11 @@ router.post(
         .update(analysesTable)
         .set({ agentProgress: "Wird gestartet…" } as any)
         .where(eq(analysesTable.id, analysis.id));
+
+      // Log question for daily chip generation (fire-and-forget)
+      db.insert(questionLogTable)
+        .values({ datasetId, userId: req.userId!, questionText: question })
+        .catch((err) => logger.warn({ err }, "question_log insert fehlgeschlagen"));
     }
 
     // Return immediately so the client can start polling for live steps
@@ -535,6 +541,11 @@ router.post(
       .update(analysesTable)
       .set({ agentProgress: "Wird gestartet…" } as any)
       .where(eq(analysesTable.id, a.id));
+
+    // Log question for daily chip generation (fire-and-forget)
+    db.insert(questionLogTable)
+      .values({ datasetId: a.datasetId, userId: req.userId!, questionText: parsed.data.question })
+      .catch((err) => logger.warn({ err }, "question_log insert fehlgeschlagen"));
 
     // Return immediately — agent runs in background
     res.status(200).json(AskQuestionResponse.parse({ accepted: true }));

@@ -386,6 +386,28 @@ router.post(
   },
 );
 
+// POST /api/admin/cron/run-chips — trigger daily chip generation externally
+router.post(
+  "/admin/cron/run-chips",
+  async (req: Request, res: Response) => {
+    const cronSecret = process.env["CRON_SECRET"];
+    if (!cronSecret) {
+      res.status(503).json({ error: "CRON_SECRET ist nicht konfiguriert." });
+      return;
+    }
+    const provided =
+      (req.headers["x-cron-secret"] as string | undefined) ??
+      (req.headers["authorization"] as string | undefined)?.replace("Bearer ", "");
+    if (provided !== cronSecret) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const { runDailyChipGeneration } = await import("../lib/chipScheduler");
+    const result = await runDailyChipGeneration().catch(() => ({ questionsProcessed: -1, chipsGenerated: -1 }));
+    res.json({ ok: true, ...result });
+  },
+);
+
 // GET /api/admin/model-usage — per-model token counts and estimated cost
 // Query params:
 //   ?window=24h|7d|30d|all  (default: all)

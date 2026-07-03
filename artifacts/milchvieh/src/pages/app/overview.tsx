@@ -9,6 +9,7 @@ import {
   useListTemplates,
   getListTemplatesQueryKey,
   useRunTemplate,
+  useCreateAnalysis,
   useGetCurrentUser,
   useListReports,
   getListReportsQueryKey,
@@ -327,6 +328,81 @@ function InsightsSummaryCard({ datasetId }: { datasetId: string }) {
   );
 }
 
+// ── Tages-Chips ──────────────────────────────────────────────────────────────
+
+const FALLBACK_CHIPS = [
+  { chipText: "Zellzahl-Trend analysieren", category: "Zellzahl", rank: 1 },
+  { chipText: "Pregnancy Rate prüfen", category: "Fruchtbarkeit", rank: 2 },
+  { chipText: "Remontierungsrate prüfen", category: "Remontierungsrate", rank: 3 },
+];
+
+function useDailyChips() {
+  const { getToken } = useAuth();
+  const [chips, setChips] = useState(FALLBACK_CHIPS);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const headers: HeadersInit = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/api/chips/daily`, { headers, credentials: "include" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { chips: typeof FALLBACK_CHIPS };
+        if (!cancelled && Array.isArray(data.chips) && data.chips.length > 0) {
+          setChips(data.chips);
+        }
+      } catch {
+        // keep fallback
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return chips;
+}
+
+function TagesChipsSection({ datasetId }: { datasetId: string }) {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const chips = useDailyChips();
+
+  const createAnalysis = useCreateAnalysis({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
+        navigate(`/app/analyses?datasetId=${datasetId}&analysisId=${data.id}`);
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Auswertung konnte nicht gestartet werden." });
+      },
+    },
+  });
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-foreground">Häufige Fragen heute</h2>
+      <div className="flex flex-wrap gap-2">
+        {chips.map((chip) => (
+          <button
+            key={chip.rank}
+            type="button"
+            onClick={() =>
+              createAnalysis.mutate({ datasetId, data: { question: chip.chipText } })
+            }
+            disabled={createAnalysis.isPending}
+            className="px-4 py-2 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:border-primary/60 hover:bg-primary/5 hover:text-primary transition-all disabled:opacity-60 whitespace-nowrap"
+          >
+            {chip.chipText}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -558,6 +634,7 @@ export function DatasetOverview() {
         </div>
       )}
 
+      <TagesChipsSection datasetId={datasetId} />
       <SchnellauswertungenSection datasetId={datasetId} />
 
       <NewsPreviewCard datasetId={datasetId} />

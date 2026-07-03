@@ -19,3 +19,5 @@ export * from "./messageFeedback";
 export * from "./news";
 export * from "./thiForecasts";
 export * from "./semenPlanning";
+export * from "./questionLog";
+export * from "./dailyChips";

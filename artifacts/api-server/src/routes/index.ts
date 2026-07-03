@@ -23,6 +23,7 @@ import betaRouter from "./beta";
 import feedbackRouter from "./feedback";
 import newsRouter from "./news";
 import thiRouter from "./thi";
+import chipsRouter from "./chips";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(betaRouter);
 router.use(feedbackRouter);
 router.use(newsRouter);
 router.use(thiRouter);
+router.use(chipsRouter);
 
 export default router;
