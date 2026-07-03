@@ -3099,10 +3099,7 @@ export function AnalysesPage() {
               ((lastAssistantMsg?.followUpQuestions as string[] | null | undefined)?.length ?? 0) > 0 && (
                 <FollowUpChips
                   questions={lastAssistantMsg!.followUpQuestions as string[]}
-                  onAsk={(q) => {
-                    setQuestion(q);
-                    setTimeout(() => inputRef.current?.focus(), 0);
-                  }}
+                  onAsk={(q) => { handleSubmit(q); }}
                 />
               )}
 
