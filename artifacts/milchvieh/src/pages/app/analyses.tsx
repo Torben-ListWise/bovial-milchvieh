@@ -2225,7 +2225,6 @@ export function AnalysesPage() {
     },
     onFallback: () => {
       setPollFallback(true);
-      toast({ description: "Live-Verbindung unterbrochen – Ergebnis wird nach Fertigstellung geladen." });
     },
   });
 
