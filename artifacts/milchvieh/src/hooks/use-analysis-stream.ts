@@ -168,10 +168,7 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
 
   function cleanup() {
     stoppedRef.current = true;
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
-    }
+    abortRef.current = null;
   }
 
   function scheduleRetry(analysisId: string) {
