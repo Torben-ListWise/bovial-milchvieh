@@ -1156,8 +1156,8 @@ function BackQuestionForm({
                 <span className="text-[10px] font-semibold text-primary/70 tabular-nums shrink-0 mt-0.5">
                   {i + 1}.
                 </span>
-                <span className={cn("text-sm leading-snug text-foreground flex-1", skipped[i] && "line-through")}>
-                  {clean}
+                <span className={cn("text-sm leading-snug text-foreground flex-1 [&_p]:inline", skipped[i] && "line-through")}>
+                  <MarkdownContent text={clean} />
                 </span>
                 <button
                   type="button"
