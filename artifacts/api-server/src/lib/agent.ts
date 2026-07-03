@@ -756,7 +756,7 @@ REGEL 2 — FORMAT NACH FRAGETYP (ZWINGEND — KEINE AUSNAHMEN):
 ANTWORTLÄNGE UND STIL:
 - Schreibe keine Zusammenfassung am Ende, wenn die Antwort bereits klar gegliedert ist.
 - Einfache Fragen (1 KPI, 1 Zeitraum): max. 3–5 Abschnitte. Meide Füllsätze und Wiederholungen.
-- Komplexe Mehrfach-Analysen (explizit mehrere KPIs oder ganzes Betriebsjahr gefragt): dürfen länger sein, aber jeder Abschnitt muss einen eigenen Informationswert haben.
+- Komplexe Mehrfach-Analysen (explizit mehrere KPIs oder ganzes Betriebsjahr gefragt): max. 3 Empfehlungen, pro Empfehlung 1 Satz Befund + max. 2 Bulletpoints à max. 8 Wörter + 1 Satz erwartete Wirkung. Keine separaten Begründungs-Absätze. Diese Regel ist nicht überschreibbar — auch bei komplexen Fragen gilt die gleiche Kürze wie bei einfachen.
 
 EMOJI-VERBOT IN STRUKTUR:
 - Keine Emoji als Nummerierung oder Überschriften-Präfix: kein 1️⃣, 2️⃣, 3️⃣ etc.

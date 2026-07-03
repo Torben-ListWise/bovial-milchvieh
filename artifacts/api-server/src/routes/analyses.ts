@@ -62,6 +62,7 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
 
   function sendSseEvent(data: object): void {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (typeof (res as any).flush === "function") (res as any).flush();
   }
 
   const writer: SseWriter = {
