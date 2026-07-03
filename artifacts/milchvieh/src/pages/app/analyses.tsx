@@ -2318,6 +2318,8 @@ export function AnalysesPage() {
   const [chatQuotaExceeded, setChatQuotaExceeded] = useState(false);
   const streamingAnalysisIdRef = useRef<string | null>(null);
   const sseStartedForRef = useRef(new Set<string>());
+  // Incrementing nonce triggers the stream-start effect AFTER the cleanup effect
+  const [streamNonce, setStreamNonce] = useState(0);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -2393,9 +2395,11 @@ export function AnalysesPage() {
   function openSseStream(analysisId: string) {
     streamingAnalysisIdRef.current = analysisId;
     sseStartedForRef.current.add(analysisId);
-    streaming.reset();
     setPollFallback(false);
-    startStream(analysisId);
+    // Increment nonce to trigger the stream-start effect, which runs AFTER
+    // the activeAnalysisId cleanup effect — preventing stopStream() from
+    // aborting the controller that startStream() just created.
+    setStreamNonce((n) => n + 1);
   }
 
   const createAnalysis = useCreateAnalysis({
@@ -2505,6 +2509,15 @@ export function AnalysesPage() {
     setPollFallback(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAnalysisId]);
+
+  // Start stream when openSseStream signals via nonce — runs AFTER the cleanup
+  // effect above, so stopStream() never races against a freshly created controller.
+  useEffect(() => {
+    if (!streamNonce || !streamingAnalysisIdRef.current) return;
+    streaming.reset();
+    startStream(streamingAnalysisIdRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamNonce]);
 
   // Sync depth selector to the stored value when switching analyses
   useEffect(() => {
