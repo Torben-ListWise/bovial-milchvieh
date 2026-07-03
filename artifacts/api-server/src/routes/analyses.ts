@@ -53,16 +53,30 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
     "X-Accel-Buffering": "no",
+    "X-Replit-Proxy-Buffering": "no",
+    "X-Content-Type-Options": "nosniff",
   });
+
+  // Disable Nagle's algorithm so each token delta is sent as its own TCP
+  // packet rather than being batched — essential for real-time streaming
+  // through the Replit dev proxy.
+  const socket = (res.socket ?? (res as any).req?.socket) as import("net").Socket | undefined;
+  if (socket) socket.setNoDelay(true);
+
   res.flushHeaders();
 
+  function flush() {
+    if (typeof (res as any).flush === "function") (res as any).flush();
+  }
+
   const keepalive = setInterval(() => {
-    res.write(": keepalive\n\n");
-  }, 15_000);
+    if (!res.writableEnded) { res.write(": keepalive\n\n"); flush(); }
+  }, 10_000);
 
   function sendSseEvent(data: object): void {
+    if (res.writableEnded) return;
     res.write(`data: ${JSON.stringify(data)}\n\n`);
-    if (typeof (res as any).flush === "function") (res as any).flush();
+    flush();
   }
 
   const writer: SseWriter = {

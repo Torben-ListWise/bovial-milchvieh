@@ -17,8 +17,12 @@ description: How SSE streaming auth works + callback wiring rules
 4. **Frontend: every code path that starts an analysis must call `openSseStream(id)`.**  
    Three paths: `createAnalysis.onSuccess`, `ask.onSuccess`, and `onTemplateRun`. All three must call `openSseStream`. Missing `onTemplateRun` meant template runs never connected to SSE.
 
-5. **SSE endpoint needs `res.flushHeaders()` + `flush()` after each write.**  
-   The Replit proxy may buffer responses; `flushHeaders()` before the first write and `(res as any).flush?.()` after each `sendEvent()` ensures data reaches the browser immediately.
+5. **SSE endpoint needs `socket.setNoDelay(true)` + `X-Replit-Proxy-Buffering: no` + `flush()` after each write.**  
+   Three things together make SSE stream in real-time through the Replit dev proxy:
+   (a) `socket.setNoDelay(true)` — disables Nagle's algorithm so small token-delta packets are not batched into larger TCP segments.
+   (b) `res.set("X-Replit-Proxy-Buffering", "no")` — Replit-specific header, complements `X-Accel-Buffering: no`.
+   (c) `if (typeof (res as any).flush === "function") (res as any).flush()` after every `res.write()` — clears compression-middleware buffers.
+   Missing any one of these causes deltas to accumulate and arrive as a burst at the end.
 
 **Why:** `verifyToken` (JWKS-based) fails silently in Replit dev proxy; `requireAuth` uses the same cookie session as all other endpoints and is proven reliable. Bearer-only auth; sseWriters was module-private (now in shared sseRegistry); three frontend entry points must all open the stream.
 
