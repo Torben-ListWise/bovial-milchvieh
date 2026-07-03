@@ -1280,6 +1280,50 @@ function relativeDay(date: Date | string | null | undefined): string | null {
   return `vor ${diffDays} Tagen`;
 }
 
+function ChatStartChips({
+  datasetId,
+  onTemplateRun,
+}: {
+  datasetId: string;
+  onTemplateRun: (analysisId: string) => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: templates } = useListTemplates(datasetId, {
+    query: { queryKey: getListTemplatesQueryKey(datasetId), staleTime: 60_000 },
+  });
+  const { data: currentUser } = useGetCurrentUser();
+  const runTemplate = useRunTemplate({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId) });
+        queryClient.invalidateQueries({ queryKey: getListTemplatesQueryKey(datasetId) });
+        onTemplateRun(data.analysisId);
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Vorlage konnte nicht gestartet werden." });
+      },
+    },
+  });
+  const top3 = filterTemplatesByFocusAreas(templates ?? [], currentUser?.focusAreas).slice(0, 3);
+  if (top3.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 justify-center">
+      {top3.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => runTemplate.mutate({ datasetId, templateId: t.id })}
+          disabled={runTemplate.isPending}
+          className="px-4 py-2 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:border-primary/60 hover:bg-primary/5 hover:text-primary transition-all disabled:opacity-60 whitespace-nowrap"
+        >
+          {t.title}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StarterQuestions({
   hasFiles,
   datasetId,
@@ -3171,9 +3215,17 @@ export function AnalysesPage() {
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground text-sm p-8 text-center">
-                <AiIcon size={28} className="text-primary/40 mb-1" />
-                <span>Stelle eine Frage oder wähle eine Vorlage in der Übersicht.</span>
+              <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+                <AiIcon size={28} className="text-primary/40" />
+                <p className="text-sm text-muted-foreground">Stelle eine Frage oder starte eine Vorlage:</p>
+                <ChatStartChips
+                  datasetId={datasetId!}
+                  onTemplateRun={(id) => {
+                    setActiveAnalysisId(id);
+                    queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId!) });
+                    openSseStream(id);
+                  }}
+                />
               </div>
             )}
             <div ref={bottomRef} />
