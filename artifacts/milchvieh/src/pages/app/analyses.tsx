@@ -2344,6 +2344,15 @@ export function AnalysesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAnalysisId]);
 
+  // Sync depth selector to the stored value when switching analyses
+  useEffect(() => {
+    if (!activeAnalysisId) return;
+    const depthRaw = (analysis as any)?.depthLevel as string | null | undefined;
+    if (depthRaw === "deep") setPendingDepthLevel("deep");
+    else setPendingDepthLevel("quick");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAnalysisId]);
+
   // Step 1 — Smart polling: after agent ends, poll every 1s (up to 12s) until
   // followUpQuestions arrive, then stop. This is independent of LLM latency.
   useEffect(() => {
@@ -3219,57 +3228,32 @@ export function AnalysesPage() {
           )}
         </Button>
       </div>
-      {/* Depth level selector — shown when there's no active analysis yet */}
-      {!activeAnalysisId && (
-        <div className="flex items-center gap-1.5 mt-2 px-1">
-          <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
-          {([
-            { value: "quick" as const, label: "Schnelle Antwort" },
-            { value: "deep" as const, label: "Ausführliche Analyse" },
-          ] as const).map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setPendingDepthLevel(value)}
-              className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
-                pendingDepthLevel === value
-                  ? "border-primary bg-primary/10 text-primary font-medium"
-                  : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      {/* Depth level badge — shown on existing analysis */}
-      {activeAnalysisId && analysis && (
-        <div className="flex items-center gap-1.5 mt-2 px-1">
-          <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
-          {([
-            { value: "quick" as const, label: "Schnelle Antwort" },
-            { value: "deep" as const, label: "Ausführliche Analyse" },
-          ] as const).map(({ value, label }) => {
-            const current = (analysis as any).depthLevel as "quick" | "deep" | null;
-            // Treat null (legacy analyses) as "quick" for display purposes
-            const isActive = (current ?? "quick") === value;
-            return (
-              <button
-                key={String(value)}
-                type="button"
-                onClick={() => handleUpdateAnalysis(activeAnalysisId, { depthLevel: value })}
-                className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
-                  isActive
-                    ? "border-primary bg-primary/10 text-primary font-medium"
-                    : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Depth level selector — always visible; pendingDepthLevel drives visual state */}
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="text-xs text-muted-foreground/70 shrink-0">Analysetiefe:</span>
+        {([
+          { value: "quick" as const, label: "Schnelle Antwort" },
+          { value: "deep" as const, label: "Ausführliche Analyse" },
+        ] as const).map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => {
+              setPendingDepthLevel(value);
+              if (activeAnalysisId) {
+                handleUpdateAnalysis(activeAnalysisId, { depthLevel: value });
+              }
+            }}
+            className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
+              pendingDepthLevel === value
+                ? "border-primary bg-primary/10 text-primary font-medium"
+                : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {!activeAnalysisId && (
         <p className="hidden md:block text-xs text-muted-foreground mt-1.5 px-1">
           Tipp: Dateien direkt auf diese Seite ziehen zum Hochladen
