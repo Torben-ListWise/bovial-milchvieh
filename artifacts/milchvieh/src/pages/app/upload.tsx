@@ -366,7 +366,41 @@ export function UploadPage() {
               </div>
             </div>
 
-            <label className="relative cursor-pointer mb-4">
+            <div className="w-full max-w-xl mb-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5 text-center">Was passiert mit deinen Betriebsdaten?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
+                  <span className="text-base shrink-0 mt-0.5">📊</span>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground leading-tight">Betriebsspiegel</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">Milchleistung, Zellzahl & Fruchtbarkeit — automatisch ausgewertet</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
+                  <span className="text-base shrink-0 mt-0.5">💬</span>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground leading-tight">KI-Fragen auf Deutsch</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">„Welche Kühe haben die höchste Zellzahl?" — einfach fragen</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
+                  <span className="text-base shrink-0 mt-0.5">💉</span>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground leading-tight">Sperma-Kalkulator</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">Herdengröße & Konzeptionsrate werden automatisch befüllt</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
+                  <span className="text-base shrink-0 mt-0.5">⚠️</span>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground leading-tight">Gesundheitswarnungen</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">Auffälligkeiten in Zellzahl & Fruchtbarkeit sofort erkannt</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <label className="relative cursor-pointer mb-3">
               <Button disabled={isUploading} asChild>
                 <span className="min-h-[44px] min-w-[160px] flex items-center justify-center">
                   <UploadCloud className="w-4 h-4 mr-2" />
@@ -384,7 +418,7 @@ export function UploadPage() {
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
               <Info className="w-3.5 h-3.5 shrink-0" />
-              <span>Nach dem Upload erstellt der Assistent automatisch einen Betriebsspiegel.</span>
+              <span>Deine Daten bleiben privat und werden nur für deine Auswertungen verwendet.</span>
             </div>
           </CardContent>
         </Card>
