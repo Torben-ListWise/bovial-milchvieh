@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/react";
 import type { KnowledgeDocument, FarmNote } from "@workspace/api-client-react";
 import {
   useListFarmNotes,
@@ -8,6 +7,7 @@ import {
   useCreateFarmNote,
   useUpdateFarmNote,
   useDeleteFarmNote,
+  getAuthToken,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,14 +123,13 @@ interface KnowledgeGapRow {
 }
 
 function KnowledgeGapsCard() {
-  const { getToken } = useAuth();
   const [enabled, setEnabled] = useState(false);
 
   const { data: gaps, isLoading, refetch, isFetching } = useQuery<KnowledgeGapRow[]>({
     queryKey: ["knowledge-gaps"],
     enabled,
     queryFn: async () => {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/admin/knowledge-gaps?limit=50`, {
         credentials: "include",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -405,7 +404,6 @@ function FarmNotesSection() {
 }
 
 function BenchmarkFactorSection() {
-  const { getToken } = useAuth();
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState("");
@@ -416,7 +414,7 @@ function BenchmarkFactorSection() {
   >({
     queryKey: ["masterdata-sys"],
     queryFn: async () => {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/masterdata`, {
         credentials: "include",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -443,7 +441,7 @@ function BenchmarkFactorSection() {
     }
     setSaving(true);
     try {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/masterdata/${factorEntry.id}`, {
         method: "PATCH",
         credentials: "include",
@@ -546,7 +544,6 @@ import { PageLayout } from "@/components/PageLayout";
 
 export function KnowledgePage() {
   const { toast } = useToast();
-  const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
@@ -565,7 +562,7 @@ export function KnowledgePage() {
   const { data: docs = [], isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["knowledge-docs"],
     queryFn: async () => {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/knowledge`, {
         credentials: "include",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -584,7 +581,7 @@ export function KnowledgePage() {
 
   const retryIngestMutation = useMutation({
     mutationFn: async (id: string) => {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/knowledge/${id}/ingest`, {
         method: "POST",
         credentials: "include",
@@ -603,7 +600,7 @@ export function KnowledgePage() {
 
   const setDocTypeMutation = useMutation({
     mutationFn: async ({ id, documentType }: { id: string; documentType: string | null }) => {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/knowledge/${id}`, {
         method: "PATCH",
         credentials: "include",
@@ -626,7 +623,7 @@ export function KnowledgePage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/knowledge/${id}`, {
         method: "DELETE",
         credentials: "include",
@@ -646,7 +643,7 @@ export function KnowledgePage() {
   async function handleCategorizeAll() {
     setCategorizing(true);
     try {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/knowledge/categorize-all`, {
         method: "POST",
         credentials: "include",
@@ -684,7 +681,7 @@ export function KnowledgePage() {
 
     try {
       updateItem({ status: "uploading" });
-      const token = await getToken();
+      const token = await getAuthToken();
       const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
       const urlRes = await fetch(`${API_BASE}/api/knowledge/upload-url`, {
@@ -767,7 +764,7 @@ export function KnowledgePage() {
 
     setUrlLoading(true);
     try {
-      const token = await getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/knowledge/ingest-url`, {
         method: "POST",
         credentials: "include",

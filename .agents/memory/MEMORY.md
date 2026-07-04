@@ -22,5 +22,6 @@
 - [Milchvieh knowledge ingest startup](milchvieh-knowledge-ingest-startup.md) — index.ts auto-ingests status='pending' knowledge docs at server startup; reset to 'pending' + restart to retry stuck 'processing' docs; CRON_SECRET not set in dev
 - [Milchvieh model routing](milchvieh-model-routing.md) — getModelForTask() in agent.ts is the ONLY place with model strings; all services import it; drizzle-kit push fails with 42710 (role exists) — use ALTER TABLE ... ADD COLUMN IF NOT EXISTS via psql instead
 - [Milchvieh orval manual schemas](milchvieh-orval-manual-schemas.md) — orval --clean wipes farm-notes manual files; restore farm-notes.ts + api-zod index.ts manual schemas after any codegen run
+- [Milchvieh auth token in manual fetch](milchvieh-auth-token-fetch.md) — use getAuthToken() from @workspace/api-client-react, NOT Clerk's getToken(); in dev the former returns the dev-bypass token that the API accepts
 - [Milchvieh GetAnalysisResponse passthrough](milchvieh-getanalysis-passthrough.md) — messages inner zod.object() needs .passthrough() or widgetSpec/backQuestions get stripped; re-apply after every orval codegen run
 - [Milchvieh streaming race condition](milchvieh-streaming-race.md) — never call startStream() in mutation callbacks; use streamNonce trigger so Effect B (start) always runs after Effect A (stop)
