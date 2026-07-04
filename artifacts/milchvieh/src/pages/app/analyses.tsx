@@ -1240,6 +1240,69 @@ function BackQuestionForm({
   );
 }
 
+// ── Semen price input form ────────────────────────────────────────────────────
+
+function SemenPriceForm({ onSubmit }: { onSubmit: (answer: string) => void }) {
+  const fields: { key: string; label: string; placeholder: string }[] = [
+    { key: "hoGesext",   label: "HO gesext (€/Portion)",           placeholder: "z.B. 35" },
+    { key: "hoKonv",     label: "HO konventionell (€/Portion)",     placeholder: "z.B. 18" },
+    { key: "beefGesext", label: "Beef gesext (€/Portion)",          placeholder: "z.B. 30" },
+    { key: "beefKonv",   label: "Beef konventionell (€/Portion)",   placeholder: "z.B. 15" },
+  ];
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  if (submitted) return null;
+
+  const anyFilled = fields.some((f) => values[f.key]?.trim());
+
+  function handleSend() {
+    const parts = fields.map((f) => {
+      const v = values[f.key]?.trim();
+      return v ? `${f.label}: ${v}€` : `${f.label}: keine Angabe`;
+    });
+    setSubmitted(true);
+    onSubmit(`Meine aktuellen Spermapreise:\n${parts.join("\n")}`);
+  }
+
+  return (
+    <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2">
+      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+        <AiIcon size={14} className="text-primary" />
+      </div>
+      <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-3 max-w-[90%]">
+        <p className="text-sm font-medium text-foreground">Bitte gib deine aktuellen Spermapreise ein:</p>
+        {fields.map((f) => (
+          <div key={f.key} className="space-y-1">
+            <label className="text-xs text-muted-foreground font-medium">{f.label}</label>
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={values[f.key] ?? ""}
+                onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                placeholder={f.placeholder}
+                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 pr-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">€</span>
+            </div>
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          disabled={!anyFilled}
+          onClick={handleSend}
+          className="w-full mt-1"
+        >
+          Berechnen
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Follow-up question chips ───────────────────────────────────────────────────
 
 function FollowUpChips({
@@ -3492,6 +3555,15 @@ export function AnalysesPage() {
       return getMsgBackQuestions(lastAssistantMsg);
     })();
 
+    // For semen price widget: show inline price form in chat when agent calls show_semen_price_form
+    const showSemenPriceForm = (() => {
+      if (isAgentWorking) return false;
+      if (!lastAssistantMsg) return false;
+      if (msgs[msgs.length - 1]?.id !== lastAssistantMsg.id) return false;
+      if (answeredMsgIdsRef.current.has(lastAssistantMsg.id + "-semen-prices")) return false;
+      return (lastAssistantMsg as any).widgetSpec?.type === "semen_prices";
+    })();
+
     return (
       <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
         {sidebarPanels}
@@ -3579,6 +3651,17 @@ export function AnalysesPage() {
                   questions={embeddedFormQuestions}
                   onSubmit={(answer) => {
                     answeredMsgIdsRef.current.add(lastAssistantMsg!.id + "-embedded");
+                    handleSubmit(answer);
+                  }}
+                />
+              )}
+
+              {/* Semen price form: inline number inputs in chat */}
+              {showSemenPriceForm && (
+                <SemenPriceForm
+                  key={lastAssistantMsg!.id + "-semen-prices"}
+                  onSubmit={(answer) => {
+                    answeredMsgIdsRef.current.add(lastAssistantMsg!.id + "-semen-prices");
                     handleSubmit(answer);
                   }}
                 />

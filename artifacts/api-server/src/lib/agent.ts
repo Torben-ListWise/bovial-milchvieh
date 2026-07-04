@@ -211,7 +211,7 @@ export interface BetaToolEntry {
 }
 
 export interface WidgetSpec {
-  type: "heat_abatement" | "fresh_cow";
+  type: "heat_abatement" | "fresh_cow" | "semen_prices";
   prefill: Record<string, number>;
 }
 
@@ -687,6 +687,11 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "show_semen_price_form",
+    description: "Zeigt dem Nutzer ein Eingabe-Formular im Chat, mit dem er seine aktuellen Spermapreise (HO gesext, HO konventionell, Beef gesext, Beef konventionell) eingeben kann. Aufrufen wenn get_semen_planning found:false zurückgibt oder alle Preise 0 sind. KEIN Freitext mit nummerierten Preisfragen generieren — stattdessen NUR dieses Tool aufrufen.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "signal_escalation",
     description: "Rufe dieses Tool genau EINMAL auf, wenn einer der vier definierten Eskalationstrigger ausgelöst wird — BEVOR du die Antwort formulierst. Das Tool hat keine Auswirkung auf die Antwort, protokolliert aber den Trigger strukturiert für den Betreiber.",
     input_schema: {
@@ -808,18 +813,13 @@ Ablauf — STRIKT einhalten:
       KEIN Nachfragen nach Preisen. Die Werte sind bereits hinterlegt.
 
 2b. \`found: false\` ODER alle Preise = 0 — DANN und NUR DANN:
-    → Stelle die Preisabfrage DIREKT ALS TEXT in deine Antwort. Nutze NICHT ask_farmer für diesen Fall.
-      Schreibe wörtlich (mit diesen 4 Fragen):
-      "Damit ich die Besamungskosten berechnen kann, benötige ich deine aktuellen Preise:
-      1. Preis HO gesext (€/Portion):
-      2. Preis HO konventionell (€/Portion):
-      3. Preis Beef gesext (€/Portion):
-      4. Preis Beef konventionell (€/Portion):
-      Nenne mir die Werte, dann rechne ich sofort durch."
-    → Sobald der Nutzer in seiner nächsten Nachricht Preise nennt (z.B. "35, 18, 30, 15" oder
-      "HO gesext 35€, konv 18€"), entnehme die Zahlen und rufe sofort \`calculate_semen_planning\`
-      mit realistischen Standardwerten für fehlende Felder auf (Anteile aus Betrieb oder 40/30/20/10,
-      Kälberpreise 80/300/180).
+    → Rufe SOFORT \`show_semen_price_form\` auf. Das Tool zeigt ein Eingabe-Formular im Chat.
+      Generiere KEINEN Freitext mit nummerierten Preisfragen. Schreibe nur einen kurzen Satz
+      wie "Ich benötige deine aktuellen Spermapreise — bitte trage sie im Formular ein."
+    → Sobald der Nutzer im nächsten Zug Preise nennt (z.B. "HO gesext: 35€, konv: 18€, ..."),
+      entnehme die Zahlen und rufe sofort \`calculate_semen_planning\` auf.
+      Nutze für fehlende Felder Standardwerte: Anteile aus Betrieb oder 40/30/20/10,
+      Kälberpreise 80/300/180.
 
 3. Zeige die Ergebnisse als strukturierte Tabelle im Chat — keine separate Seite nötig.
 
@@ -2067,6 +2067,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "show_fresh_cow_calculator": {
         widgetSpec = { type: "fresh_cow", prefill: input as Record<string, number> };
         return { acknowledged: true, widget: "fresh_cow" };
+      }
+      case "show_semen_price_form": {
+        widgetSpec = { type: "semen_prices", prefill: {} };
+        return { acknowledged: true, widget: "semen_prices" };
       }
       case "ask_farmer": {
         const qs = (input.questions as Array<{text?: string; options?: string[]} | string> | undefined) ?? [];
