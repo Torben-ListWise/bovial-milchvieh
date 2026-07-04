@@ -29,7 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight } from "lucide-react";
+import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -454,6 +454,162 @@ function SchnellauswertungenSection({ datasetId }: { datasetId: string }) {
   );
 }
 
+// ── Semen Planning Summary Card ───────────────────────────────────────────────
+
+interface SemenPlanningInputs {
+  summeKuehe: number;
+  konzRateKuehe: number;
+  konzRateFaersen: number;
+  prozentAbgaenge: number;
+  eka: number;
+  anteilHoGesext: number;
+  anteilHoKonv: number;
+  anteilBeefGesext: number;
+  anteilBeefKonv: number;
+  preisHoGesext: number;
+  preisHoKonv: number;
+  preisBeefGesext: number;
+  preisBeefKonv: number;
+  verkaufspreisHoBullkalb: number;
+  verkaufspreisBeefWeiblich: number;
+  verkaufspreisBeefBullkalb: number;
+}
+
+interface SemenPlanningOutputs {
+  besamungen: { portionen: { gesamt: number } };
+  faersenbalance: { faersenBalance: number; moeglAbgangsratePct: number };
+  nettokosten: number;
+  nettokostenProKuhJahr: number;
+  sexingMehrpreisProKuhMonat: number;
+}
+
+interface SemenPlanningData {
+  found: boolean;
+  inputs?: SemenPlanningInputs;
+  outputs?: SemenPlanningOutputs;
+  updatedAt?: string;
+}
+
+function SemenPlanningCard({ datasetId }: { datasetId: string }) {
+  const { getToken } = useAuth();
+  const [data, setData] = useState<SemenPlanningData | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const token = await getToken();
+        const resp = await fetch(`${API_BASE}/api/datasets/${datasetId}/semen-planning`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) { if (!cancelled) setData(null); return; }
+        const json = await resp.json() as SemenPlanningData;
+        if (!cancelled) setData(json);
+      } catch {
+        if (!cancelled) setData(null);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [datasetId, getToken]);
+
+  if (data === undefined) return null;
+  if (!data || !data.found || !data.inputs || !data.outputs) return null;
+
+  const inp = data.inputs;
+  const out = data.outputs;
+
+  const fmt = (n: number, decimals = 0) =>
+    n.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+  const fmtEur = (n: number) =>
+    n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+  const updatedLabel = data.updatedAt
+    ? new Date(data.updatedAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : null;
+
+  const editHref = `/app/analyses?datasetId=${datasetId}`;
+
+  const faersenBalanceColor =
+    out.faersenbalance.faersenBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive";
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <FlaskConical className="w-4 h-4 text-primary" />
+          </div>
+          <span className="text-sm font-semibold text-foreground">Spermaplanung</span>
+          {updatedLabel && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">· Stand {updatedLabel}</span>
+          )}
+        </div>
+        <Link href={editHref}>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer">
+            <Pencil className="w-3.5 h-3.5" />
+            Bearbeiten
+          </span>
+        </Link>
+      </div>
+
+      {/* Key inputs grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Herdengröße</p>
+          <p className="text-sm font-semibold text-foreground">{fmt(inp.summeKuehe)} Kühe</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Konzeptionsrate</p>
+          <p className="text-sm font-semibold text-foreground">
+            {fmt(inp.konzRateKuehe)} % / {fmt(inp.konzRateFaersen)} %
+          </p>
+          <p className="text-xs text-muted-foreground">Kühe / Färsen</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">HO gesext / konv.</p>
+          <p className="text-sm font-semibold text-foreground">
+            {fmt(inp.anteilHoGesext)} % / {fmt(inp.anteilHoKonv)} %
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Beef gesext / konv.</p>
+          <p className="text-sm font-semibold text-foreground">
+            {fmt(inp.anteilBeefGesext)} % / {fmt(inp.anteilBeefKonv)} %
+          </p>
+        </div>
+      </div>
+
+      {/* Key results row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Portionen/Jahr</p>
+          <p className="text-sm font-semibold text-foreground">{fmt(out.besamungen.portionen.gesamt)}</p>
+        </div>
+        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Färsenbilanz</p>
+          <p className={`text-sm font-semibold ${faersenBalanceColor}`}>
+            {out.faersenbalance.faersenBalance >= 0 ? "+" : ""}{fmt(out.faersenbalance.faersenBalance)}
+          </p>
+        </div>
+        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Nettokosten</p>
+          <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokosten)}</p>
+        </div>
+        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Netto / Kuh / Jahr</p>
+          <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokostenProKuhJahr)}</p>
+        </div>
+      </div>
+
+      {updatedLabel && (
+        <p className="text-xs text-muted-foreground sm:hidden">Stand: {updatedLabel}</p>
+      )}
+    </div>
+  );
+}
+
 export function DatasetOverview() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -607,6 +763,8 @@ export function DatasetOverview() {
           </Link>
         </div>
       )}
+
+      <SemenPlanningCard datasetId={datasetId} />
 
       <StartChipsSection datasetId={datasetId} />
       <SchnellauswertungenSection datasetId={datasetId} />
