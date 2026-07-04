@@ -12,6 +12,7 @@ export type SseWriter = {
   sendSources: (sources: string[]) => void;
   sendProgress: (step: string) => void;
   sendChart: (chart: unknown) => void;
+  sendTurnReset: () => void;
   sendDone: () => void;
   sendError: (msg: string) => void;
 };
@@ -21,6 +22,7 @@ type BufferedEvent =
   | { type: "sources"; sources: string[] }
   | { type: "progress"; step: string }
   | { type: "chart"; chart: unknown }
+  | { type: "turn_reset" }
   | { type: "done" }
   | { type: "error"; msg: string };
 
@@ -59,12 +61,13 @@ export function registerWriter(id: string, writer: SseWriter): void {
     const w = sseWriters.get(id);
     if (!w) return;
     switch (ev.type) {
-      case "delta":    w.sendDelta(ev.text); break;
-      case "sources":  w.sendSources(ev.sources); break;
-      case "progress": w.sendProgress(ev.step); break;
-      case "chart":    w.sendChart(ev.chart); break;
-      case "done":     w.sendDone(); return; // done ends the stream
-      case "error":    w.sendError(ev.msg); return;
+      case "delta":      w.sendDelta(ev.text); break;
+      case "sources":    w.sendSources(ev.sources); break;
+      case "progress":   w.sendProgress(ev.step); break;
+      case "chart":      w.sendChart(ev.chart); break;
+      case "turn_reset": w.sendTurnReset(); break;
+      case "done":       w.sendDone(); return; // done ends the stream
+      case "error":      w.sendError(ev.msg); return;
     }
     setImmediate(replayNext);
   }
@@ -99,6 +102,10 @@ export function getOrBufferWriter(id: string): SseWriter {
     sendChart: (chart) => {
       const w = sseWriters.get(id);
       if (w) w.sendChart(chart); else buffer(id, { type: "chart", chart });
+    },
+    sendTurnReset: () => {
+      const w = sseWriters.get(id);
+      if (w) w.sendTurnReset(); else buffer(id, { type: "turn_reset" });
     },
     sendDone: () => {
       const w = sseWriters.get(id);

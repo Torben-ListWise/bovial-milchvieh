@@ -2609,8 +2609,14 @@ export function AnalysesPage() {
     onProgress: streaming.onProgress,
     onChart: streaming.onChart,
     onSources: streaming.onSources,
+    // turn_reset: the agent is starting a new model turn (e.g. after ask_farmer).
+    // Clear accumulated streaming text so Turn-N preamble doesn't persist
+    // alongside Turn-N+1 text and cause doubled output in the UI.
+    onTurnReset: () => streaming.resetText(),
     onDone: () => {
       const id = streamingAnalysisIdRef.current;
+      streaming.reset();
+      streamingAnalysisIdRef.current = null;
       if (id) {
         sseStartedForRef.current.delete(id);
         queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
@@ -2619,6 +2625,8 @@ export function AnalysesPage() {
     },
     onFallback: () => {
       const id = streamingAnalysisIdRef.current;
+      streaming.reset();
+      streamingAnalysisIdRef.current = null;
       if (id) sseStartedForRef.current.delete(id);
       setPollFallback(true);
     },

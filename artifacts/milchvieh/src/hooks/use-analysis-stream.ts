@@ -7,6 +7,7 @@ export type StreamCallbacks = {
   onProgress: (step: string) => void;
   onChart: (chart: Chart) => void;
   onSources: (sources: string[]) => void;
+  onTurnReset?: () => void;
   onDone: () => void;
   onFallback?: () => void;
 };
@@ -155,6 +156,9 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
           if (parsed.sources) callbacksRef.current.onSources(parsed.sources);
           break;
         }
+        case "turn_reset":
+          callbacksRef.current.onTurnReset?.();
+          break;
         case "done":
           callbacksRef.current.onDone();
           cleanup();
@@ -281,6 +285,18 @@ export function useStreamingState() {
     setSources([]);
   }, []);
 
+  // Resets only the text buffer (not progress/charts/sources).
+  // Used on turn_reset events so Turn-N preamble text is cleared before
+  // Turn-N+1 text starts streaming, without losing progress step state.
+  const resetText = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    pendingDeltaRef.current = "";
+    setText("");
+  }, []);
+
   return {
     text,
     progressStep,
@@ -292,5 +308,6 @@ export function useStreamingState() {
     onChart,
     onSources,
     reset,
+    resetText,
   };
 }

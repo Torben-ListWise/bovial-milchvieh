@@ -97,6 +97,7 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
     sendSources: (sources) => sendSseEvent("sources", { sources }),
     sendProgress: (step) => sendSseEvent("progress", { step }),
     sendChart: (chart) => sendSseEvent("chart", { chart }),
+    sendTurnReset: () => sendSseEvent("turn_reset", {}),
     sendDone: () => {
       sendSseEvent("done", {});
       clearInterval(keepalive);
@@ -334,6 +335,7 @@ router.post(
           onSourceSearched: (sources) => w.sendSources(sources),
           onProgress: (step) => w.sendProgress(step),
           onChart: (chart) => w.sendChart(chart),
+          onTurnReset: () => w.sendTurnReset(),
           onDone: () => w.sendDone(),
         })
           .then((msg) => {
@@ -455,6 +457,7 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
     sendSources: (sources) => sendEvent("sources", { sources }),
     sendProgress: (step) => sendEvent("progress", { step }),
     sendChart: (chart) => sendEvent("chart", { chart }),
+    sendTurnReset: () => sendEvent("turn_reset", {}),
     sendDone: () => {
       sendEvent("done", {});
       res.end();
@@ -577,6 +580,7 @@ router.post(
         onSourceSearched: (sources) => w.sendSources(sources),
         onProgress: (step) => w.sendProgress(step),
         onChart: (chart) => w.sendChart(chart),
+        onTurnReset: () => w.sendTurnReset(),
         onDone: () => w.sendDone(),
       }, imageObjectPath ? { imageObjectPath } : undefined)
         .then((msg) => {

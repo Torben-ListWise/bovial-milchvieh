@@ -120,6 +120,7 @@ export type SseCallbacks = {
   onSourceSearched?: (sources: string[]) => void;
   onProgress?: (step: string) => void;
   onChart?: (chart: Chart) => void;
+  onTurnReset?: () => void;
   onDone?: () => void;
 };
 
@@ -315,6 +316,7 @@ export async function processQuestion(
           onTextDelta: sse?.onTextDelta,
           onSourceSearched: sse?.onSourceSearched,
           onChart: sse?.onChart,
+          onTurnReset: sse?.onTurnReset,
           onProgress: async (step: string | null) => {
             // The previous step is now complete — move it to completedSteps
             if (lastProgressStep) completedSteps.push(lastProgressStep);

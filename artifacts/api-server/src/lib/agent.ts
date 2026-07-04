@@ -1107,6 +1107,12 @@ interface RunOptions {
   /** Called immediately when a chart is emitted by the agent (before done). */
   onChart?: (chart: Chart) => void;
   /**
+   * Called just before the agent starts a new model turn (after tool_use).
+   * Signals the frontend to reset any partial streamed text so Turn-N text
+   * does not accumulate alongside Turn-N+1 text in the streaming buffer.
+   */
+  onTurnReset?: () => void;
+  /**
    * Seed task type for model routing on Turn 0.
    * "chat_analysis_simple" → Sonnet + reduced toolset for single-KPI questions.
    * "chat_analysis" (default) → Sonnet + full toolset.
@@ -2750,6 +2756,11 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         });
       }
       messages.push({ role: "user", content: toolResults });
+      // Signal the frontend to flush and clear the streaming text buffer so
+      // Turn-N text (preamble before tool_use) does not persist alongside the
+      // Turn-N+1 text that is about to stream. This prevents doubled output
+      // when the agent needs multiple model turns (e.g. ask_farmer flow).
+      opts.onTurnReset?.();
       continue;
     }
     break;
