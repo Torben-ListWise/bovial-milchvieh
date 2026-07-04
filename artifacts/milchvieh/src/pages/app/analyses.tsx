@@ -2109,6 +2109,7 @@ function AnalysisResultsPanel({
 
   const [widgetPanelCollapsed, setWidgetPanelCollapsed] = useState(false);
   const [panelHighlight, setPanelHighlight] = useState(false);
+  const [isPanelVisible, setIsPanelVisible] = useState(true);
   const prevWidgetTypeRef = useRef<string | null>(null);
   // Tracks whether the one-time visual cue has already fired for this conversation
   const hasShownWidgetCueRef = useRef(false);
@@ -2119,6 +2120,18 @@ function AnalysisResultsPanel({
     hasShownWidgetCueRef.current = false;
     prevWidgetTypeRef.current = null;
   }, [analysis?.id]);
+
+  // Track whether the sticky panel is visible in the viewport
+  useEffect(() => {
+    const el = stickyPanelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsPanelVisible(entry.isIntersecting),
+      { threshold: 0.5 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [lastWidgetSpec]);
 
   // Auto-expand when a new widgetSpec type appears;
   // flash highlight + scroll only the very first time a widget appears per conversation
@@ -2316,6 +2329,22 @@ function AnalysisResultsPanel({
         />
       )}
       {stickyCalculatorPanel}
+      {lastWidgetSpec && (widgetPanelCollapsed || !isPanelVisible) && (
+        <button
+          type="button"
+          onClick={() => {
+            setWidgetPanelCollapsed(false);
+            setTimeout(() => {
+              stickyPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }, 50);
+          }}
+          className="absolute bottom-14 right-3 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-primary-foreground shadow-lg text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all animate-in fade-in slide-in-from-bottom-2 duration-200"
+          aria-label="Rechner öffnen"
+        >
+          {lastWidgetSpec.type === "heat_abatement" ? "🌡️" : "🐄"}
+          <span>Rechner öffnen</span>
+        </button>
+      )}
     </div>
   );
 }
