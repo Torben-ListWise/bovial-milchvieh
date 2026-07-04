@@ -708,46 +708,49 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={openEdit}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openEdit(); }}
+        className="rounded-xl border border-teal-200/70 dark:border-teal-700/40 bg-gradient-to-br from-teal-50 to-cyan-50/60 dark:from-teal-950/30 dark:to-cyan-950/20 p-4 space-y-4 cursor-pointer hover:shadow-md hover:border-teal-300/80 dark:hover:border-teal-600/50 transition-all"
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <FlaskConical className="w-4 h-4 text-primary" />
+            <div className="w-7 h-7 rounded-lg bg-teal-500/15 dark:bg-teal-400/15 flex items-center justify-center shrink-0">
+              <FlaskConical className="w-4 h-4 text-teal-600 dark:text-teal-400" />
             </div>
-            <span className="text-sm font-semibold text-foreground">Spermaplanung</span>
+            <span className="text-sm font-semibold text-foreground">Sperma-Kalkulator</span>
             {updatedLabel && (
               <span className="text-xs text-muted-foreground hidden sm:inline">· Stand {updatedLabel}</span>
             )}
           </div>
-          <button
-            onClick={openEdit}
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer"
-          >
+          <div className="inline-flex items-center gap-1 text-xs font-medium text-teal-600 dark:text-teal-400">
             <Pencil className="w-3.5 h-3.5" />
             Bearbeiten
-          </button>
+          </div>
         </div>
 
         {/* Key inputs grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <div className="rounded-lg bg-white/60 dark:bg-white/5 px-3 py-2">
             <p className="text-xs text-muted-foreground">Herdengröße</p>
             <p className="text-sm font-semibold text-foreground">{fmt(inp.summeKuehe)} Kühe</p>
           </div>
-          <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <div className="rounded-lg bg-white/60 dark:bg-white/5 px-3 py-2">
             <p className="text-xs text-muted-foreground">Konzeptionsrate</p>
             <p className="text-sm font-semibold text-foreground">
               {fmt(inp.konzRateKuehe)} % / {fmt(inp.konzRateFaersen)} %
             </p>
             <p className="text-xs text-muted-foreground">Kühe / Färsen</p>
           </div>
-          <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <div className="rounded-lg bg-white/60 dark:bg-white/5 px-3 py-2">
             <p className="text-xs text-muted-foreground">HO gesext / konv.</p>
             <p className="text-sm font-semibold text-foreground">
               {fmt(inp.anteilHoGesext)} % / {fmt(inp.anteilHoKonv)} %
             </p>
           </div>
-          <div className="rounded-lg bg-muted/50 px-3 py-2">
+          <div className="rounded-lg bg-white/60 dark:bg-white/5 px-3 py-2">
             <p className="text-xs text-muted-foreground">Beef gesext / konv.</p>
             <p className="text-sm font-semibold text-foreground">
               {fmt(inp.anteilBeefGesext)} % / {fmt(inp.anteilBeefKonv)} %
@@ -757,21 +760,21 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
 
         {/* Key results row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <div className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-3 py-2">
             <p className="text-xs text-muted-foreground">Portionen/Jahr</p>
             <p className="text-sm font-semibold text-foreground">{fmt(out.besamungen.portionen.gesamt)}</p>
           </div>
-          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <div className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-3 py-2">
             <p className="text-xs text-muted-foreground">Färsenbilanz</p>
             <p className={`text-sm font-semibold ${faersenBalanceColor}`}>
               {out.faersenbalance.faersenBalance >= 0 ? "+" : ""}{fmt(out.faersenbalance.faersenBalance)}
             </p>
           </div>
-          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <div className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-3 py-2">
             <p className="text-xs text-muted-foreground">Nettokosten</p>
             <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokosten)}</p>
           </div>
-          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+          <div className="rounded-lg bg-teal-500/10 border border-teal-500/20 px-3 py-2">
             <p className="text-xs text-muted-foreground">Netto / Kuh / Jahr</p>
             <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokostenProKuhJahr)}</p>
           </div>
