@@ -952,6 +952,18 @@ const EXTERNAL_LINK_COMPONENTS = {
     if (href?.startsWith("#")) {
       return <a href={href} className={LINK_CLASSES}>{children}</a>;
     }
+    // Internal app links (e.g. /app/semen-planning) — render as a colored
+    // badge-button so they are visually prominent and actually clickable.
+    if (href?.startsWith("/")) {
+      return (
+        <Link
+          href={href}
+          className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-sm font-medium text-primary ring-1 ring-inset ring-primary/20 hover:bg-primary/20 transition-colors no-underline"
+        >
+          {children}
+        </Link>
+      );
+    }
     return <span className={LINK_CLASSES}>{children}</span>;
   },
   table({ children }: { children?: React.ReactNode }) {
