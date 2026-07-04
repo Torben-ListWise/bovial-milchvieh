@@ -212,12 +212,50 @@ export async function runDailyChipGeneration(): Promise<{
       sql`DELETE FROM daily_chip_suggestions WHERE valid_date = ${validDateStr}::date`,
     );
 
-    const inserts = top3.map((cat, i) => ({
+    const regularChips = top3.map((cat, i) => ({
       chipText: chipTexts[i] ?? `${cat.category} analysieren`,
       category: cat.category,
       rank: i + 1,
       validDate: validDateStr,
+      actionHref: null as string | null,
     }));
+
+    // Inject a calculator chip every 3rd day (day-of-month % 3 === 0)
+    // or when fewer than 3 data-driven categories were found.
+    const shouldInjectCalcChip = validDate.getDate() % 3 === 0 || top3.length < 3;
+
+    const CALC_CHIPS = [
+      {
+        chipText: "Was kostet meine Besamungsstrategie?",
+        category: "__calc_semen",
+        actionHref: "/app/semen-planning",
+      },
+      {
+        chipText: "Besamungskosten optimieren",
+        category: "__calc_semen",
+        actionHref: "/app/semen-planning",
+      },
+      {
+        chipText: "Spermakosten kalkulieren",
+        category: "__calc_semen",
+        actionHref: "/app/semen-planning",
+      },
+    ];
+
+    let inserts = regularChips;
+
+    if (shouldInjectCalcChip) {
+      // Pick which calc chip to show based on day-of-year for variety
+      const dayOfYear = Math.floor(
+        (validDate.getTime() - new Date(validDate.getFullYear(), 0, 0).getTime()) / 86_400_000,
+      );
+      const calcChip = CALC_CHIPS[dayOfYear % CALC_CHIPS.length];
+      // Replace rank-3 chip (last slot) with the calculator chip
+      inserts = [
+        ...regularChips.slice(0, 2),
+        { ...calcChip, rank: 3, validDate: validDateStr },
+      ];
+    }
 
     await db.insert(dailyChipSuggestionsTable).values(inserts);
 

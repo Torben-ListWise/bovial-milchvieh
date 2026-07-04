@@ -26,6 +26,7 @@ router.get("/chips/daily", requireAuth, async (_req: Request, res: Response) => 
         chipText: dailyChipSuggestionsTable.chipText,
         category: dailyChipSuggestionsTable.category,
         rank: dailyChipSuggestionsTable.rank,
+        actionHref: dailyChipSuggestionsTable.actionHref,
       })
       .from(dailyChipSuggestionsTable)
       .where(eq(dailyChipSuggestionsTable.validDate, todayStr))

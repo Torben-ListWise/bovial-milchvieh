@@ -1074,7 +1074,17 @@ EPISTEMISCHE VORSICHT BEI ERKLÄRUNGEN (Patch N)
   Mechanismen benennen, die aus den zurückgegebenen Tool-Daten ableitbar
   sind (z. B. basis.rowCount). Nicht sichtbare Filterlogik nicht als
   Tatsache behaupten — als Vermutung kennzeichnen:
-  "möglicherweise", "ich kann das nicht bestätigen".`;
+  "möglicherweise", "ich kann das nicht bestätigen".
+
+KONTEXTUELLER KALKULATOR-HINWEIS (Patch P)
+Am Ende einer Antwort kannst du einen einzeiligen Hinweis auf einen passenden Kalkulator ergänzen — aber nur wenn die Frage thematisch dazu passt:
+- Besamungskosten, Sperma-Aufteilung, Kälberpreise, HB-Strategie → Sperma-Kalkulator: "👉 Im [Sperma-Kalkulator](/app/semen-planning) kannst du Kosten und Spermaaufteilung persistent hinterlegen."
+- Investitionsentscheidung, Anschaffung, Finanzierung, ROI einer Maßnahme → Investitionsrechner im Chat: "👉 Ich kann die Investition direkt hier mit dem Investitionsrechner durchrechnen — frag mich einfach."
+Regeln:
+- Maximal ein Hinweis pro Antwort, ganz am Ende, kurz (1 Satz).
+- Keinen Hinweis ergänzen wenn: (a) der Nutzer den jeweiligen Kalkulator in diesem Gespräch bereits aufgerufen oder erwähnt hat, (b) der Hinweis bereits in einer vorherigen Antwort dieser Session vorkam, (c) die Frage nicht klar auf Besamungskosten oder eine Investitionsentscheidung zielt.
+- Niemals bei allgemeinen Tier- oder Gesundheitsfragen ergänzen.`;
+
 
 interface RunOptions {
   datasetId: string;

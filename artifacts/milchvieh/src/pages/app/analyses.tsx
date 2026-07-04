@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import { Link, useSearch } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import {
   getListAnalysesQueryKey,
   useListAnalyses,
@@ -1292,10 +1292,11 @@ function ChatStartChips({
 }) {
   const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
   const { getToken } = useAuth();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [dailyChips, setDailyChips] = useState<{ chipText: string; category: string }[] | null>(null);
+  const [dailyChips, setDailyChips] = useState<{ chipText: string; category: string; actionHref?: string | null }[] | null>(null);
   const [chipsError, setChipsError] = useState(false);
 
   useEffect(() => {
@@ -1346,7 +1347,18 @@ function ChatStartChips({
     return (
       <div className="flex flex-wrap gap-2 justify-center">
         {dailyChips.map((c, i) => (
-          <button key={i} type="button" onClick={() => onAsk(c.chipText)} className={chipClass}>
+          <button
+            key={i}
+            type="button"
+            onClick={() => {
+              if (c.actionHref) {
+                navigate(`${c.actionHref}?datasetId=${datasetId}`);
+              } else {
+                onAsk(c.chipText);
+              }
+            }}
+            className={chipClass}
+          >
             {c.chipText}
           </button>
         ))}

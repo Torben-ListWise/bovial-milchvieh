@@ -8,6 +8,10 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 
+export type ChipAction =
+  | { type: "ask" }
+  | { type: "navigate"; href: string };
+
 /**
  * Daily chip suggestions — the 3 chips shown on the Startseite.
  * Generated nightly by the chip scheduler from aggregated question_log data.
@@ -21,6 +25,8 @@ export const dailyChipSuggestionsTable = pgTable(
     category: text("category").notNull(),
     rank: integer("rank").notNull(),
     validDate: date("valid_date").notNull(),
+    /** If set, clicking the chip navigates to this path instead of sending a chat message. */
+    actionHref: text("action_href"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
