@@ -2661,7 +2661,8 @@ export function AnalysesPage() {
         });
         setQuestion("");
         inputRef.current?.focus();
-        if (activeAnalysisId) openSseStream(activeAnalysisId);
+        // SSE is opened in handleSubmit BEFORE ask.mutate fires, so we do NOT
+        // open it here — opening after onSuccess would race with the agent.
       },
       onError: (err: any) => {
         const status = err?.status ?? err?.response?.status;
@@ -3089,6 +3090,10 @@ export function AnalysesPage() {
       setFilePickerOpen(false);
     } else {
       if (ask.isPending) return;
+      // Open the SSE connection BEFORE the POST so the writer is registered
+      // on the server before the agent starts emitting events. If the agent
+      // is already running when SSE connects, all buffered events burst at once.
+      openSseStream(activeAnalysisId);
       const imageObjectPath = pendingImage?.objectPath || undefined;
       ask.mutate({ analysisId: activeAnalysisId, data: { question: text, imageObjectPath } });
       if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);

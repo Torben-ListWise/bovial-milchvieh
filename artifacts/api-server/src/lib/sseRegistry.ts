@@ -1,10 +1,11 @@
-// Shared SSE/WebSocket writer registry — keyed by analysisId.
-// Writers are registered when the client opens the WebSocket endpoint
-// and removed on disconnect or when the agent sends the "done" event.
+// Shared SSE writer registry — keyed by analysisId.
+// Writers are registered when the client opens the SSE endpoint and removed
+// on disconnect or when the agent sends the "done" event.
 //
-// BUFFERING: The agent may start emitting deltas before the client's WebSocket
-// auth handshake completes. Early events are buffered here and flushed
-// immediately once a writer registers, so no leading characters are dropped.
+// BUFFERING: The agent may start emitting deltas before the client's SSE
+// connection is established. Early events are buffered here and replayed
+// asynchronously once a writer registers, so no leading characters are
+// dropped and the replay does not arrive as a single TCP burst.
 
 export type SseWriter = {
   sendDelta: (text: string) => void;
@@ -32,26 +33,42 @@ const eventBuffers = new Map<string, BufferedEvent[]>();
 const MAX_BUFFER = 2000;
 
 /**
- * Register a writer for the given analysisId and immediately flush any
+ * Register a writer for the given analysisId and asynchronously replay any
  * buffered events that arrived before the client connected.
+ *
+ * The writer is registered FIRST so that any new events emitted while the
+ * replay is in progress go directly to the writer instead of the buffer.
+ * Events are replayed one per setImmediate tick so each res.write() flushes
+ * to the socket individually rather than arriving as one TCP burst.
  */
 export function registerWriter(id: string, writer: SseWriter): void {
+  // Register writer first — new events from here on go directly to the writer.
   sseWriters.set(id, writer);
 
   const buffered = eventBuffers.get(id);
-  if (buffered && buffered.length > 0) {
-    eventBuffers.delete(id);
-    for (const ev of buffered) {
-      switch (ev.type) {
-        case "delta":    writer.sendDelta(ev.text); break;
-        case "sources":  writer.sendSources(ev.sources); break;
-        case "progress": writer.sendProgress(ev.step); break;
-        case "chart":    writer.sendChart(ev.chart); break;
-        case "done":     writer.sendDone(); break;
-        case "error":    writer.sendError(ev.msg); break;
-      }
+  if (!buffered || buffered.length === 0) return;
+  eventBuffers.delete(id);
+
+  // Replay buffered events one per event-loop tick to avoid a synchronous
+  // burst that would appear as a single chunk at the client.
+  let i = 0;
+  function replayNext() {
+    if (i >= buffered!.length) return;
+    const ev = buffered![i++];
+    // Writer may have been removed if the client disconnected during replay.
+    const w = sseWriters.get(id);
+    if (!w) return;
+    switch (ev.type) {
+      case "delta":    w.sendDelta(ev.text); break;
+      case "sources":  w.sendSources(ev.sources); break;
+      case "progress": w.sendProgress(ev.step); break;
+      case "chart":    w.sendChart(ev.chart); break;
+      case "done":     w.sendDone(); return; // done ends the stream
+      case "error":    w.sendError(ev.msg); return;
     }
+    setImmediate(replayNext);
   }
+  setImmediate(replayNext);
 }
 
 function buffer(id: string, ev: BufferedEvent): void {
@@ -86,7 +103,6 @@ export function getOrBufferWriter(id: string): SseWriter {
     sendDone: () => {
       const w = sseWriters.get(id);
       if (w) { w.sendDone(); } else buffer(id, { type: "done" });
-      // Clean up buffer either way
       eventBuffers.delete(id);
     },
     sendError: (msg) => {

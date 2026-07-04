@@ -66,13 +66,22 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
 
   res.flushHeaders();
 
-  function flush() {
-    if (typeof (res as any).flush === "function") (res as any).flush();
+  // After each res.write() call the socket's own cork/uncork cycle ensures
+  // Node.js flushes the write to TCP immediately. Combined with setNoDelay(true)
+  // above, each SSE event is sent as its own TCP packet without buffering.
+  // There is no compression middleware in this app, so (res as any).flush would
+  // always be undefined — we skip that dead check entirely.
+  function flushSocket() {
+    const sock = (res as any).socket as import("net").Socket | undefined;
+    if (sock && !sock.destroyed) {
+      sock.uncork();
+      sock.cork();
+    }
   }
 
   const keepalive = setInterval(() => {
-    if (!res.writableEnded) { res.write(": keepalive\n\n"); flush(); }
-  }, 10_000);
+    if (!res.writableEnded) { res.write(": keepalive\n\n"); flushSocket(); }
+  }, 15_000);
 
   // Named SSE events: `event: <name>\ndata: <json>\n\n`
   // Named events are required for the native EventSource API to dispatch
@@ -80,7 +89,7 @@ router.get("/stream", requireAuth, async (req: Request, res: Response) => {
   function sendSseEvent(name: string, data: object): void {
     if (res.writableEnded) return;
     res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
-    flush();
+    flushSocket();
   }
 
   const writer: SseWriter = {
@@ -312,10 +321,13 @@ router.post(
       }),
     );
 
-    // Run the agent in the background after the response is sent
+    // Run the agent in the background after the response is sent.
+    // The 200 ms delay gives the client time to open the SSE connection so
+    // the writer is registered before the first text delta fires — preventing
+    // a burst replay of all events when SSE connects.
     if (question) {
       const id = analysis.id;
-      setImmediate(() => {
+      setTimeout(() => {
         const w = getOrBufferWriter(id);
         processQuestion(analysis, question, {
           onTextDelta: (delta) => w.sendDelta(delta),
@@ -420,21 +432,23 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
   // EventSource / fetch-based SSE consumers.
   res.flushHeaders();
 
-  function flush() {
-    // (res as any).flush() is injected by compression middleware; without it
-    // we fall back to socket.write flushing via setNoDelay above.
-    if (typeof (res as any).flush === "function") (res as any).flush();
+  function flushSocket() {
+    const sock = (res as any).socket as import("net").Socket | undefined;
+    if (sock && !sock.destroyed) {
+      sock.uncork();
+      sock.cork();
+    }
   }
 
   function sendEvent(event: string, data: unknown) {
     if (res.writableEnded) return;
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    flush();
+    flushSocket();
   }
 
   // Send an initial comment so the client knows the connection is open
   res.write(": connected\n\n");
-  flush();
+  flushSocket();
 
   const writer: SseWriter = {
     sendDelta: (text) => sendEvent("delta", { text }),
@@ -551,11 +565,10 @@ router.post(
     res.status(200).json(AskQuestionResponse.parse({ accepted: true }));
 
     const msgUserId = req.userId!;
-    setImmediate(() => {
-      // Pass SSE callbacks via closure over the registry — the SSE connection
-      // may open slightly after this fires, so we look up the writer at call
-      // time (not now). By the time any text delta fires, the client has had
-      // ample time (≥1 tool-call round trip) to open the SSE connection.
+    // 200 ms delay: gives the client time to open the SSE connection so the
+    // writer is registered before the agent emits the first text delta —
+    // preventing a burst replay of all events when SSE connects.
+    setTimeout(() => {
       const id = a.id;
       const w = getOrBufferWriter(id);
       const imageObjectPath = parsed.data.imageObjectPath;
