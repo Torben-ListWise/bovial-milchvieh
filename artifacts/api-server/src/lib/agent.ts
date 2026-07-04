@@ -950,11 +950,13 @@ Wenn eines dieser Muster zutrifft:
 1. Überspringe get_schema, get_kpis, get_kpi_timeseries, get_event_stats und andere Betriebsdaten-Werkzeuge vollständig.
 2. Rufe SOFORT search_dairycomp_manual auf — dies ersetzt auch den search_knowledge-Pflichtschritt.
 3. Du darfst den Produktnamen „DairyComp" in deiner Antwort verwenden.
-4. Wenn search_dairycomp_manual keine relevanten Treffer liefert (noRelevantResults: true): Antworte mit „Dazu finde ich leider nichts im DairyComp-Handbuch. Für diese Frage wende dich bitte direkt an den DairyComp-Support." — keine Eskalation, kein search_web-Fallback.
-5. Kennzeichne Antworten aus dem DairyComp-Handbuch mit *[DairyComp-Handbuch]* statt *[Bibliothek]*.
+4. Kennzeichne Antworten aus dem DairyComp-Handbuch mit *[DairyComp-Handbuch]* statt *[Bibliothek]*.
+
+⛔ HARTES STOPP-GEBOT — WIRD VOR ALLEN ANDEREN REGELN GEPRÜFT:
+Wenn search_dairycomp_manual { noRelevantResults: true } zurückgibt: Antworte AUSSCHLIESSLICH mit „Dazu finde ich leider nichts im DairyComp-Handbuch. Für diese Frage wende dich bitte direkt an den DairyComp-Support." — und beende die Antwort dort. KEINE weiteren Sätze, KEIN Befehlsvorschlag, KEIN „vermutlich", KEIN „typischerweise", KEINE Ableitung aus eigenem Wissen. Kein search_web-Fallback. Keine Eskalation. Dies ist eine absolute Schranke.
 
 DAIRYCOMP-BEFEHLSGLOSSAR — SONDERREGELN:
-search_dairycomp_manual gibt zwei Quellen zurück: Einträge mit source="glossar" (strukturiertes Befehlsglossar) und source="manual" (semantisches Handbuch-Ergebnis). Folgende Regeln gelten:
+search_dairycomp_manual gibt zwei Quellen zurück: Einträge mit source="glossar" (strukturiertes Befehlsglossar) und source="manual" (semantisches Handbuch-Ergebnis). Diese Regeln gelten NUR wenn das Tool tatsächlich Chunks zurückgegeben hat (noRelevantResults ist NICHT gesetzt):
 
 1. GLOSSAR-VORRANG: Wenn ein Glossar-Eintrag (source="glossar") zurückgegeben wird, nenne den dort angegebenen Befehl direkt und exakt — keine Umformulierung, keine Eigenableitung. Der Befehl-Wert im Glossar ist die maßgebliche Quelle.
 
@@ -962,7 +964,7 @@ search_dairycomp_manual gibt zwei Quellen zurück: Einträge mit source="glossar
 
 3. EVENTS-NUMMERN: Die EVENTS-Codes 8, 9, A, B, C sind systemreserviert und dürfen nicht als Benutzer-Auswertungen genannt oder empfohlen werden.
 
-4. NEUE BEFEHLE ABLEITEN: Nur erlaubt wenn search_dairycomp_manual tatsächlich Chunks zurückgegeben hat (source="glossar" oder source="manual" im Ergebnis vorhanden). In diesem Fall: Befehl kennzeichnen mit „(aus Handbuch-Grammatik abgeleitet)" und auf Seiten 65–69 verweisen. — VERBOTEN wenn noRelevantResults: true: Dann greift ausschließlich Regel 4 oben (Stopp-Antwort). Aus eigenem Trainingswissen über DairyComp darf NIEMALS Syntax abgeleitet oder erfunden werden — auch nicht als Näherung, Beispiel oder Hinweis. Kein „vermutlich", kein „typischerweise lautet der Befehl".
+4. NEUE BEFEHLE ABLEITEN: Nur erlaubt wenn search_dairycomp_manual tatsächlich Chunks zurückgegeben hat (source="glossar" oder source="manual" im Ergebnis vorhanden). In diesem Fall: Befehl kennzeichnen mit „(aus Handbuch-Grammatik abgeleitet)" und auf Seiten 65–69 verweisen. Aus eigenem Trainingswissen über DairyComp darf NIEMALS Syntax abgeleitet oder erfunden werden — auch nicht als Näherung, Beispiel oder Hinweis.
 
 BILD-INTERPRETATION:
 Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist. Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
@@ -1830,7 +1832,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
               FROM knowledge_chunks kc
               JOIN knowledge_documents kd ON kd.id = kc.doc_id
               WHERE kd.status = 'ready'
-                AND kd.document_type = 'dairycomp_manual'
+                AND kd.document_type IN ('dairycomp_glossar', 'dairycomp_manual')
               ORDER BY kc.embedding <=> ${vecStr}::vector
               LIMIT ${topK}
             `,

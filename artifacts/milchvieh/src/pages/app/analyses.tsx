@@ -2600,11 +2600,14 @@ export function AnalysesPage() {
     onDone: () => {
       const id = streamingAnalysisIdRef.current;
       if (id) {
+        sseStartedForRef.current.delete(id);
         queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
         queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey(datasetId ?? "") });
       }
     },
     onFallback: () => {
+      const id = streamingAnalysisIdRef.current;
+      if (id) sseStartedForRef.current.delete(id);
       setPollFallback(true);
     },
   });
@@ -3085,6 +3088,7 @@ export function AnalysesPage() {
       setPendingContextFileIds([]);
       setFilePickerOpen(false);
     } else {
+      if (ask.isPending) return;
       const imageObjectPath = pendingImage?.objectPath || undefined;
       ask.mutate({ analysisId: activeAnalysisId, data: { question: text, imageObjectPath } });
       if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
