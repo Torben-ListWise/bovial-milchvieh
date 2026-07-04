@@ -638,7 +638,8 @@ export function NewsEditorPage() {
         errors?: string[];
       };
       if (!resp.ok) {
-        toast({ variant: "destructive", title: "Batch fehlgeschlagen", description: String(result) });
+        const errMsg = (result as { error?: string })?.error ?? JSON.stringify(result);
+        toast({ variant: "destructive", title: "Batch fehlgeschlagen", description: errMsg });
         return;
       }
       toast({

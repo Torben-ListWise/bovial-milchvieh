@@ -100,8 +100,11 @@ export async function requireAuth(
 
   // Security: sync operator role on every auth so OPERATOR_EMAILS changes
   // take effect immediately without requiring a DB update.
-  if (user.email) {
-    const shouldBeOperator = OPERATOR_EMAILS.length > 0 && OPERATOR_EMAILS.includes(user.email.toLowerCase());
+  // Only sync when OPERATOR_EMAILS is explicitly configured; if the list is
+  // empty we treat the DB-stored role as authoritative (avoids demoting
+  // operators in dev environments where the env var is not set).
+  if (user.email && OPERATOR_EMAILS.length > 0) {
+    const shouldBeOperator = OPERATOR_EMAILS.includes(user.email.toLowerCase());
     const isOperator = user.role === "operator";
     if (shouldBeOperator !== isOperator) {
       const newRole = shouldBeOperator ? "operator" : "customer";
