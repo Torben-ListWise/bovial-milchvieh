@@ -970,8 +970,9 @@ Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf d
 HITZESTRESS-RECHNER: Wenn der Nutzer fragt ob sich Kühlung/Ventilatoren/Kühlsystem lohnen, oder nach Hitzestress-Milchverlusten, THI-Kosten oder Kühl-Investitionen fragt:
 1. Rufe get_master_data auf (falls nicht bereits in diesem Turn geschehen), um den Milchpreis zu ermitteln. Der Eintrag hat typischerweise den Schlüssel "Milchpreis" oder die Kategorie "Preise". Wenn ein Wert gefunden wird (in €/kg), übergib ihn als milkPriceEuroKg. Wenn kein Eintrag vorhanden ist oder der Wert fehlt, verwende den Default (0.40).
 2. Fülle herdSize aus dem Datensatz-Kontext vor (falls aus get_schema oder get_kpis bekannt).
-3. Rufe dann show_heat_abatement_calculator mit allen vorausgefüllten Werten auf.
+3. Rufe dann show_heat_abatement_calculator mit allen vorausgefüllten Werten auf — auch wenn nicht alle Betriebswerte bekannt sind; Default-Werte sind ausdrücklich zulässig. KEIN Fließtext über den Rechner statt des Werkzeugaufrufs.
 4. Schreibe danach einen kurzen einleitenden Satz (1-2 Sätze), was der Rechner zeigt.
+5. Falls show_heat_abatement_calculator in diesem Gespräch bereits aufgerufen wurde: verweise im Fließtext nur kurz auf den bereits sichtbaren Rechner (1 Satz) — kein langer Erklärungstext, kein erneuter Werkzeugaufruf.
 
 FRISCHMELKER-RECHNER: Wenn der Nutzer fragt ob sich ein verbessertes Frischmelker-/Transitphasen-Programm lohnt, nach Metritis/Ketose/Hypokalzämie-Kosten fragt oder Früherkennung/Monitoring bei Frischkühen bewertet:
 1. Ermittle die Abkalbungen/Jahr: Falls get_schema Event-Daten zeigt, rufe run_sql auf mit: SELECT COUNT(*) AS calvings FROM cow_events WHERE dataset_id = '<CURRENT_DATASET_ID>' AND event_type = 'FRESH' AND event_date >= NOW() - INTERVAL '12 months'. Verwende den Wert als calvingsPerYear. Wenn keine Event-Daten vorhanden sind, lies calvingsPerYear aus dem Datensatz-Kontext (get_kpis) oder lass ihn leer.
@@ -2455,6 +2456,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
       case "get_semen_planning": return "Lade gespeicherte Besamungsplanung";
       case "calculate_semen_planning": return "Berechne Besamungs- und Spermakosten";
+      case "show_heat_abatement_calculator": return "Zeige Hitzestress-Rechner";
+      case "show_fresh_cow_calculator": return "Zeige Frischmelker-ROI-Rechner";
       case "emit_chart": return `Erstelle Diagramm`;
       case "ask_farmer": return "Formuliere Rückfragen";
       case "get_event_stats": return `Berechne Event-Statistik${metric ? ` für ${metric}` : ""}`;
@@ -2552,6 +2555,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     "get_event_stats",
     "get_repro_kpis",
     "run_sql",
+    "get_master_data",
+    "show_heat_abatement_calculator",
+    "show_fresh_cow_calculator",
   ]);
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -2765,8 +2771,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       "Agent antwortete ohne Werkzeugaufruf — Antwort wird verworfen (Grounding-Garantie)",
     );
     finalText =
-      "Die Analyse konnte nicht auf Basis Ihrer Daten durchgeführt werden. " +
-      "Bitte stellen Sie sicher, dass der Datensatz korrekt hochgeladen und verarbeitet wurde.";
+      "Für diese Frage wurden allgemeine Richtwerte verwendet — mit Ihren hochgeladenen Betriebsdaten " +
+      "(Milchleistung, Herdendaten, Ereignisprotokoll) kann die Analyse gezielt auf Ihren Betrieb " +
+      "zugeschnitten werden und liefert deutlich präzisere Ergebnisse.";
     return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
   }
 
