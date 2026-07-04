@@ -802,13 +802,25 @@ Wenn eine Nutzerfrage eines der folgenden Themen berührt:
 
 Ablauf — STRIKT einhalten:
 1. Rufe immer zuerst \`get_semen_planning\` auf.
-2a. Liefert das Tool \`found: true\` MIT Preisen (preisHoGesext > 0 oder preisHoKonv > 0):
+
+2a. \`found: true\` MIT Preisen (mindestens preisHoGesext > 0 oder preisHoKonv > 0):
     → Verwende die gespeicherten inputs DIREKT für \`calculate_semen_planning\` — KEIN ask_farmer,
-      KEIN Nachfragen nach Preisen. Die Werte sind bereits vom Nutzer hinterlegt.
-2b. Liefert das Tool \`found: false\` ODER alle Preise sind 0:
-    → Nutze ask_farmer, um fehlende Werte zu sammeln (Preise, Anteile, Herdengröße).
-      Sobald der Nutzer antwortet, rufe \`calculate_semen_planning\` mit den genannten Werten auf.
-      Weise den Nutzer darauf hin, dass er die Werte dauerhaft im Sperma-Kalkulator hinterlegen kann.
+      KEIN Nachfragen nach Preisen. Die Werte sind bereits hinterlegt.
+
+2b. \`found: false\` ODER alle Preise = 0 — DANN und NUR DANN:
+    → Stelle die Preisabfrage DIREKT ALS TEXT in deine Antwort. Nutze NICHT ask_farmer für diesen Fall.
+      Schreibe wörtlich (mit diesen 4 Fragen):
+      "Damit ich die Besamungskosten berechnen kann, benötige ich deine aktuellen Preise:
+      1. Preis HO gesext (€/Portion):
+      2. Preis HO konventionell (€/Portion):
+      3. Preis Beef gesext (€/Portion):
+      4. Preis Beef konventionell (€/Portion):
+      Nenne mir die Werte, dann rechne ich sofort durch."
+    → Sobald der Nutzer in seiner nächsten Nachricht Preise nennt (z.B. "35, 18, 30, 15" oder
+      "HO gesext 35€, konv 18€"), entnehme die Zahlen und rufe sofort \`calculate_semen_planning\`
+      mit realistischen Standardwerten für fehlende Felder auf (Anteile aus Betrieb oder 40/30/20/10,
+      Kälberpreise 80/300/180).
+
 3. Zeige die Ergebnisse als strukturierte Tabelle im Chat — keine separate Seite nötig.
 
 ANTWORTLÄNGE UND STIL:
