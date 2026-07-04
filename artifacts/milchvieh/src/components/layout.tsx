@@ -242,7 +242,6 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
   const allCustomerNav = [
     { name: "Start", href: "/app/overview", icon: Home, preserveDataset: true, guestHidden: false },
     { name: "Analysen", href: "/app/analyses", icon: MessageSquare, preserveDataset: true, guestHidden: false },
-    { name: "Sperma-Kalkulator", href: "/app/semen-planning", icon: FlaskConical, preserveDataset: true, guestHidden: true },
     { name: "Regeln", href: "/app/rules", icon: Sliders, preserveDataset: true, guestHidden: true },
     { name: "Einstellungen", href: "/app/settings", icon: Settings, preserveDataset: false, guestHidden: false },
   ];
