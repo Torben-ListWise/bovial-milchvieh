@@ -2096,14 +2096,37 @@ function AnalysisResultsPanel({
   }, [msgs]);
 
   const [widgetPanelCollapsed, setWidgetPanelCollapsed] = useState(false);
+  const [panelHighlight, setPanelHighlight] = useState(false);
   const prevWidgetTypeRef = useRef<string | null>(null);
+  // Tracks whether the one-time visual cue has already fired for this conversation
+  const hasShownWidgetCueRef = useRef(false);
+  const stickyPanelRef = useRef<HTMLDivElement>(null);
 
-  // Auto-expand when a new widgetSpec type appears
+  // Reset per-conversation cue gate whenever we switch to a different analysis
   useEffect(() => {
-    if (lastWidgetSpec?.type && lastWidgetSpec.type !== prevWidgetTypeRef.current) {
-      setWidgetPanelCollapsed(false);
-      prevWidgetTypeRef.current = lastWidgetSpec.type;
-    }
+    hasShownWidgetCueRef.current = false;
+    prevWidgetTypeRef.current = null;
+  }, [analysis?.id]);
+
+  // Auto-expand when a new widgetSpec type appears;
+  // flash highlight + scroll only the very first time a widget appears per conversation
+  useEffect(() => {
+    if (!lastWidgetSpec?.type || lastWidgetSpec.type === prevWidgetTypeRef.current) return;
+    setWidgetPanelCollapsed(false);
+    prevWidgetTypeRef.current = lastWidgetSpec.type;
+    // Only fire the attention cue once per conversation
+    if (hasShownWidgetCueRef.current) return;
+    hasShownWidgetCueRef.current = true;
+    setPanelHighlight(true);
+    const clearHighlight = setTimeout(() => setPanelHighlight(false), 2100);
+    // Scroll the panel into view after a tick (let it render expanded first)
+    const scrollTimer = setTimeout(() => {
+      stickyPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 80);
+    return () => {
+      clearTimeout(clearHighlight);
+      clearTimeout(scrollTimer);
+    };
   }, [lastWidgetSpec?.type]);
 
   // Scroll to the streaming area as soon as the agent starts — don't wait for the full response.
@@ -2183,11 +2206,11 @@ function AnalysisResultsPanel({
   }
 
   const stickyCalculatorPanel = lastWidgetSpec ? (
-    <div className="shrink-0 border-t border-border bg-background">
+    <div ref={stickyPanelRef} className="shrink-0 border-t border-border bg-background">
       <button
         type="button"
         onClick={() => setWidgetPanelCollapsed((c) => !c)}
-        className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted/50 transition-colors"
+        className={`w-full flex items-center justify-between px-4 py-2 hover:bg-muted/50 transition-colors rounded-sm ${panelHighlight ? "panel-highlight-anim" : ""}`}
         aria-expanded={!widgetPanelCollapsed}
       >
         <div className="flex items-center gap-1.5">

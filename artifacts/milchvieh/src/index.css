@@ -302,6 +302,12 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes panel-highlight {
+  0%   { background-color: hsl(var(--primary) / 0.18); box-shadow: 0 0 0 2px hsl(var(--primary) / 0.25); }
+  60%  { background-color: hsl(var(--primary) / 0.10); box-shadow: 0 0 0 2px hsl(var(--primary) / 0.12); }
+  100% { background-color: transparent; box-shadow: none; }
+}
+
 /* ── Base ───────────────────────────────────────────────── */
 
 @layer base {
@@ -333,6 +339,10 @@
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .panel-highlight-anim {
+    animation: panel-highlight 2s ease-out forwards;
   }
 
   .touch-target {
