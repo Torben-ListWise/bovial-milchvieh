@@ -10,6 +10,7 @@
 - [Milchvieh local embeddings](milchvieh-local-embeddings.md) — use Xenova/multilingual-e5-base via @huggingface/transformers (NOT nomic-embed-text-v1.5 — gated/401)
 - [Milchvieh streaming transport](milchvieh-streaming-transport.md) — use SSE (GET /api/stream?analysisId&token) NOT WebSocket; Replit dev proxy does not forward WS upgrades across artifact ports
 - [Milchvieh agent streaming](milchvieh-agent-streaming.md) — use messages.stream() + stream.on("text") for real-time deltas; no verification step (adds 15-30s with no UX benefit)
+- [Milchvieh processQuestion callbacks](milchvieh-processquestion-callbacks.md) — every handler calling processQuestion must forward ALL SSE callbacks (onProgress/onChart too) or client hangs on "Wird gestartet"
 - [Milchvieh DB migration idempotency](milchvieh-migration-idempotency.md) — use CREATE INDEX IF NOT EXISTS not ADD CONSTRAINT for unique indexes; ADD CONSTRAINT has no IF NOT EXISTS in PG
 - [Milchvieh conception rate linking](milchvieh-conception-rate.md) — conception rate must join BRED→PREG via animal_id+date window; result='P' on BRED is never set in German HMS exports
 - [Milchvieh run_sql security](milchvieh-run-sql-security.md) — run_sql uses milchvieh_analyst role + RLS for DB-level dataset isolation; never text-pattern matching

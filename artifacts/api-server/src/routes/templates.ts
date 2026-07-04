@@ -162,6 +162,8 @@ router.post(
       processQuestion(analysis, template.promptText, {
         onTextDelta: (delta) => w.sendDelta(delta),
         onSourceSearched: (sources) => w.sendSources(sources),
+        onProgress: (step) => w.sendProgress(step),
+        onChart: (chart) => w.sendChart(chart),
         onDone: () => w.sendDone(),
       })
         .then((msg) => {

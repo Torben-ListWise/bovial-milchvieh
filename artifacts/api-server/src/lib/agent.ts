@@ -6,7 +6,7 @@ import type {
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { createHash } from "node:crypto";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   pool,
@@ -1444,11 +1444,20 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           }
         }
         if (docTitles.length > 0) {
-          const catRows = await db.execute(
-            sql`SELECT title, category FROM knowledge_documents WHERE title = ANY(${docTitles}) AND status = 'ready'`,
-          );
+          const catRows = await db
+            .select({
+              title: knowledgeDocumentsTable.title,
+              category: knowledgeDocumentsTable.category,
+            })
+            .from(knowledgeDocumentsTable)
+            .where(
+              and(
+                inArray(knowledgeDocumentsTable.title, docTitles),
+                eq(knowledgeDocumentsTable.status, "ready"),
+              ),
+            );
           const catMap = new Map<string, string | null>(
-            (catRows.rows as { title: string; category: string | null }[]).map((r) => [r.title, r.category]),
+            catRows.map((r) => [r.title, r.category]),
           );
           const seenTopics = new Set<string>();
           for (const title of docTitles) {
