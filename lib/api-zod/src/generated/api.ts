@@ -442,7 +442,7 @@ export const GetAnalysisResponse = zod.object({
   "followUpQuestions": zod.array(zod.string()).optional(),
   "error": zod.string().nullish(),
   "createdAt": zod.coerce.date()
-}))
+}).passthrough())
 })
 
 
