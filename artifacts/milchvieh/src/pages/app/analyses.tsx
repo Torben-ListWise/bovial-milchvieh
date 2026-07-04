@@ -2428,7 +2428,11 @@ function AnalysisResultsPanel({
         <div className="flex items-center gap-1.5">
           <Calculator className="w-3 h-3 text-primary shrink-0" />
           <span className="text-xs font-semibold text-muted-foreground">
-            {lastWidgetSpec.type === "heat_abatement" ? "🌡️ Hitzestress-Rechner" : "🐄 Frischmelker-ROI-Rechner"}
+            {lastWidgetSpec.type === "heat_abatement"
+              ? "🌡️ Hitzestress-Rechner"
+              : lastWidgetSpec.type === "semen_prices"
+                ? "💉 Sperma-Kalkulator"
+                : "🐄 Frischmelker-ROI-Rechner"}
           </span>
         </div>
         <ChevronDown
@@ -2442,6 +2446,20 @@ function AnalysisResultsPanel({
           )}
           {lastWidgetSpec.type === "fresh_cow" && (
             <FreshCowWidget prefill={lastWidgetSpec.prefill ?? {}} />
+          )}
+          {lastWidgetSpec.type === "semen_prices" && (
+            <div className="flex flex-col gap-3 pt-1">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Die berechneten Werte wurden im Sperma-Kalkulator gespeichert. Dort kannst du alle Parameter jederzeit anpassen.
+              </p>
+              <Link
+                href={`/app/overview?datasetId=${analysis?.datasetId ?? ""}`}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors w-fit"
+              >
+                <Calculator className="w-3.5 h-3.5" />
+                Zum Sperma-Kalkulator
+              </Link>
+            </div>
           )}
         </div>
       )}
@@ -2517,20 +2535,31 @@ function AnalysisResultsPanel({
       )}
       {stickyCalculatorPanel}
       {lastWidgetSpec && (widgetPanelCollapsed || !isPanelVisible) && (
-        <button
-          type="button"
-          onClick={() => {
-            setWidgetPanelCollapsed(false);
-            setTimeout(() => {
-              stickyPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            }, 50);
-          }}
-          className="absolute bottom-14 right-3 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-primary-foreground shadow-lg text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all animate-in fade-in slide-in-from-bottom-2 duration-200"
-          aria-label="Rechner öffnen"
-        >
-          {lastWidgetSpec.type === "heat_abatement" ? "🌡️" : "🐄"}
-          <span>Rechner öffnen</span>
-        </button>
+        lastWidgetSpec.type === "semen_prices" ? (
+          <Link
+            href={`/app/overview?datasetId=${analysis?.datasetId ?? ""}`}
+            className="absolute bottom-14 right-3 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-primary-foreground shadow-lg text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all animate-in fade-in slide-in-from-bottom-2 duration-200"
+            aria-label="Zum Sperma-Kalkulator"
+          >
+            💉
+            <span>Sperma-Kalkulator</span>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setWidgetPanelCollapsed(false);
+              setTimeout(() => {
+                stickyPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }, 50);
+            }}
+            className="absolute bottom-14 right-3 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-primary-foreground shadow-lg text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all animate-in fade-in slide-in-from-bottom-2 duration-200"
+            aria-label="Rechner öffnen"
+          >
+            {lastWidgetSpec.type === "heat_abatement" ? "🌡️" : "🐄"}
+            <span>Rechner öffnen</span>
+          </button>
+        )
       )}
     </div>
   );
