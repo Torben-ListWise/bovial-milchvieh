@@ -310,6 +310,9 @@ function AppPortal() {
         <Route path="/app/nachrichten" component={NachrichtenPage} />
         <Route path="/app/nachrichten-editor" component={NewsEditorPage} />
         <Route path="/app/upgrade" component={UpgradePage} />
+        <Route path="/app/semen-planning">
+          <Redirect to="/app/analyses" />
+        </Route>
         <Route path="/app">
           {effectiveView === 'operator'
             ? <Redirect to="/app/monitoring" />
