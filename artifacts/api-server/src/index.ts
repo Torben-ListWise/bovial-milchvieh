@@ -10,7 +10,6 @@ import { startChipScheduler } from "./lib/chipScheduler";
 import { ensureExtensions, setupAnalystSandbox, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
 import { ingestKnowledgeDoc } from "./lib/ingest";
-import { seedSystemKnowledge } from "./lib/seedKnowledge";
 import { warmupEmbeddingModel, embeddingModelReady, LOCAL_MODEL_NAME } from "./lib/embeddings";
 import { attachWebSocketServer } from "./lib/wsHandler";
 
@@ -211,7 +210,6 @@ ensureExtensions()
       // passes immediately. The first embedding request pays the ONNX
       // cold-start penalty only if warmup hasn't finished yet.
       void warmupEmbeddingModel()
-        .then(() => seedSystemKnowledge())
         .then(() => reembedLegacyDocs())
         .then(() => resumePendingIngestions())
         .catch((err) => logger.error({ err }, "Post-Startup-Ingestion fehlgeschlagen"));
