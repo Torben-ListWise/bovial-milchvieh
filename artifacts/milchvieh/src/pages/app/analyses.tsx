@@ -1583,6 +1583,33 @@ function HeatAbatementWidget({ prefill }: { prefill: Record<string, number> }) {
   const [systemLifetimeYears, setSystemLifetimeYears] = useState(p.systemLifetimeYears ?? 15);
   const [interestRatePct, setInterestRatePct] = useState(p.interestRatePct ?? 3.5);
 
+  // Track which fields the farmer has manually edited so follow-up prefills don't clobber them
+  const dirtyFields = useRef<Set<string>>(new Set());
+  const mkSetter = (key: string, setter: (v: number) => void) =>
+    (v: number) => { dirtyFields.current.add(key); setter(v); };
+  const setHerdSizeUser          = mkSetter("herdSize",            setHerdSize);
+  const setHeatStressDaysUser    = mkSetter("heatStressDays",      setHeatStressDays);
+  const setMilkLossUser          = mkSetter("milkLossPerDayKg",    setMilkLossPerDayKg);
+  const setMilkPriceUser         = mkSetter("milkPriceEuroKg",     setMilkPriceEuroKg);
+  const setInvestmentCostUser    = mkSetter("investmentCost",      setInvestmentCost);
+  const setAnnualOpCostUser      = mkSetter("annualOperatingCost", setAnnualOperatingCost);
+  const setLifetimeUser          = mkSetter("systemLifetimeYears", setSystemLifetimeYears);
+  const setInterestUser          = mkSetter("interestRatePct",     setInterestRatePct);
+
+  // When a follow-up question arrives with updated prefill for the SAME widget type,
+  // silently update any field the farmer hasn't manually changed yet.
+  useEffect(() => {
+    const np = prefill as HeatAbatementPrefill;
+    if (!dirtyFields.current.has("herdSize")            && np.herdSize != null)            setHerdSize(np.herdSize);
+    if (!dirtyFields.current.has("heatStressDays")      && np.heatStressDays != null)      setHeatStressDays(np.heatStressDays);
+    if (!dirtyFields.current.has("milkLossPerDayKg")    && np.milkLossPerDayKg != null)    setMilkLossPerDayKg(np.milkLossPerDayKg);
+    if (!dirtyFields.current.has("milkPriceEuroKg")     && np.milkPriceEuroKg != null)     setMilkPriceEuroKg(np.milkPriceEuroKg);
+    if (!dirtyFields.current.has("investmentCost")      && np.investmentCost != null)      setInvestmentCost(np.investmentCost);
+    if (!dirtyFields.current.has("annualOperatingCost") && np.annualOperatingCost != null) setAnnualOperatingCost(np.annualOperatingCost);
+    if (!dirtyFields.current.has("systemLifetimeYears") && np.systemLifetimeYears != null) setSystemLifetimeYears(np.systemLifetimeYears);
+    if (!dirtyFields.current.has("interestRatePct")     && np.interestRatePct != null)     setInterestRatePct(np.interestRatePct);
+  }, [prefill]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const result = useMemo(() => {
     const annualMilkLossRevenue = herdSize * heatStressDays * milkLossPerDayKg * milkPriceEuroKg;
     const i = interestRatePct / 100;
@@ -1639,14 +1666,14 @@ function HeatAbatementWidget({ prefill }: { prefill: Record<string, number> }) {
         <span className="text-sm font-semibold">Hitzestress-Rechner</span>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <NumField label="Laktierende Kühe" value={herdSize} onChange={setHerdSize} unit="Kühe" />
-        <NumField label="Hitzestresstage/Jahr" value={heatStressDays} onChange={setHeatStressDays} unit="Tage" />
-        <NumField label="Milchverlust/Kuh/Tag" value={milkLossPerDayKg} onChange={setMilkLossPerDayKg} unit="kg" step={0.1} />
-        <NumField label="Milchpreis" value={milkPriceEuroKg} onChange={setMilkPriceEuroKg} unit="€/kg" step={0.01} />
-        <NumField label="Investition" value={investmentCost} onChange={setInvestmentCost} unit="€" step={1000} />
-        <NumField label="Betriebskosten/Jahr" value={annualOperatingCost} onChange={setAnnualOperatingCost} unit="€/Jahr" step={100} />
-        <NumField label="Nutzungsdauer" value={systemLifetimeYears} onChange={setSystemLifetimeYears} unit="Jahre" />
-        <NumField label="Zinssatz" value={interestRatePct} onChange={setInterestRatePct} unit="%" step={0.1} />
+        <NumField label="Laktierende Kühe" value={herdSize} onChange={setHerdSizeUser} unit="Kühe" />
+        <NumField label="Hitzestresstage/Jahr" value={heatStressDays} onChange={setHeatStressDaysUser} unit="Tage" />
+        <NumField label="Milchverlust/Kuh/Tag" value={milkLossPerDayKg} onChange={setMilkLossUser} unit="kg" step={0.1} />
+        <NumField label="Milchpreis" value={milkPriceEuroKg} onChange={setMilkPriceUser} unit="€/kg" step={0.01} />
+        <NumField label="Investition" value={investmentCost} onChange={setInvestmentCostUser} unit="€" step={1000} />
+        <NumField label="Betriebskosten/Jahr" value={annualOperatingCost} onChange={setAnnualOpCostUser} unit="€/Jahr" step={100} />
+        <NumField label="Nutzungsdauer" value={systemLifetimeYears} onChange={setLifetimeUser} unit="Jahre" />
+        <NumField label="Zinssatz" value={interestRatePct} onChange={setInterestUser} unit="%" step={0.1} />
       </div>
       <div className={`rounded-lg border p-3 ${ratingColor}`}>
         <div className="flex items-center gap-2 mb-1">
@@ -1691,6 +1718,35 @@ function FreshCowWidget({ prefill }: { prefill: Record<string, number> }) {
   const [hypocalcemiaCostEuro, setHypocalcemiaCostEuro] = useState(p.hypocalcemiaCostEuro ?? 150);
   const [diseaseReductionPct, setDiseaseReductionPct] = useState(p.diseaseReductionPct ?? 35);
   const [programCostPerCowEuro, setProgramCostPerCowEuro] = useState(p.programCostPerCowEuro ?? 25);
+
+  // Track which fields the farmer has manually edited so follow-up prefills don't clobber them
+  const dirtyFields = useRef<Set<string>>(new Set());
+  const mkSetter = (key: string, setter: (v: number) => void) =>
+    (v: number) => { dirtyFields.current.add(key); setter(v); };
+  const setCalvingsUser          = mkSetter("calvingsPerYear",        setCalvingsPerYear);
+  const setMetritisRateUser      = mkSetter("metritisRatePct",        setMetritisRatePct);
+  const setKetosisRateUser       = mkSetter("ketosisRatePct",         setKetosisRatePct);
+  const setHypocalcemiaRateUser  = mkSetter("hypocalcemiaRatePct",    setHypocalcemiaRatePct);
+  const setMetritisCostUser      = mkSetter("metrisisCostEuro",       setMetrisisCostEuro);
+  const setKetosisCostUser       = mkSetter("ketosisCostEuro",        setKetosisCostEuro);
+  const setHypocalcemiaCostUser  = mkSetter("hypocalcemiaCostEuro",   setHypocalcemiaCostEuro);
+  const setDiseaseReductionUser  = mkSetter("diseaseReductionPct",    setDiseaseReductionPct);
+  const setProgramCostUser       = mkSetter("programCostPerCowEuro",  setProgramCostPerCowEuro);
+
+  // When a follow-up question arrives with updated prefill for the SAME widget type,
+  // silently update any field the farmer hasn't manually changed yet.
+  useEffect(() => {
+    const np = prefill as FreshCowPrefill;
+    if (!dirtyFields.current.has("calvingsPerYear")       && np.calvingsPerYear != null)       setCalvingsPerYear(np.calvingsPerYear);
+    if (!dirtyFields.current.has("metritisRatePct")       && np.metritisRatePct != null)       setMetritisRatePct(np.metritisRatePct);
+    if (!dirtyFields.current.has("ketosisRatePct")        && np.ketosisRatePct != null)        setKetosisRatePct(np.ketosisRatePct);
+    if (!dirtyFields.current.has("hypocalcemiaRatePct")   && np.hypocalcemiaRatePct != null)   setHypocalcemiaRatePct(np.hypocalcemiaRatePct);
+    if (!dirtyFields.current.has("metrisisCostEuro")      && np.metrisisCostEuro != null)      setMetrisisCostEuro(np.metrisisCostEuro);
+    if (!dirtyFields.current.has("ketosisCostEuro")       && np.ketosisCostEuro != null)       setKetosisCostEuro(np.ketosisCostEuro);
+    if (!dirtyFields.current.has("hypocalcemiaCostEuro")  && np.hypocalcemiaCostEuro != null)  setHypocalcemiaCostEuro(np.hypocalcemiaCostEuro);
+    if (!dirtyFields.current.has("diseaseReductionPct")   && np.diseaseReductionPct != null)   setDiseaseReductionPct(np.diseaseReductionPct);
+    if (!dirtyFields.current.has("programCostPerCowEuro") && np.programCostPerCowEuro != null) setProgramCostPerCowEuro(np.programCostPerCowEuro);
+  }, [prefill]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const result = useMemo(() => {
     const currentDiseaseCost = calvingsPerYear * (
@@ -1741,15 +1797,15 @@ function FreshCowWidget({ prefill }: { prefill: Record<string, number> }) {
         <span className="text-sm font-semibold">Frischmelker-ROI-Rechner</span>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <NumField label="Abkalbungen/Jahr" value={calvingsPerYear} onChange={setCalvingsPerYear} unit="Abkalbungen" />
-        <NumField label="Metritis-Rate" value={metritisRatePct} onChange={setMetritisRatePct} unit="%" step={0.5} />
-        <NumField label="Ketose-Rate" value={ketosisRatePct} onChange={setKetosisRatePct} unit="%" step={0.5} />
-        <NumField label="Hypokalzämie-Rate" value={hypocalcemiaRatePct} onChange={setHypocalcemiaRatePct} unit="%" step={0.5} />
-        <NumField label="Kosten Metritis/Fall" value={metrisisCostEuro} onChange={setMetrisisCostEuro} unit="€" step={10} />
-        <NumField label="Kosten Ketose/Fall" value={ketosisCostEuro} onChange={setKetosisCostEuro} unit="€" step={10} />
-        <NumField label="Kosten Hypokalzämie/Fall" value={hypocalcemiaCostEuro} onChange={setHypocalcemiaCostEuro} unit="€" step={10} />
-        <NumField label="Krankheitsreduktion" value={diseaseReductionPct} onChange={setDiseaseReductionPct} unit="%" step={1} />
-        <NumField label="Programmkosten/Kuh" value={programCostPerCowEuro} onChange={setProgramCostPerCowEuro} unit="€/Kuh" step={1} />
+        <NumField label="Abkalbungen/Jahr" value={calvingsPerYear} onChange={setCalvingsUser} unit="Abkalbungen" />
+        <NumField label="Metritis-Rate" value={metritisRatePct} onChange={setMetritisRateUser} unit="%" step={0.5} />
+        <NumField label="Ketose-Rate" value={ketosisRatePct} onChange={setKetosisRateUser} unit="%" step={0.5} />
+        <NumField label="Hypokalzämie-Rate" value={hypocalcemiaRatePct} onChange={setHypocalcemiaRateUser} unit="%" step={0.5} />
+        <NumField label="Kosten Metritis/Fall" value={metrisisCostEuro} onChange={setMetritisCostUser} unit="€" step={10} />
+        <NumField label="Kosten Ketose/Fall" value={ketosisCostEuro} onChange={setKetosisCostUser} unit="€" step={10} />
+        <NumField label="Kosten Hypokalzämie/Fall" value={hypocalcemiaCostEuro} onChange={setHypocalcemiaCostUser} unit="€" step={10} />
+        <NumField label="Krankheitsreduktion" value={diseaseReductionPct} onChange={setDiseaseReductionUser} unit="%" step={1} />
+        <NumField label="Programmkosten/Kuh" value={programCostPerCowEuro} onChange={setProgramCostUser} unit="€/Kuh" step={1} />
       </div>
       <div className={`rounded-lg border p-3 ${ratingColor}`}>
         <div className="flex items-center gap-2 mb-1">
