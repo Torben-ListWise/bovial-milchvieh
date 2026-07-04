@@ -654,7 +654,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: "calculate_semen_planning",
-    description: "Berechnet und speichert die Besamungs- und Sperma-Kostenplanung für den Betrieb: Jahresbedarf Portionen, Kosten je Sperma-Kategorie, Kälbererlöse, Nettokosten, Färsenbalance und Aufzuchtplatzbedarf. Aufrufen wenn alle Parameter vom Nutzer bestätigt wurden. Das Ergebnis wird persistent pro Betrieb gespeichert.",
+    description: "Berechnet und speichert die Besamungs- und Sperma-Kostenplanung für den Betrieb: Jahresbedarf Portionen, Kosten je Sperma-Kategorie, Kälbererlöse, Nettokosten, Färsenbalance und Aufzuchtplatzbedarf. Aufrufen sobald alle Parameter verfügbar sind — entweder aus get_semen_planning (found:true) oder aus den Nutzerantworten auf ask_farmer. NICHT auf explizite Nutzerbestätigung warten wenn Daten bereits gespeichert sind.",
     input_schema: {
       type: "object",
       properties: {
@@ -800,10 +800,16 @@ Wenn eine Nutzerfrage eines der folgenden Themen berührt:
 - Beef-Kreuzung / Beef-Kälber-Erlöse
 - Spermakosten, Nettokosten Besamung, oder Sexing-Mehrpreis
 
-…dann rufe zwingend zuerst \`get_semen_planning\` auf, um gespeicherte Werte
-zu laden. Falls der Nutzer neue Werte nennt oder eine Neuberechnung wünscht,
-folge mit \`calculate_semen_planning\`. Zeige die Ergebnisse als strukturierte
-Tabelle im Chat — keine separate Seite nötig.
+Ablauf — STRIKT einhalten:
+1. Rufe immer zuerst \`get_semen_planning\` auf.
+2a. Liefert das Tool \`found: true\` MIT Preisen (preisHoGesext > 0 oder preisHoKonv > 0):
+    → Verwende die gespeicherten inputs DIREKT für \`calculate_semen_planning\` — KEIN ask_farmer,
+      KEIN Nachfragen nach Preisen. Die Werte sind bereits vom Nutzer hinterlegt.
+2b. Liefert das Tool \`found: false\` ODER alle Preise sind 0:
+    → Nutze ask_farmer, um fehlende Werte zu sammeln (Preise, Anteile, Herdengröße).
+      Sobald der Nutzer antwortet, rufe \`calculate_semen_planning\` mit den genannten Werten auf.
+      Weise den Nutzer darauf hin, dass er die Werte dauerhaft im Sperma-Kalkulator hinterlegen kann.
+3. Zeige die Ergebnisse als strukturierte Tabelle im Chat — keine separate Seite nötig.
 
 ANTWORTLÄNGE UND STIL:
 - Schreibe keine Zusammenfassung am Ende, wenn die Antwort bereits klar gegliedert ist.
