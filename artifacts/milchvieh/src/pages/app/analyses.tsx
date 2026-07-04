@@ -1242,27 +1242,74 @@ function BackQuestionForm({
 
 // ── Semen price input form ────────────────────────────────────────────────────
 
+type SemenPriceField = { key: string; label: string; placeholder: string; defaultVal?: string };
+
+function SemenPriceFormField({
+  f,
+  value,
+  onChange,
+}: {
+  f: SemenPriceField;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-muted-foreground font-medium">{f.label}</label>
+      <div className="relative">
+        <input
+          type="number"
+          min={0}
+          step={0.5}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={f.placeholder}
+          className="w-full rounded-lg border border-border bg-background px-3 py-1.5 pr-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">€</span>
+      </div>
+    </div>
+  );
+}
+
 function SemenPriceForm({ onSubmit }: { onSubmit: (answer: string) => void }) {
-  const fields: { key: string; label: string; placeholder: string }[] = [
+  const semenFields: SemenPriceField[] = [
     { key: "hoGesext",   label: "HO gesext (€/Portion)",           placeholder: "z.B. 35" },
     { key: "hoKonv",     label: "HO konventionell (€/Portion)",     placeholder: "z.B. 18" },
     { key: "beefGesext", label: "Beef gesext (€/Portion)",          placeholder: "z.B. 30" },
     { key: "beefKonv",   label: "Beef konventionell (€/Portion)",   placeholder: "z.B. 15" },
   ];
+  const calfFields: SemenPriceField[] = [
+    { key: "hoBullkalb",      label: "HO Bullenkalb (€/Tier, 4 Wochen)",       placeholder: "Standard: 80 €",  defaultVal: "80" },
+    { key: "beefBullkalb",    label: "Beef Bullenkalb (€/Tier, 4 Wochen)",     placeholder: "Standard: 300 €", defaultVal: "300" },
+    { key: "beefFaersenkalb", label: "Beef Färsenkalb (€/Tier, 4 Wochen)",     placeholder: "Standard: 180 €", defaultVal: "180" },
+  ];
+
   const [values, setValues] = useState<Record<string, string>>({});
+  const [showCalfPrices, setShowCalfPrices] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   if (submitted) return null;
 
-  const anyFilled = fields.some((f) => values[f.key]?.trim());
+  const anySemenFilled = semenFields.some((f) => values[f.key]?.trim());
+
+  function set(key: string, v: string) {
+    setValues((prev) => ({ ...prev, [key]: v }));
+  }
 
   function handleSend() {
-    const parts = fields.map((f) => {
+    const semenParts = semenFields.map((f) => {
       const v = values[f.key]?.trim();
       return v ? `${f.label}: ${v}€` : `${f.label}: keine Angabe`;
     });
+    const calfParts = calfFields.map((f) => {
+      const v = values[f.key]?.trim() || f.defaultVal;
+      return `${f.label}: ${v}€`;
+    });
     setSubmitted(true);
-    onSubmit(`Meine aktuellen Spermapreise:\n${parts.join("\n")}`);
+    onSubmit(
+      `Meine aktuellen Spermapreise:\n${semenParts.join("\n")}\n\nKälberpreise:\n${calfParts.join("\n")}`
+    );
   }
 
   return (
@@ -1271,33 +1318,42 @@ function SemenPriceForm({ onSubmit }: { onSubmit: (answer: string) => void }) {
         <AiIcon size={14} className="text-primary" />
       </div>
       <div className="flex-1 bg-secondary rounded-2xl rounded-tl-sm px-4 py-3 space-y-3 max-w-[90%]">
-        <p className="text-sm font-medium text-foreground">Bitte gib deine aktuellen Spermapreise ein:</p>
-        {fields.map((f) => (
-          <div key={f.key} className="space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">{f.label}</label>
-            <div className="relative">
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                value={values[f.key] ?? ""}
-                onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                placeholder={f.placeholder}
-                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 pr-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">€</span>
-            </div>
-          </div>
+        <p className="text-sm font-medium text-foreground">Spermapreise eingeben:</p>
+        {semenFields.map((f) => (
+          <SemenPriceFormField key={f.key} f={f} value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)} />
         ))}
+
+        <button
+          type="button"
+          onClick={() => setShowCalfPrices((p) => !p)}
+          className="flex items-center gap-1.5 text-xs text-primary/70 hover:text-primary transition-colors mt-1"
+        >
+          <span className={cn("transition-transform duration-150", showCalfPrices ? "rotate-90" : "rotate-0")}>▶</span>
+          Kälberpreise anpassen
+          {!showCalfPrices && <span className="text-muted-foreground ml-1">(Standard: 80 / 300 / 180 €)</span>}
+        </button>
+
+        {showCalfPrices && (
+          <div className="space-y-3 pl-3 border-l-2 border-primary/20">
+            <p className="text-xs text-muted-foreground">Verkaufspreise je Kalb (ca. 4 Wochen alt). Felder leer lassen = Standardwert wird verwendet.</p>
+            {calfFields.map((f) => (
+              <SemenPriceFormField key={f.key} f={f} value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)} />
+            ))}
+          </div>
+        )}
+
         <Button
           type="button"
           size="sm"
-          disabled={!anyFilled}
+          disabled={!anySemenFilled}
           onClick={handleSend}
           className="w-full mt-1"
         >
           Berechnen
         </Button>
+        <p className="text-[10px] text-muted-foreground/60 text-center">
+          Herdengröße &amp; Konzeptionsrate werden aus deinen Betriebsdaten ermittelt
+        </p>
       </div>
     </div>
   );
