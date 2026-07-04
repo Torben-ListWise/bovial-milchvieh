@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@clerk/react";
 import {
@@ -527,6 +527,47 @@ function toFormValues(inp: SemenPlanningInputs): EditFormValues {
   };
 }
 
+function calcSemenPlanningClient(inp: SemenPlanningInputs) {
+  const round = (n: number, d = 0) => Math.round(n * 10 ** d) / 10 ** d;
+  const kzKuehe = inp.konzRateKuehe / 100;
+  const kzFaersen = inp.konzRateFaersen / 100;
+  const benoetigteFaersen = round(inp.summeKuehe * inp.prozentAbgaenge / 100);
+  const traechtigkeitenKuehe = round(inp.summeKuehe * 0.9);
+  const traechtigkeitenFaersen = round(benoetigteFaersen * 1.05);
+  const totalBesamungen = traechtigkeitenKuehe / kzKuehe + traechtigkeitenFaersen / kzFaersen;
+  const aHoGes = inp.anteilHoGesext / 100;
+  const aHoKonv = inp.anteilHoKonv / 100;
+  const aBeefGes = inp.anteilBeefGesext / 100;
+  const aBeefKonv = inp.anteilBeefKonv / 100;
+  const portHoGes = round(totalBesamungen * aHoGes);
+  const portHoKonv = round(totalBesamungen * aHoKonv);
+  const portBeefGes = round(totalBesamungen * aBeefGes);
+  const portBeefKonv = round(totalBesamungen * aBeefKonv);
+  const portGesamt = round(portHoGes + portHoKonv + portBeefGes + portBeefKonv);
+  const pregHoGes = round(traechtigkeitenKuehe * aHoGes + traechtigkeitenFaersen * aHoGes);
+  const pregHoKonv = round(traechtigkeitenKuehe * aHoKonv + traechtigkeitenFaersen * aHoKonv);
+  const femaleHoGes = round(pregHoGes * 0.90);
+  const femaleHoKonv = round(pregHoKonv * 0.50);
+  const verfuegbareHoFaersen = round(femaleHoGes + femaleHoKonv);
+  const faersenBalance = round(verfuegbareHoFaersen - benoetigteFaersen);
+  const pregBeefGes = round(traechtigkeitenKuehe * aBeefGes + traechtigkeitenFaersen * aBeefGes);
+  const pregBeefKonv = round(traechtigkeitenKuehe * aBeefKonv + traechtigkeitenFaersen * aBeefKonv);
+  const maleHoGes = round(pregHoGes * 0.10);
+  const maleHoKonv = round(pregHoKonv * 0.50);
+  const maleBeefGes = round(pregBeefGes * 0.90);
+  const maleBeefKonv = round(pregBeefKonv * 0.50);
+  const femaleBeefGes = round(pregBeefGes * 0.10);
+  const femaleBeefKonv = round(pregBeefKonv * 0.50);
+  const gesamtkosten = round(portHoGes * inp.preisHoGesext + portHoKonv * inp.preisHoKonv + portBeefGes * inp.preisBeefGesext + portBeefKonv * inp.preisBeefKonv);
+  const gesamterlös = round(
+    (maleHoGes + maleHoKonv) * inp.verkaufspreisHoBullkalb +
+    (maleBeefGes + maleBeefKonv) * inp.verkaufspreisBeefBullkalb +
+    (femaleBeefGes + femaleBeefKonv) * inp.verkaufspreisBeefWeiblich
+  );
+  const nettokosten = round(gesamtkosten - gesamterlös);
+  return { portGesamt, faersenBalance, nettokosten };
+}
+
 function SemenPlanningCard({ datasetId }: { datasetId: string }) {
   const { getToken } = useAuth();
   const { toast } = useToast();
@@ -633,6 +674,19 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
         .reduce((acc, v) => acc + (parseFloat(v.replace(",", ".")) || 0), 0)
     : 0;
   const anteilSumOk = Math.abs(anteilSum - 100) <= 0.5;
+
+  const livePreview = useMemo<{ portGesamt: number; faersenBalance: number; nettokosten: number } | null>(() => {
+    if (!formValues) return null;
+    const parsed: Record<string, number> = {};
+    for (const [k, v] of Object.entries(formValues)) {
+      const n = parseFloat(String(v).replace(",", "."));
+      if (isNaN(n)) return null;
+      parsed[k] = n;
+    }
+    const sum = (parsed.anteilHoGesext ?? 0) + (parsed.anteilHoKonv ?? 0) + (parsed.anteilBeefGesext ?? 0) + (parsed.anteilBeefKonv ?? 0);
+    if (Math.abs(sum - 100) > 0.5 || (parsed.summeKuehe ?? 0) <= 0 || (parsed.konzRateKuehe ?? 0) <= 0 || (parsed.konzRateFaersen ?? 0) <= 0) return null;
+    return calcSemenPlanningClient(parsed as unknown as SemenPlanningInputs);
+  }, [formValues]);
 
   function NumField({ label, fieldKey, suffix }: { label: string; fieldKey: keyof EditFormValues; suffix?: string }) {
     return (
@@ -787,6 +841,37 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
                   <NumField label="Beef-Bullkalb" fieldKey="verkaufspreisBeefBullkalb" suffix="€" />
                 </div>
               </div>
+
+              {/* Live preview panel */}
+              {livePreview ? (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Vorschau</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Portionen/Jahr</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {livePreview.portGesamt.toLocaleString("de-DE")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Färsenbilanz</p>
+                      <p className={`text-sm font-semibold ${livePreview.faersenBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+                        {livePreview.faersenBalance >= 0 ? "+" : ""}{livePreview.faersenBalance.toLocaleString("de-DE")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Nettokosten</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {livePreview.nettokosten.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : anteilSumOk && (
+                <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                  Vorschau wird angezeigt, sobald alle Felder gültig sind.
+                </div>
+              )}
 
               {formError && (
                 <p className="text-sm text-destructive">{formError}</p>
