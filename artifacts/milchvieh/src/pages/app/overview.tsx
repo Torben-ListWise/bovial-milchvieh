@@ -31,6 +31,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -462,6 +472,8 @@ interface SemenPlanningInputs {
   konzRateFaersen: number;
   prozentAbgaenge: number;
   eka: number;
+  verlusteKueheRate?: number;
+  verlusteRinderRate?: number;
   anteilHoGesext: number;
   anteilHoKonv: number;
   anteilBeefGesext: number;
@@ -490,9 +502,39 @@ interface SemenPlanningData {
   updatedAt?: string;
 }
 
+type EditFormValues = Record<keyof SemenPlanningInputs, string>;
+
+function toFormValues(inp: SemenPlanningInputs): EditFormValues {
+  return {
+    summeKuehe: String(inp.summeKuehe),
+    konzRateKuehe: String(inp.konzRateKuehe),
+    konzRateFaersen: String(inp.konzRateFaersen),
+    prozentAbgaenge: String(inp.prozentAbgaenge),
+    eka: String(inp.eka),
+    verlusteKueheRate: String(inp.verlusteKueheRate ?? 5),
+    verlusteRinderRate: String(inp.verlusteRinderRate ?? 5),
+    anteilHoGesext: String(inp.anteilHoGesext),
+    anteilHoKonv: String(inp.anteilHoKonv),
+    anteilBeefGesext: String(inp.anteilBeefGesext),
+    anteilBeefKonv: String(inp.anteilBeefKonv),
+    preisHoGesext: String(inp.preisHoGesext),
+    preisHoKonv: String(inp.preisHoKonv),
+    preisBeefGesext: String(inp.preisBeefGesext),
+    preisBeefKonv: String(inp.preisBeefKonv),
+    verkaufspreisHoBullkalb: String(inp.verkaufspreisHoBullkalb),
+    verkaufspreisBeefWeiblich: String(inp.verkaufspreisBeefWeiblich),
+    verkaufspreisBeefBullkalb: String(inp.verkaufspreisBeefBullkalb),
+  };
+}
+
 function SemenPlanningCard({ datasetId }: { datasetId: string }) {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [data, setData] = useState<SemenPlanningData | null | undefined>(undefined);
+  const [editOpen, setEditOpen] = useState(false);
+  const [formValues, setFormValues] = useState<EditFormValues | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -502,7 +544,7 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
         const resp = await fetch(`${API_BASE}/api/datasets/${datasetId}/semen-planning`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        if (!resp.ok) { if (!cancelled) setData(null); return; }
+        if (!resp.ok || cancelled) { if (!cancelled) setData(null); return; }
         const json = await resp.json() as SemenPlanningData;
         if (!cancelled) setData(json);
       } catch {
@@ -512,6 +554,60 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
     load();
     return () => { cancelled = true; };
   }, [datasetId, getToken]);
+
+  function openEdit() {
+    if (data?.inputs) {
+      setFormValues(toFormValues(data.inputs));
+      setFormError(null);
+      setEditOpen(true);
+    }
+  }
+
+  function handleFieldChange(field: keyof EditFormValues, value: string) {
+    setFormValues((prev) => prev ? { ...prev, [field]: value } : prev);
+    setFormError(null);
+  }
+
+  async function handleSave() {
+    if (!formValues) return;
+    const parsed: Record<string, number> = {};
+    for (const [k, v] of Object.entries(formValues)) {
+      const n = parseFloat(v.replace(",", "."));
+      if (isNaN(n)) { setFormError(`Ungültiger Wert für ${k}.`); return; }
+      parsed[k] = n;
+    }
+    const anteilSum = (parsed.anteilHoGesext ?? 0) + (parsed.anteilHoKonv ?? 0) +
+      (parsed.anteilBeefGesext ?? 0) + (parsed.anteilBeefKonv ?? 0);
+    if (Math.abs(anteilSum - 100) > 0.5) {
+      setFormError(`Sperma-Anteile ergeben ${anteilSum.toFixed(1)} % — müssen genau 100 % ergeben.`);
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const token = await getToken();
+      const resp = await fetch(`${API_BASE}/api/datasets/${datasetId}/semen-planning/calculate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(parsed),
+      });
+      const json = await resp.json();
+      if (!resp.ok) {
+        setFormError(json?.error ?? "Fehler beim Speichern.");
+        return;
+      }
+      setData({ found: true, inputs: json.inputs, outputs: json.outputs, updatedAt: new Date().toISOString() });
+      setEditOpen(false);
+      toast({ title: "Spermaplanung aktualisiert" });
+    } catch {
+      setFormError("Netzwerkfehler beim Speichern.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (data === undefined) return null;
   if (!data || !data.found || !data.inputs || !data.outputs) return null;
@@ -529,84 +625,187 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
     ? new Date(data.updatedAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
     : null;
 
-  const editHref = `/app/analyses?datasetId=${datasetId}`;
-
   const faersenBalanceColor =
     out.faersenbalance.faersenBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive";
 
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <FlaskConical className="w-4 h-4 text-primary" />
-          </div>
-          <span className="text-sm font-semibold text-foreground">Spermaplanung</span>
-          {updatedLabel && (
-            <span className="text-xs text-muted-foreground hidden sm:inline">· Stand {updatedLabel}</span>
-          )}
+  const anteilSum = formValues
+    ? [formValues.anteilHoGesext, formValues.anteilHoKonv, formValues.anteilBeefGesext, formValues.anteilBeefKonv]
+        .reduce((acc, v) => acc + (parseFloat(v.replace(",", ".")) || 0), 0)
+    : 0;
+  const anteilSumOk = Math.abs(anteilSum - 100) <= 0.5;
+
+  function NumField({ label, fieldKey, suffix }: { label: string; fieldKey: keyof EditFormValues; suffix?: string }) {
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs">{label}</Label>
+        <div className="flex items-center gap-1">
+          <Input
+            type="number"
+            step="any"
+            value={formValues?.[fieldKey] ?? ""}
+            onChange={(e) => handleFieldChange(fieldKey, e.target.value)}
+            className="h-8 text-sm"
+          />
+          {suffix && <span className="text-xs text-muted-foreground shrink-0">{suffix}</span>}
         </div>
-        <Link href={editHref}>
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer">
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FlaskConical className="w-4 h-4 text-primary" />
+            </div>
+            <span className="text-sm font-semibold text-foreground">Spermaplanung</span>
+            {updatedLabel && (
+              <span className="text-xs text-muted-foreground hidden sm:inline">· Stand {updatedLabel}</span>
+            )}
+          </div>
+          <button
+            onClick={openEdit}
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer"
+          >
             <Pencil className="w-3.5 h-3.5" />
             Bearbeiten
-          </span>
-        </Link>
+          </button>
+        </div>
+
+        {/* Key inputs grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-lg bg-muted/50 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Herdengröße</p>
+            <p className="text-sm font-semibold text-foreground">{fmt(inp.summeKuehe)} Kühe</p>
+          </div>
+          <div className="rounded-lg bg-muted/50 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Konzeptionsrate</p>
+            <p className="text-sm font-semibold text-foreground">
+              {fmt(inp.konzRateKuehe)} % / {fmt(inp.konzRateFaersen)} %
+            </p>
+            <p className="text-xs text-muted-foreground">Kühe / Färsen</p>
+          </div>
+          <div className="rounded-lg bg-muted/50 px-3 py-2">
+            <p className="text-xs text-muted-foreground">HO gesext / konv.</p>
+            <p className="text-sm font-semibold text-foreground">
+              {fmt(inp.anteilHoGesext)} % / {fmt(inp.anteilHoKonv)} %
+            </p>
+          </div>
+          <div className="rounded-lg bg-muted/50 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Beef gesext / konv.</p>
+            <p className="text-sm font-semibold text-foreground">
+              {fmt(inp.anteilBeefGesext)} % / {fmt(inp.anteilBeefKonv)} %
+            </p>
+          </div>
+        </div>
+
+        {/* Key results row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Portionen/Jahr</p>
+            <p className="text-sm font-semibold text-foreground">{fmt(out.besamungen.portionen.gesamt)}</p>
+          </div>
+          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Färsenbilanz</p>
+            <p className={`text-sm font-semibold ${faersenBalanceColor}`}>
+              {out.faersenbalance.faersenBalance >= 0 ? "+" : ""}{fmt(out.faersenbalance.faersenBalance)}
+            </p>
+          </div>
+          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Nettokosten</p>
+            <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokosten)}</p>
+          </div>
+          <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Netto / Kuh / Jahr</p>
+            <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokostenProKuhJahr)}</p>
+          </div>
+        </div>
+
+        {updatedLabel && (
+          <p className="text-xs text-muted-foreground sm:hidden">Stand: {updatedLabel}</p>
+        )}
       </div>
 
-      {/* Key inputs grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-lg bg-muted/50 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Herdengröße</p>
-          <p className="text-sm font-semibold text-foreground">{fmt(inp.summeKuehe)} Kühe</p>
-        </div>
-        <div className="rounded-lg bg-muted/50 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Konzeptionsrate</p>
-          <p className="text-sm font-semibold text-foreground">
-            {fmt(inp.konzRateKuehe)} % / {fmt(inp.konzRateFaersen)} %
-          </p>
-          <p className="text-xs text-muted-foreground">Kühe / Färsen</p>
-        </div>
-        <div className="rounded-lg bg-muted/50 px-3 py-2">
-          <p className="text-xs text-muted-foreground">HO gesext / konv.</p>
-          <p className="text-sm font-semibold text-foreground">
-            {fmt(inp.anteilHoGesext)} % / {fmt(inp.anteilHoKonv)} %
-          </p>
-        </div>
-        <div className="rounded-lg bg-muted/50 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Beef gesext / konv.</p>
-          <p className="text-sm font-semibold text-foreground">
-            {fmt(inp.anteilBeefGesext)} % / {fmt(inp.anteilBeefKonv)} %
-          </p>
-        </div>
-      </div>
+      {/* Edit modal */}
+      <Dialog open={editOpen} onOpenChange={(open) => { if (!saving) setEditOpen(open); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Spermaplanung bearbeiten</DialogTitle>
+          </DialogHeader>
 
-      {/* Key results row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Portionen/Jahr</p>
-          <p className="text-sm font-semibold text-foreground">{fmt(out.besamungen.portionen.gesamt)}</p>
-        </div>
-        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Färsenbilanz</p>
-          <p className={`text-sm font-semibold ${faersenBalanceColor}`}>
-            {out.faersenbalance.faersenBalance >= 0 ? "+" : ""}{fmt(out.faersenbalance.faersenBalance)}
-          </p>
-        </div>
-        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Nettokosten</p>
-          <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokosten)}</p>
-        </div>
-        <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
-          <p className="text-xs text-muted-foreground">Netto / Kuh / Jahr</p>
-          <p className="text-sm font-semibold text-foreground">{fmtEur(out.nettokostenProKuhJahr)}</p>
-        </div>
-      </div>
+          {formValues && (
+            <div className="space-y-5 py-1">
+              {/* Section: Herde */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Herde</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumField label="Anzahl Kühe" fieldKey="summeKuehe" suffix="Kühe" />
+                  <NumField label="Abgangsrate" fieldKey="prozentAbgaenge" suffix="%" />
+                  <NumField label="Erstkalbalter (Monate)" fieldKey="eka" suffix="Mo." />
+                  <NumField label="Konz.-Rate Kühe" fieldKey="konzRateKuehe" suffix="%" />
+                  <NumField label="Konz.-Rate Färsen" fieldKey="konzRateFaersen" suffix="%" />
+                  <NumField label="Verluste Kühe" fieldKey="verlusteKueheRate" suffix="%" />
+                  <NumField label="Verluste Rinder" fieldKey="verlusteRinderRate" suffix="%" />
+                </div>
+              </div>
 
-      {updatedLabel && (
-        <p className="text-xs text-muted-foreground sm:hidden">Stand: {updatedLabel}</p>
-      )}
-    </div>
+              {/* Section: Sperma-Anteile */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sperma-Anteile</p>
+                  <span className={`text-xs font-medium ${anteilSumOk ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+                    Summe: {anteilSum.toFixed(1)} %
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumField label="HO gesext" fieldKey="anteilHoGesext" suffix="%" />
+                  <NumField label="HO konv." fieldKey="anteilHoKonv" suffix="%" />
+                  <NumField label="Beef gesext" fieldKey="anteilBeefGesext" suffix="%" />
+                  <NumField label="Beef konv." fieldKey="anteilBeefKonv" suffix="%" />
+                </div>
+              </div>
+
+              {/* Section: Spermapreise */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Spermapreise (€/Portion)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumField label="HO gesext" fieldKey="preisHoGesext" suffix="€" />
+                  <NumField label="HO konv." fieldKey="preisHoKonv" suffix="€" />
+                  <NumField label="Beef gesext" fieldKey="preisBeefGesext" suffix="€" />
+                  <NumField label="Beef konv." fieldKey="preisBeefKonv" suffix="€" />
+                </div>
+              </div>
+
+              {/* Section: Kälber-Verkaufspreise */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Kälber-Verkaufspreise (€/Tier)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumField label="HO-Bullkalb" fieldKey="verkaufspreisHoBullkalb" suffix="€" />
+                  <NumField label="Beef weiblich" fieldKey="verkaufspreisBeefWeiblich" suffix="€" />
+                  <NumField label="Beef-Bullkalb" fieldKey="verkaufspreisBeefBullkalb" suffix="€" />
+                </div>
+              </div>
+
+              {formError && (
+                <p className="text-sm text-destructive">{formError}</p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSave} disabled={saving || !anteilSumOk}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Speichern
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
