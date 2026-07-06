@@ -12,6 +12,7 @@ const TABS: {
   { name: "index", label: "Betriebe", sf: "house", icon: "home-outline" },
   { name: "analyse", label: "Analysen", sf: "bubble.left.and.bubble.right", icon: "chatbubbles-outline" },
   { name: "berichte", label: "Berichte", sf: "chart.bar", icon: "bar-chart-outline" },
+  { name: "diary", label: "Tagebuch", sf: "book", icon: "journal-outline" },
   { name: "einstellungen", label: "Einstellungen", sf: "gearshape", icon: "settings-outline" },
 ];
 
