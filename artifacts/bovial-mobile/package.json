@@ -57,8 +57,10 @@
   },
   "dependencies": {
     "@clerk/expo": "^3.6.5",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "expo-auth-session": "~7.0.11",
     "expo-crypto": "~15.0.9",
-    "expo-secure-store": "~15.0.8"
+    "expo-secure-store": "~15.0.8",
+    "react-native-sse": "^1.2.1"
   }
 }

@@ -1,28 +1,28 @@
 import { useAuth } from "@clerk/expo";
-import { useGetAnalysis, useAskQuestion } from "@workspace/api-client-react";
+import { useGetAnalysis, useAskQuestion, customFetch } from "@workspace/api-client-react";
 import type { Chart } from "@workspace/api-client-react";
-import { useLocalSearchParams, useNavigation } from "expo-router";
-import { fetch as expoFetch } from "expo/fetch";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import EventSource from "react-native-sse";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { BottomSheetModal, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { MessageBubble } from "@/components/MessageBubble";
 import { ProgressPill } from "@/components/ProgressPill";
-import { customFetch } from "@workspace/api-client-react";
 
 type StreamingState = {
   text: string;
@@ -39,24 +39,27 @@ const DIARY_CATEGORIES = [
   { key: "sonstiges", label: "Sonstiges" },
 ];
 
+const LAST_ANALYSIS_KEY = (datasetId: string) => `lastAnalysisId:${datasetId}`;
+
 export default function ChatScreen() {
   const { analysisId, new: isNew } = useLocalSearchParams<{ analysisId: string; new?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const router = useRouter();
   const { getToken } = useAuth();
 
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
-  const [diaryModal, setDiaryModal] = useState(false);
   const [diaryDesc, setDiaryDesc] = useState("");
   const [diaryCategory, setDiaryCategory] = useState("sonstiges");
-  const [diaryDate, setDiaryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [diaryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [diarySaving, setDiarySaving] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
-  const abortRef = useRef<boolean>(false);
-  const streamingStarted = useRef<boolean>(false);
+  const esRef = useRef<EventSource | null>(null);
+  const streamingStarted = useRef(false);
+  const diarySheetRef = useRef<BottomSheetModal>(null);
 
   const { data: analysis, refetch } = useGetAnalysis({ analysisId });
   const askQuestion = useAskQuestion();
@@ -65,99 +68,98 @@ export default function ChatScreen() {
     if (analysis?.title) {
       navigation.setOptions({ title: analysis.title });
     }
-  }, [analysis?.title]);
+    if (analysis?.datasetId) {
+      AsyncStorage.setItem(LAST_ANALYSIS_KEY(analysis.datasetId), analysisId).catch(() => {});
+    }
+  }, [analysis?.title, analysis?.datasetId]);
 
   useEffect(() => {
     if (isNew === "1" && !streamingStarted.current) {
       streamingStarted.current = true;
-      startStreaming();
+      connectSSE(false);
     }
+    return () => {
+      esRef.current?.close();
+    };
   }, [analysisId]);
 
-  const startStreaming = useCallback(async () => {
-    abortRef.current = false;
-    const token = await getToken();
-    if (!token) return;
+  const connectSSE = useCallback(
+    async (postQuestion?: string | false) => {
+      esRef.current?.close();
+      esRef.current = null;
 
-    setStreaming({ text: "", step: "Verbinde…", chart: null, done: false });
+      const token = await getToken();
+      if (!token) return;
 
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    if (!domain) return;
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      if (!domain) return;
 
-    try {
-      const response = await expoFetch(
+      setStreaming({ text: "", step: "Verbinde…", chart: null, done: false });
+
+      const es = new EventSource(
         `https://${domain}/api/analyses/${analysisId}/stream`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "text/event-stream",
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
+      esRef.current = es;
 
-      if (!response.body) return;
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (!abortRef.current) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-
-        for (const part of parts) {
-          let eventName = "message";
-          let dataLine = "";
-          for (const line of part.split("\n")) {
-            if (line.startsWith("event: ")) eventName = line.slice(7).trim();
-            else if (line.startsWith("data: ")) dataLine = line.slice(6);
-          }
-
-          if (!dataLine) continue;
-
+      es.addEventListener("open", async () => {
+        if (postQuestion) {
           try {
-            const payload = JSON.parse(dataLine);
-
-            setStreaming((prev) => {
-              if (!prev) return prev;
-              if (eventName === "delta") {
-                return { ...prev, text: prev.text + (payload.text ?? ""), step: null };
-              }
-              if (eventName === "progress") {
-                return { ...prev, step: payload.step ?? null };
-              }
-              if (eventName === "chart") {
-                return { ...prev, chart: payload.chart ?? null };
-              }
-              if (eventName === "done") {
-                return { ...prev, done: true, step: null };
-              }
-              if (eventName === "agenterror") {
-                return { ...prev, text: payload.message ?? "Fehler bei der Analyse", done: true, step: null };
-              }
-              return prev;
+            await askQuestion.mutateAsync({
+              analysisId,
+              data: { question: postQuestion },
             });
-
-            if (eventName === "done" || eventName === "agenterror") {
-              reader.cancel();
-              break;
-            }
           } catch {
+            es.close();
+            setStreaming(null);
           }
         }
-      }
-    } catch (e) {
-      console.error("SSE error", e);
-      setStreaming((prev) => prev ? { ...prev, done: true, step: null } : null);
-    } finally {
-      await refetch();
-      setStreaming(null);
-    }
-  }, [analysisId, getToken, refetch]);
+      });
+
+      es.addEventListener("delta" as any, (e: any) => {
+        const payload = JSON.parse(e.data ?? "{}");
+        setStreaming((prev) =>
+          prev ? { ...prev, text: prev.text + (payload.text ?? ""), step: null } : prev
+        );
+      });
+
+      es.addEventListener("progress" as any, (e: any) => {
+        const payload = JSON.parse(e.data ?? "{}");
+        setStreaming((prev) =>
+          prev ? { ...prev, step: payload.step ?? null } : prev
+        );
+      });
+
+      es.addEventListener("chart" as any, (e: any) => {
+        const payload = JSON.parse(e.data ?? "{}");
+        setStreaming((prev) =>
+          prev ? { ...prev, chart: payload.chart ?? null } : prev
+        );
+      });
+
+      es.addEventListener("done" as any, async () => {
+        es.close();
+        esRef.current = null;
+        await refetch();
+        setStreaming(null);
+      });
+
+      es.addEventListener("error" as any, (e: any) => {
+        let message = "Fehler bei der Analyse";
+        try {
+          const payload = JSON.parse(e?.data ?? "{}");
+          message = payload.message ?? message;
+        } catch {}
+        setStreaming((prev) =>
+          prev ? { ...prev, text: message, done: true, step: null } : prev
+        );
+        es.close();
+        esRef.current = null;
+        refetch();
+      });
+    },
+    [analysisId, getToken, askQuestion, refetch]
+  );
 
   const handleSend = useCallback(async () => {
     const question = input.trim();
@@ -165,18 +167,8 @@ export default function ChatScreen() {
 
     setInput("");
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    try {
-      await askQuestion.mutateAsync({
-        analysisId,
-        data: { question },
-      });
-    } catch {
-      return;
-    }
-
-    startStreaming();
-  }, [input, streaming, askQuestion, analysisId, startStreaming]);
+    connectSSE(question);
+  }, [input, streaming, askQuestion, connectSSE]);
 
   const handleDiarySave = async () => {
     const desc = diaryDesc.trim();
@@ -192,10 +184,9 @@ export default function ChatScreen() {
           description: desc,
         }),
       });
-      setDiaryModal(false);
+      diarySheetRef.current?.dismiss();
       setDiaryDesc("");
       setDiaryCategory("sonstiges");
-      setDiaryDate(new Date().toISOString().slice(0, 10));
       Alert.alert("Gespeichert", "Ereignis wurde im Tagebuch gespeichert.");
     } catch {
       Alert.alert("Fehler", "Ereignis konnte nicht gespeichert werden.");
@@ -205,6 +196,8 @@ export default function ChatScreen() {
   };
 
   const messages = analysis?.messages ?? [];
+  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
+  const showDiaryCta = !streaming && lastAssistantMsg && !lastAssistantMsg.loggedEvent;
 
   const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -213,21 +206,26 @@ export default function ChatScreen() {
       paddingTop: 12,
       paddingBottom: 8,
     },
-    inputRow: {
+    headerRight: {
       flexDirection: "row",
-      alignItems: "flex-end",
-      paddingHorizontal: 12,
-      paddingTop: 10,
-      paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-      backgroundColor: colors.card,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      alignItems: "center",
       gap: 8,
+      marginRight: 8,
+    },
+    headerBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.secondary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    inputArea: {
+      backgroundColor: colors.background,
     },
     diaryCtaWrap: {
       paddingHorizontal: 16,
-      paddingBottom: 8,
-      backgroundColor: colors.background,
+      paddingBottom: 6,
     },
     diaryCta: {
       flexDirection: "row",
@@ -244,6 +242,17 @@ export default function ChatScreen() {
       fontSize: 14,
       fontFamily: "Inter_500Medium",
       color: colors.accent,
+    },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+      backgroundColor: colors.card,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      gap: 8,
     },
     inputWrap: {
       flex: 1,
@@ -269,36 +278,17 @@ export default function ChatScreen() {
       alignItems: "center",
       justifyContent: "center",
     },
-    sendBtnDisabled: {
-      opacity: 0.4,
-    },
+    sendBtnDisabled: { opacity: 0.4 },
     loadingContainer: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
     },
-    streamingBubble: {
-      marginBottom: 8,
-    },
-    overlay: {
+    streamingBubble: { marginBottom: 8 },
+    sheetContent: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.6)",
-      justifyContent: "flex-end",
-    },
-    sheet: {
-      backgroundColor: colors.card,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
       padding: 24,
       paddingBottom: insets.bottom + 24,
-    },
-    sheetHandle: {
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: colors.border,
-      alignSelf: "center",
-      marginBottom: 20,
     },
     sheetTitle: {
       fontSize: 18,
@@ -335,7 +325,7 @@ export default function ChatScreen() {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 8,
-      marginBottom: 16,
+      marginBottom: 20,
     },
     catChip: {
       borderRadius: 20,
@@ -346,17 +336,15 @@ export default function ChatScreen() {
       backgroundColor: colors.secondary,
     },
     catChipActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
     },
     catChipText: {
       fontSize: 13,
       fontFamily: "Inter_500Medium",
       color: colors.mutedForeground,
     },
-    catChipTextActive: {
-      color: "#fff",
-    },
+    catChipTextActive: { color: "#fff" },
     saveBtn: {
       backgroundColor: colors.accent,
       borderRadius: 14,
@@ -371,6 +359,21 @@ export default function ChatScreen() {
     },
   });
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={s.headerRight}>
+          <Pressable
+            style={s.headerBtn}
+            onPress={() => router.push(`/analyses?datasetId=${analysis?.datasetId}` as any)}
+          >
+            <Ionicons name="list-outline" size={18} color={colors.foreground} />
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [analysis?.datasetId]);
+
   if (!analysis) {
     return (
       <View style={[s.container, s.loadingContainer]}>
@@ -380,7 +383,6 @@ export default function ChatScreen() {
   }
 
   const canSend = input.trim().length > 0 && !streaming && !askQuestion.isPending;
-  const showDiaryCta = !streaming && messages.length > 0;
 
   return (
     <KeyboardAvoidingView
@@ -395,7 +397,20 @@ export default function ChatScreen() {
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
         inverted
-        renderItem={({ item }) => <MessageBubble message={item} />}
+        renderItem={({ item }) => (
+          <MessageBubble
+            message={item}
+            onFeedback={async (messageId, rating) => {
+              try {
+                await customFetch(`/api/messages/${messageId}/feedback`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ rating }),
+                });
+              } catch {}
+            }}
+          />
+        )}
         ListHeaderComponent={
           streaming ? (
             <View style={s.streamingBubble}>
@@ -421,94 +436,97 @@ export default function ChatScreen() {
         }
       />
 
-      {showDiaryCta && (
-        <View style={s.diaryCtaWrap}>
-          <Pressable style={s.diaryCta} onPress={() => setDiaryModal(true)}>
-            <Ionicons name="journal-outline" size={16} color={colors.accent} />
-            <Text style={s.diaryCtaText}>📅 Ereignis eintragen?</Text>
-          </Pressable>
-        </View>
-      )}
+      <View style={s.inputArea}>
+        {showDiaryCta && (
+          <View style={s.diaryCtaWrap}>
+            <Pressable
+              style={s.diaryCta}
+              onPress={() => diarySheetRef.current?.present()}
+            >
+              <Ionicons name="journal-outline" size={16} color={colors.accent} />
+              <Text style={s.diaryCtaText}>📅 Ereignis eintragen?</Text>
+            </Pressable>
+          </View>
+        )}
 
-      <View style={s.inputRow}>
-        <View style={s.inputWrap}>
-          <TextInput
-            style={s.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Frage stellen…"
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            returnKeyType="send"
-            onSubmitEditing={canSend ? handleSend : undefined}
-            editable={!streaming}
-          />
-        </View>
-        <Pressable
-          style={[s.sendBtn, !canSend && s.sendBtnDisabled]}
-          onPress={handleSend}
-          disabled={!canSend}
-        >
-          {askQuestion.isPending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="arrow-up" size={20} color="#fff" />
-          )}
-        </Pressable>
-      </View>
-
-      <Modal
-        visible={diaryModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setDiaryModal(false)}
-      >
-        <Pressable style={s.overlay} onPress={() => setDiaryModal(false)}>
-          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
-            <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>Ereignis eintragen</Text>
-            <Text style={s.sheetSub}>Im Tagebuch für diesen Betrieb speichern</Text>
-
-            <Text style={s.label}>Beschreibung</Text>
+        <View style={s.inputRow}>
+          <View style={s.inputWrap}>
             <TextInput
-              style={s.textInput}
-              value={diaryDesc}
-              onChangeText={setDiaryDesc}
-              placeholder="Was ist passiert?"
+              style={s.input}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Frage stellen…"
               placeholderTextColor={colors.mutedForeground}
               multiline
-              autoFocus
+              returnKeyType="send"
+              onSubmitEditing={canSend ? handleSend : undefined}
+              editable={!streaming}
             />
-
-            <Text style={s.label}>Kategorie</Text>
-            <View style={s.catRow}>
-              {DIARY_CATEGORIES.map((cat) => (
-                <Pressable
-                  key={cat.key}
-                  style={[s.catChip, diaryCategory === cat.key && s.catChipActive]}
-                  onPress={() => setDiaryCategory(cat.key)}
-                >
-                  <Text style={[s.catChipText, diaryCategory === cat.key && s.catChipTextActive]}>
-                    {cat.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              style={[s.saveBtn, (!diaryDesc.trim() || diarySaving) && s.saveBtnDisabled]}
-              onPress={handleDiarySave}
-              disabled={!diaryDesc.trim() || diarySaving}
-            >
-              {diarySaving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={s.saveBtnText}>Im Tagebuch speichern</Text>
-              )}
-            </Pressable>
+          </View>
+          <Pressable
+            style={[s.sendBtn, !canSend && s.sendBtnDisabled]}
+            onPress={handleSend}
+            disabled={!canSend}
+          >
+            {askQuestion.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="arrow-up" size={20} color="#fff" />
+            )}
           </Pressable>
-        </Pressable>
-      </Modal>
+        </View>
+      </View>
+
+      <BottomSheetModal
+        ref={diarySheetRef}
+        snapPoints={["55%", "80%"]}
+        backgroundStyle={{ backgroundColor: colors.card }}
+        handleIndicatorStyle={{ backgroundColor: colors.border }}
+      >
+        <BottomSheetView style={s.sheetContent}>
+          <Text style={s.sheetTitle}>Ereignis eintragen</Text>
+          <Text style={s.sheetSub}>Im Tagebuch speichern</Text>
+
+          <Text style={s.label}>Beschreibung</Text>
+          <BottomSheetTextInput
+            style={s.textInput}
+            value={diaryDesc}
+            onChangeText={setDiaryDesc}
+            placeholder="Was ist passiert?"
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+          />
+
+          <Text style={s.label}>Kategorie</Text>
+          <View style={s.catRow}>
+            {DIARY_CATEGORIES.map((cat) => (
+              <Pressable
+                key={cat.key}
+                style={[s.catChip, diaryCategory === cat.key && s.catChipActive]}
+                onPress={() => setDiaryCategory(cat.key)}
+              >
+                <Text
+                  style={[s.catChipText, diaryCategory === cat.key && s.catChipTextActive]}
+                >
+                  {cat.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            style={[s.saveBtn, (!diaryDesc.trim() || diarySaving) && s.saveBtnDisabled]}
+            onPress={handleDiarySave}
+            disabled={!diaryDesc.trim() || diarySaving}
+          >
+            {diarySaving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={s.saveBtnText}>Im Tagebuch speichern</Text>
+            )}
+          </Pressable>
+        </BottomSheetView>
+      </BottomSheetModal>
     </KeyboardAvoidingView>
   );
 }

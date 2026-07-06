@@ -1,7 +1,7 @@
 import type { AnalysisMessage, Chart } from "@workspace/api-client-react";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Rect, Line, Text as SvgText, G } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import { DiaryChip } from "@/components/DiaryChip";
@@ -9,11 +9,19 @@ import { DiaryChip } from "@/components/DiaryChip";
 type Props = {
   message: AnalysisMessage;
   isStreaming?: boolean;
+  onFeedback?: (messageId: string, rating: "up" | "down") => void;
 };
 
-export function MessageBubble({ message, isStreaming }: Props) {
+export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
   const colors = useColors();
   const isUser = message.role === "user";
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+
+  const handleFeedback = (rating: "up" | "down") => {
+    if (feedback === rating) return;
+    setFeedback(rating);
+    onFeedback?.(message.id, rating);
+  };
 
   const s = StyleSheet.create({
     wrapper: {
@@ -137,22 +145,25 @@ export function MessageBubble({ message, isStreaming }: Props) {
       color: colors.mutedForeground,
       flex: 1,
     },
-    followUpRow: {
-      marginTop: 12,
-      gap: 6,
+    feedbackRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 10,
     },
-    followUpBtn: {
+    feedbackBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
       backgroundColor: colors.muted,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    followUpText: {
-      fontSize: 13,
-      fontFamily: "Inter_400Regular",
-      color: colors.primary,
+    feedbackBtnActive: {
+      backgroundColor: colors.primary + "22",
+      borderColor: colors.primary,
     },
   });
 
@@ -278,8 +289,6 @@ export function MessageBubble({ message, isStreaming }: Props) {
       y: PAD.top + innerH - ((values[i] - minVal) / range) * innerH,
     }));
 
-    const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-
     return (
       <Svg width={WIDTH} height={HEIGHT} style={{ marginHorizontal: 4 }}>
         {pts.length > 1 && (
@@ -362,7 +371,7 @@ export function MessageBubble({ message, isStreaming }: Props) {
             {!isUser && message.loggedEvent && (
               <DiaryChip event={message.loggedEvent} />
             )}
-            {!isUser && !isStreaming && message.citations && message.citations.length > 0 && (
+            {!isUser && message.citations && message.citations.length > 0 && (
               <View style={s.citationsRow}>
                 {message.citations.slice(0, 3).map((c, i) => (
                   <View key={i} style={s.citation}>
@@ -370,6 +379,30 @@ export function MessageBubble({ message, isStreaming }: Props) {
                     <Text style={s.citationText} numberOfLines={1}>{c.label}</Text>
                   </View>
                 ))}
+              </View>
+            )}
+            {!isUser && !isStreaming && message.id !== "__streaming__" && onFeedback && (
+              <View style={s.feedbackRow}>
+                <Pressable
+                  style={[s.feedbackBtn, feedback === "up" && s.feedbackBtnActive]}
+                  onPress={() => handleFeedback("up")}
+                >
+                  <Ionicons
+                    name={feedback === "up" ? "thumbs-up" : "thumbs-up-outline"}
+                    size={14}
+                    color={feedback === "up" ? colors.primary : colors.mutedForeground}
+                  />
+                </Pressable>
+                <Pressable
+                  style={[s.feedbackBtn, feedback === "down" && s.feedbackBtnActive]}
+                  onPress={() => handleFeedback("down")}
+                >
+                  <Ionicons
+                    name={feedback === "down" ? "thumbs-down" : "thumbs-down-outline"}
+                    size={14}
+                    color={feedback === "down" ? colors.destructive : colors.mutedForeground}
+                  />
+                </Pressable>
               </View>
             )}
           </>
