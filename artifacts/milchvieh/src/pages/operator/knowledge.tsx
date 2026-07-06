@@ -1353,7 +1353,165 @@ export function KnowledgePage() {
       <div className="border-t pt-6 space-y-6">
         <BenchmarkFactorSection />
         <FarmNotesSection />
+        <FarmDiarySection />
       </div>
     </PageLayout>
+  );
+}
+
+// ── Operator: Farm Diary (all customer events) ────────────────────────────────
+
+const DIARY_CATEGORY_DE: Record<string, string> = {
+  feed: "Fütterung",
+  infrastructure: "Infrastruktur",
+  health: "Tiergesundheit",
+  management: "Betriebsführung",
+  weather: "Wetter",
+  other: "Sonstiges",
+};
+
+type DiaryEntryAdmin = {
+  id: string;
+  entryDate: string;
+  category: string;
+  categoryLabel: string;
+  description: string;
+  reminderDays: number | null;
+  reminderDueAt: string | null;
+  remindedAt: string | null;
+  createdAt: string;
+  user: { id: string; email: string | null; name: string | null };
+};
+
+const API_BASE_DIARY = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+
+function FarmDiarySection() {
+  const [entries, setEntries] = useState<DiaryEntryAdmin[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [filterUser, setFilterUser] = useState<string>("");
+  const [filterCategory, setFilterCategory] = useState<string>("");
+  const [expanded, setExpanded] = useState(false);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const token = await getAuthToken();
+      const params = new URLSearchParams();
+      if (filterUser) params.set("userId", filterUser);
+      if (filterCategory) params.set("category", filterCategory);
+      const res = await fetch(`${API_BASE_DIARY}/api/admin/diary?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const data = await res.json() as DiaryEntryAdmin[];
+      setEntries(data);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filterUser, filterCategory]);
+
+  useEffect(() => {
+    if (expanded) load();
+  }, [expanded, load]);
+
+  const users = Array.from(
+    new Map(entries.map((e) => [e.user.id, e.user])).values(),
+  );
+
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-primary" />
+            Betriebstagebuch
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Vom Agenten automatisch erfasste Betriebsereignisse aller Kunden
+          </p>
+        </div>
+        {expanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+      </button>
+
+      {expanded && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value)}
+              className="text-sm border border-border rounded-md px-3 py-1.5 bg-background"
+            >
+              <option value="">Alle Kunden</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name || u.email || u.id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="text-sm border border-border rounded-md px-3 py-1.5 bg-background"
+            >
+              <option value="">Alle Kategorien</option>
+              {Object.entries(DIARY_CATEGORY_DE).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          <Card>
+            <CardContent className="p-4">
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Laden...
+                </div>
+              ) : entries.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic text-center py-4">
+                  Noch keine Betriebsereignisse erfasst.
+                </p>
+              ) : (
+                <div className="divide-y">
+                  {entries.map((e) => (
+                    <div key={e.id} className="py-3 first:pt-0 last:pb-0 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {new Date(e.entryDate + "T12:00:00Z").toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" })}
+                          </span>
+                          <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                            {e.categoryLabel}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {e.user.name || e.user.email || e.user.id.slice(0, 8)}
+                          </span>
+                          {e.remindedAt && (
+                            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs px-1.5 py-0 gap-1">
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              erinnert
+                            </Badge>
+                          )}
+                          {!e.remindedAt && e.reminderDueAt && (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs px-1.5 py-0 gap-1">
+                              🔔 Erinnerung {new Date(e.reminderDueAt).toLocaleDateString("de-DE")}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm">{e.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
   );
 }

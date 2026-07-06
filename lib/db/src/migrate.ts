@@ -678,6 +678,32 @@ export async function setupAnalystSandbox(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS semen_planning_dataset_id_idx ON semen_planning (dataset_id)"
   );
 
+  // Migration: farm_diary_entries table — per-farmer operational event log
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS farm_diary_entries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      analysis_id UUID,
+      entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      category TEXT NOT NULL CHECK (category IN ('feed','infrastructure','health','management','weather','other')),
+      description TEXT NOT NULL,
+      reminder_days INTEGER,
+      reminder_due_at TIMESTAMPTZ,
+      reminded_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS farm_diary_userid_idx ON farm_diary_entries (user_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS farm_diary_reminder_idx ON farm_diary_entries (reminder_due_at) WHERE reminded_at IS NULL"
+  );
+  // Migration: logged_event JSONB on messages (diary entry captured per message)
+  await pool.query(
+    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS logged_event JSONB"
+  );
+
   // Seed default news topics if table is empty
   const { rows: topicRows } = await pool.query(
     "SELECT COUNT(*)::int AS c FROM news_topics"

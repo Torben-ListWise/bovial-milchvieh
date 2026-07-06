@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   analysesTable,
@@ -6,6 +6,7 @@ import {
   activityLogTable,
   rulesTable,
   farmNotesTable,
+  farmDiaryEntriesTable,
   usersTable,
   datasetsTable,
   betaToolLogsTable,
@@ -213,6 +214,7 @@ export async function processQuestion(
     let agentResultText: string | undefined;
     let agentToolLog: BetaToolEntry[] = [];
     let agentEscalationTrigger: { type: string; reason: string } | null = null;
+    let agentLoggedEvent: import("./agent").AgentResult["loggedEvent"] = null;
 
     // Load customer-defined rules and pass them as structured context so the
     // agent can reference them in every analysis (e.g. custom thresholds).
@@ -240,6 +242,42 @@ export async function processQuestion(
       farmNotes.length > 0
         ? `\nBetriebshinweise des Landwirts (wichtige Hintergrundinformationen, die bei jeder Analyse beachtet werden sollen):\n${farmNotes
             .map((n) => `- ${n.content}`)
+            .join("\n")}`
+        : "";
+
+    // Diary entries of this farmer (last 10 entries within 30 days)
+    // NOTE: per-farmer query — NOT the farm-notes operator pattern
+    const diaryEntries = await db
+      .select({
+        entryDate: farmDiaryEntriesTable.entryDate,
+        category: farmDiaryEntriesTable.category,
+        description: farmDiaryEntriesTable.description,
+      })
+      .from(farmDiaryEntriesTable)
+      .where(
+        and(
+          eq(farmDiaryEntriesTable.userId, analysis.userId!),
+          sql`entry_date >= CURRENT_DATE - INTERVAL '30 days'`,
+        ),
+      )
+      .orderBy(desc(farmDiaryEntriesTable.entryDate))
+      .limit(10);
+
+    const CATEGORY_DE: Record<string, string> = {
+      feed: "Fütterung",
+      infrastructure: "Infrastruktur",
+      health: "Tiergesundheit",
+      management: "Betriebsführung",
+      weather: "Wetter",
+      other: "Sonstiges",
+    };
+    const diaryContext =
+      diaryEntries.length > 0
+        ? `\nKürzliche Betriebsereignisse (Tagebuch des Landwirts — zeitlich einordnen beim Antworten):\n${diaryEntries
+            .map(
+              (e) =>
+                `- ${e.entryDate} (${CATEGORY_DE[e.category] ?? e.category}): ${e.description}`,
+            )
             .join("\n")}`
         : "";
 
@@ -306,7 +344,7 @@ export async function processQuestion(
           datasetId: analysis.datasetId,
           conversation,
           sector,
-          systemExtra: [rulesContext, farmNotesContext].filter(Boolean).join("") || undefined,
+          systemExtra: [rulesContext, farmNotesContext, diaryContext].filter(Boolean).join("") || undefined,
           userId: analysis.userId ?? undefined,
           isBeta: isBetaUser,
           betaAnalysisId: analysis.id,
@@ -339,6 +377,7 @@ export async function processQuestion(
       agentResultText = result.text;
       agentToolLog = result.toolLog ?? [];
       agentEscalationTrigger = result.escalationTrigger ?? null;
+      agentLoggedEvent = result.loggedEvent ?? null;
 
     } catch (err) {
       logger.error({ err, analysisId: analysis.id }, "runAgent failed");
@@ -389,6 +428,7 @@ export async function processQuestion(
         followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : null,
         backQuestions: backQuestions.length > 0 ? backQuestions : null,
         widgetSpec: widgetSpec ?? null,
+        loggedEvent: agentLoggedEvent ?? null,
       } as any)
       .returning();
 

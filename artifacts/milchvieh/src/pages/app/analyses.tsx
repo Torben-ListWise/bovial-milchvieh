@@ -29,6 +29,7 @@ import {
   type Analysis,
   type AnalysisTemplate,
   type Chart,
+  getAuthToken,
 } from "@workspace/api-client-react";
 
 function filterTemplatesByFocusAreas(
@@ -64,6 +65,7 @@ import {
   Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
   Pin, MoreHorizontal, Trash2,
   ThumbsUp, ThumbsDown, Image as ImageIcon,
+  Bell, BookMarked,
 } from "lucide-react";
 
 const FEEDBACK_API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -2051,6 +2053,33 @@ const ResultCard = memo(function ResultCard({
           {(msg as any).widgetSpec?.type === "fresh_cow" && (
             <FreshCowWidget prefill={(msg as any).widgetSpec.prefill ?? {}} />
           )}
+          {msg.loggedEvent && (
+            <div className="flex items-start gap-2 mt-2 p-2.5 rounded-lg bg-green-50 border border-green-200 text-sm">
+              <BookMarked className="w-3.5 h-3.5 text-green-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <span className="font-medium text-green-800">Notiert: </span>
+                <span className="text-green-700">{msg.loggedEvent.description}</span>
+                <span className="text-green-500 mx-1.5">·</span>
+                <span className="text-green-600 text-xs">
+                  {new Date(msg.loggedEvent.entryDate + "T12:00:00Z").toLocaleDateString("de-DE", {
+                    day: "numeric", month: "long",
+                  })}
+                </span>
+                <span className="text-green-500 mx-1.5">·</span>
+                <span className="text-green-600 text-xs capitalize">
+                  {{ feed: "Fütterung", infrastructure: "Infrastruktur", health: "Tiergesundheit", management: "Betriebsführung", weather: "Wetter", other: "Sonstiges" }[msg.loggedEvent.category] ?? msg.loggedEvent.category}
+                </span>
+                {msg.loggedEvent.reminderDueAt && (
+                  <>
+                    <span className="text-green-500 mx-1.5">·</span>
+                    <span className="text-green-600 text-xs">
+                      🔔 Erinnerung am {new Date(msg.loggedEvent.reminderDueAt).toLocaleDateString("de-DE", { day: "numeric", month: "long" })}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {(() => {
             const trustSources = extractTrustSources(msg.content ?? "");
             const hasCitations = msg.citations && msg.citations.length > 0;
@@ -2688,6 +2717,24 @@ export function AnalysesPage() {
   } | null>(null);
   const [scopePickerChoice, setScopePickerChoice] = useState<"all" | "project">("all");
   const scopePickerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Diary reminders ────────────────────────────────────────────────────────
+  type DiaryReminder = { id: string; description: string; entryDate: string; category: string; daysAgo: number };
+  const [diaryReminders, setDiaryReminders] = useState<DiaryReminder[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadReminders() {
+      const token = await getAuthToken();
+      const res = await fetch(`${FEEDBACK_API_BASE}/api/diary/reminders`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok || cancelled) return;
+      const data = await res.json() as DiaryReminder[];
+      if (!cancelled) setDiaryReminders(data);
+    }
+    loadReminders().catch(() => {});
+    return () => { cancelled = true; };
+  }, [datasetId]);
 
   // ── SSE streaming state via hook ──────────────────────────────────────────
   const streaming = useStreamingState();
@@ -3762,6 +3809,35 @@ export function AnalysesPage() {
             ) : isAgentWorking ? (
               <AgentWorkingBanner currentStep={currentStep} />
             ) : null}
+
+            {!isAgentWorking && diaryReminders.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-1">
+                {diaryReminders.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className="flex items-center gap-1.5 text-sm bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 rounded-full px-3 py-1.5 transition-colors"
+                    onClick={async () => {
+                      setDiaryReminders((prev) => prev.filter((x) => x.id !== r.id));
+                      const token = await getAuthToken();
+                      fetch(`${FEEDBACK_API_BASE}/api/diary/${r.id}/reminded`, {
+                        method: "PATCH",
+                        headers: {
+                          "Content-Type": "application/json",
+                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        },
+                      }).catch(() => {});
+                      const prefill = `Ich habe vor ${r.daysAgo} Tagen ${r.description}. Hat sich das auf meine Daten ausgewirkt?`;
+                      setQuestion(prefill);
+                      setTimeout(() => inputRef.current?.focus(), 50);
+                    }}
+                  >
+                    <Bell className="w-3.5 h-3.5 shrink-0" />
+                    <span>{r.description} — vor {r.daysAgo} Tagen</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {!isAgentWorking &&
               ((lastAssistantMsg?.followUpQuestions as string[] | null | undefined)?.length ?? 0) > 0 && (

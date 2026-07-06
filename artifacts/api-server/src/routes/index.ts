@@ -25,6 +25,7 @@ import newsRouter from "./news";
 import thiRouter from "./thi";
 import chipsRouter from "./chips";
 import semenPlanningRouter from "./semen-planning";
+import diaryRouter from "./diary";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(newsRouter);
 router.use(thiRouter);
 router.use(chipsRouter);
 router.use(semenPlanningRouter);
+router.use(diaryRouter);
 
 export default router;

@@ -17,6 +17,7 @@ import {
   knowledgeMissedQueriesTable,
   apiUsageLogTable,
   semenPlanningTable,
+  farmDiaryEntriesTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -223,6 +224,13 @@ export interface AgentResult {
   widgetSpec: WidgetSpec | null;
   toolLog: BetaToolEntry[];
   escalationTrigger: { type: string; reason: string } | null;
+  loggedEvent?: {
+    id: string;
+    description: string;
+    entryDate: string;
+    category: string;
+    reminderDueAt: string | null;
+  } | null;
 }
 
 export class MissingApiKeyError extends Error {}
@@ -708,6 +716,37 @@ const TOOLS: Tool[] = [
         },
       },
       required: ["trigger_type", "reason"],
+    },
+  },
+  {
+    name: "log_farm_event",
+    description: `Speichert ein operatives Betriebsereignis im Tagebuch des Landwirts.
+NUR aufrufen wenn der Nutzer explizit ein vergangenes oder aktuelles Ereignis berichtet
+(z.B. "Futterwechsel", "neue Ventilatoren eingebaut", "Kuh behandelt", "Unwetter").
+NICHT aufrufen bei Fragen ("Warum ist die Zellzahl hoch?"), Analyse-Anfragen, Klagen
+ohne konkretes Ereignis, oder Hypothesen. Im Zweifel: nicht aufrufen.`,
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        description: {
+          type: "string",
+          description: "Kurze Beschreibung des Ereignisses, max. 120 Zeichen",
+        },
+        category: {
+          type: "string",
+          enum: ["feed", "infrastructure", "health", "management", "weather", "other"],
+          description: "Kategorie: feed=Fütterung, infrastructure=Technik/Gebäude, health=Tiergesundheit, management=Betriebsführung, weather=Wetter, other=Sonstiges",
+        },
+        entryDate: {
+          type: "string",
+          description: "Datum des Ereignisses als ISO-String YYYY-MM-DD, Default: heute",
+        },
+        reminderDays: {
+          type: "number",
+          description: "Tage bis zur Erinnerung. Empfohlene Defaults: feed=14, infrastructure=21, health=7, management=14. Weglassen wenn kein Follow-up sinnvoll.",
+        },
+      },
+      required: ["description", "category"],
     },
   },
 ];
@@ -1251,6 +1290,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const client = getClient();
   const charts: Chart[] = [];
   const citations: Citation[] = [];
+  let loggedEvent: AgentResult["loggedEvent"] = null;
   const { datasetId } = opts;
 
   const messages: MessageParam[] = opts.conversation.map((m) => ({
@@ -2472,6 +2512,50 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const { trigger_type, reason } = input as { trigger_type?: string; reason?: string };
         return { ok: true, trigger_type: trigger_type ?? null, reason: reason ?? "" };
       }
+      case "log_farm_event": {
+        if (!opts.userId) {
+          return { error: "Kein Nutzer-Kontext verfügbar" };
+        }
+        const description = input.description as string;
+        const category = input.category as string;
+        const entryDateStr = (input.entryDate as string | undefined)
+          ?? new Date().toISOString().split("T")[0];
+        const reminderDays = input.reminderDays as number | undefined;
+
+        let reminderDueAt: Date | null = null;
+        if (reminderDays != null) {
+          const base = new Date(entryDateStr + "T12:00:00Z");
+          reminderDueAt = new Date(base.getTime() + reminderDays * 24 * 60 * 60 * 1000);
+        }
+
+        const [entry] = await db
+          .insert(farmDiaryEntriesTable)
+          .values({
+            userId: opts.userId,
+            analysisId: opts.betaAnalysisId ?? null,
+            entryDate: entryDateStr,
+            category,
+            description,
+            reminderDays: reminderDays ?? null,
+            reminderDueAt,
+          })
+          .returning();
+
+        loggedEvent = {
+          id: entry.id,
+          description: entry.description,
+          entryDate: entry.entryDate,
+          category: entry.category,
+          reminderDueAt: entry.reminderDueAt?.toISOString() ?? null,
+        };
+
+        return {
+          saved: true,
+          id: entry.id,
+          entryDate: entryDateStr,
+          reminderDueAt: reminderDueAt?.toISOString() ?? null,
+        };
+      }
       default:
         return { error: `Unbekanntes Werkzeug: ${block.name}` };
     }
@@ -2503,6 +2587,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       case "get_event_stats": return `Berechne Event-Statistik${metric ? ` für ${metric}` : ""}`;
       case "get_repro_kpis": return "Berechne Fruchtbarkeitskennzahlen";
       case "run_sql": return `Führe SQL-Abfrage aus${input.description ? `: ${input.description as string}` : ""}`;
+      case "log_farm_event": return "Speichere Betriebsereignis";
       default: return "Verarbeite Daten";
     }
   }
@@ -2819,8 +2904,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       "Für diese Frage wurden allgemeine Richtwerte verwendet — mit Ihren hochgeladenen Betriebsdaten " +
       "(Milchleistung, Herdendaten, Ereignisprotokoll) kann die Analyse gezielt auf Ihren Betrieb " +
       "zugeschnitten werden und liefert deutlich präzisere Ergebnisse.";
-    return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
+    return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent: null };
   }
 
-  return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation };
+  return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent };
 }

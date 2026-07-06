@@ -409,6 +409,13 @@ export interface AnalysisMessage {
   followUpQuestions?: string[];
   /** @nullable */
   error?: string | null;
+  loggedEvent?: {
+    id: string;
+    description: string;
+    entryDate: string;
+    category: string;
+    reminderDueAt?: string | null;
+  } | null;
   createdAt: string;
 }
 

@@ -13,6 +13,7 @@ export * from "./templates";
 export * from "./billing";
 export * from "./apiUsage";
 export * from "./farmNotes";
+export * from "./farmDiary";
 export * from "./events";
 export * from "./betaToolLogs";
 export * from "./messageFeedback";

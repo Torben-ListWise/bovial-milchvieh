@@ -201,6 +201,7 @@ function serializeMessage(m: Message) {
     followUpQuestions: ((m as any).followUpQuestions as string[] | null) ?? [],
     backQuestions: normalizeBackQuestions((m as any).backQuestions),
     widgetSpec: (m as any).widgetSpec ?? null,
+    loggedEvent: (m as any).loggedEvent ?? null,
     charts: (m.charts as Chart[] | null) ?? [],
     citations: (m.citations as Citation[] | null) ?? [],
     error: m.error ?? null,

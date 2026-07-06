@@ -1437,6 +1437,21 @@ components:
             type: string
         error:
           type: ["string", "null"]
+        loggedEvent:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            description:
+              type: string
+            entryDate:
+              type: string
+            category:
+              type: string
+            reminderDueAt:
+              type: string
+              nullable: true
         createdAt:
           type: string
           format: date-time
