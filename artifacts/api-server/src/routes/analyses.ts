@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
@@ -41,7 +41,17 @@ const router: IRouter = Router();
 // text/event-stream events (delta, progress, chart, sources, done, error).
 // Uses the same cookie-based Clerk session as all other endpoints (requireAuth),
 // which is the only transport that works reliably through the Replit dev proxy.
-router.get("/stream", requireAuth, async (req: Request, res: Response) => {
+router.get(
+  "/stream",
+  (req: Request, _res: Response, next: NextFunction) => {
+    const token = req.query.token;
+    if (token && typeof token === "string" && !req.headers.authorization) {
+      req.headers.authorization = `Bearer ${token}`;
+    }
+    next();
+  },
+  requireAuth,
+  async (req: Request, res: Response) => {
   const analysisId = req.query.analysisId as string | undefined;
 
   if (!analysisId) {
