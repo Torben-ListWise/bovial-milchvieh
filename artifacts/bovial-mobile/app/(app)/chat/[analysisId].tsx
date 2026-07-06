@@ -3,7 +3,6 @@ import {
   useGetAnalysis,
   useAskQuestion,
   customFetch,
-  getAuthToken,
 } from "@workspace/api-client-react";
 import type { Chart } from "@workspace/api-client-react";
 import { useLocalSearchParams, useNavigation } from "expo-router";
@@ -11,7 +10,6 @@ import EventSource from "react-native-sse";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -50,6 +48,11 @@ type StreamingState = {
   chart: Chart | null;
 };
 
+type AgentError = {
+  message: string;
+  lastQuestion: string | false;
+};
+
 const DIARY_CATEGORIES = [
   { key: "health", label: "Tiergesundheit" },
   { key: "feed", label: "Fütterung" },
@@ -73,6 +76,7 @@ export default function ChatScreen() {
 
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  const [agentError, setAgentError] = useState<AgentError | null>(null);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
 
   const [diaryDate, setDiaryDate] = useState(
@@ -87,6 +91,9 @@ export default function ChatScreen() {
   const esRef = useRef<EventSource | null>(null);
   const streamingStarted = useRef(false);
   const diarySheetRef = useRef<BottomSheetModal>(null);
+
+  const streamingTextRef = useRef("");
+  const rafPendingRef = useRef(false);
 
   const { data: analysis, refetch } = useGetAnalysis(analysisId ?? "");
   const askQuestion = useAskQuestion();
@@ -117,6 +124,10 @@ export default function ChatScreen() {
     };
   }, [analysisId]);
 
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
   const fetchDiaryPreview = useCallback(async () => {
     try {
       const entries = await customFetch<DiaryEntry[]>("/api/diary?limit=2");
@@ -128,6 +139,9 @@ export default function ChatScreen() {
     async (postQuestion: string | false) => {
       esRef.current?.close();
       esRef.current = null;
+      streamingTextRef.current = "";
+      rafPendingRef.current = false;
+      setAgentError(null);
 
       const token = await getToken();
       if (!token) return;
@@ -141,6 +155,8 @@ export default function ChatScreen() {
         currentStep: "Verbinde…",
         chart: null,
       });
+
+      scrollToBottom();
 
       const url = `https://${domain}/api/stream?analysisId=${encodeURIComponent(analysisId)}&token=${encodeURIComponent(token)}`;
 
@@ -156,7 +172,12 @@ export default function ChatScreen() {
             });
           } catch {
             es.close();
+            esRef.current = null;
             setStreaming(null);
+            setAgentError({
+              message: "Frage konnte nicht gesendet werden.",
+              lastQuestion: postQuestion,
+            });
           }
         } else {
           setStreaming((prev) =>
@@ -165,20 +186,28 @@ export default function ChatScreen() {
         }
       });
 
-      es.addEventListener("open" as any, async () => {
-        // fallback: if "connected" event doesn't fire, POST on open
-      });
-
       es.addEventListener("delta" as any, (e: any) => {
         const payload = JSON.parse(e.data ?? "{}");
-        setStreaming((prev) =>
-          prev
-            ? { ...prev, text: prev.text + (payload.text ?? ""), currentStep: null }
-            : prev
-        );
+        const chunk: string = payload.text ?? "";
+        if (!chunk) return;
+
+        streamingTextRef.current += chunk;
+
+        if (!rafPendingRef.current) {
+          rafPendingRef.current = true;
+          requestAnimationFrame(() => {
+            rafPendingRef.current = false;
+            const accText = streamingTextRef.current;
+            setStreaming((prev) =>
+              prev ? { ...prev, text: accText, currentStep: null } : prev
+            );
+            scrollToBottom();
+          });
+        }
       });
 
       es.addEventListener("turn_reset" as any, () => {
+        streamingTextRef.current = "";
         setStreaming((prev) =>
           prev ? { ...prev, text: "", completedSteps: [], currentStep: null } : prev
         );
@@ -195,6 +224,7 @@ export default function ChatScreen() {
             : prev.completedSteps;
           return { ...prev, completedSteps: completed, currentStep: step };
         });
+        scrollToBottom();
       });
 
       es.addEventListener("chart" as any, (e: any) => {
@@ -202,39 +232,50 @@ export default function ChatScreen() {
         setStreaming((prev) =>
           prev ? { ...prev, chart: payload.chart ?? null } : prev
         );
+        scrollToBottom();
       });
 
       es.addEventListener("done" as any, async () => {
         es.close();
         esRef.current = null;
+        streamingTextRef.current = "";
         await refetch();
         await fetchDiaryPreview();
         setStreaming(null);
       });
 
       es.addEventListener("agenterror" as any, (e: any) => {
-        let message = "Fehler bei der Analyse";
+        let message = "Die Analyse konnte nicht abgeschlossen werden.";
         try {
           const payload = JSON.parse(e?.data ?? "{}");
           message = payload.message ?? message;
         } catch {}
-        Alert.alert("Fehler", message);
         es.close();
         esRef.current = null;
+        streamingTextRef.current = "";
         refetch();
         setStreaming(null);
+        setAgentError({ message, lastQuestion: postQuestion });
       });
     },
-    [analysisId, getToken, askQuestion, refetch, fetchDiaryPreview]
+    [analysisId, getToken, askQuestion, refetch, fetchDiaryPreview, scrollToBottom]
   );
 
   const handleSend = useCallback(async () => {
     const question = input.trim();
     if (!question || streaming || askQuestion.isPending) return;
     setInput("");
+    setAgentError(null);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     connectSSE(question);
   }, [input, streaming, askQuestion, connectSSE]);
+
+  const handleRetry = useCallback(() => {
+    if (!agentError) return;
+    const lastQ = agentError.lastQuestion;
+    setAgentError(null);
+    connectSSE(lastQ);
+  }, [agentError, connectSSE]);
 
   const handleDiarySave = async () => {
     const desc = diaryDesc.trim();
@@ -260,7 +301,10 @@ export default function ChatScreen() {
       setDiaryDate(new Date().toISOString().slice(0, 10));
       fetchDiaryPreview();
     } catch {
-      Alert.alert("Fehler", "Ereignis konnte nicht gespeichert werden.");
+      setAgentError({
+        message: "Ereignis konnte nicht gespeichert werden.",
+        lastQuestion: false,
+      });
     } finally {
       setDiarySaving(false);
     }
@@ -300,6 +344,39 @@ export default function ChatScreen() {
       fontSize: 14,
       fontFamily: "Inter_500Medium",
       color: colors.accent,
+    },
+    errorBanner: {
+      marginHorizontal: 16,
+      marginBottom: 8,
+      backgroundColor: colors.destructive + "18",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.destructive + "44",
+      padding: 12,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+    },
+    errorBannerText: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      color: colors.destructive,
+      lineHeight: 20,
+    },
+    retryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.destructive + "22",
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    retryBtnText: {
+      fontSize: 13,
+      fontFamily: "Inter_500Medium",
+      color: colors.destructive,
     },
     inputRow: {
       flexDirection: "row",
@@ -344,7 +421,7 @@ export default function ChatScreen() {
     },
     streamingWrap: { marginBottom: 8, gap: 4 },
     diaryPreviewSection: {
-      marginHorizontal: 16,
+      marginHorizontal: 0,
       marginBottom: 16,
       backgroundColor: colors.card,
       borderRadius: 14,
@@ -380,15 +457,6 @@ export default function ChatScreen() {
       fontSize: 12,
       fontFamily: "Inter_500Medium",
       color: colors.accent,
-    },
-    diaryPreviewEmpty: {
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-    },
-    diaryPreviewEmptyText: {
-      fontSize: 13,
-      fontFamily: "Inter_400Regular",
-      color: colors.mutedForeground,
     },
     diaryPreviewRow: {
       flexDirection: "row",
@@ -501,6 +569,7 @@ export default function ChatScreen() {
   }
 
   const canSend = input.trim().length > 0 && !streaming && !askQuestion.isPending;
+  const isBusy = !!streaming || askQuestion.isPending;
 
   const formatDate = (str: string) => {
     try {
@@ -590,6 +659,19 @@ export default function ChatScreen() {
       />
 
       <View style={s.inputArea}>
+        {agentError && (
+          <View style={s.errorBanner}>
+            <Ionicons name="alert-circle-outline" size={18} color={colors.destructive} style={{ marginTop: 1 }} />
+            <Text style={s.errorBannerText}>{agentError.message}</Text>
+            {agentError.lastQuestion !== false && (
+              <Pressable style={s.retryBtn} onPress={handleRetry}>
+                <Ionicons name="refresh-outline" size={14} color={colors.destructive} />
+                <Text style={s.retryBtnText}>Nochmal</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {showDiaryCta && (
           <View style={s.diaryCtaWrap}>
             <Pressable
@@ -614,7 +696,7 @@ export default function ChatScreen() {
               multiline
               returnKeyType="send"
               onSubmitEditing={canSend ? handleSend : undefined}
-              editable={!streaming}
+              editable={!isBusy}
             />
           </View>
           <Pressable
@@ -622,7 +704,7 @@ export default function ChatScreen() {
             onPress={handleSend}
             disabled={!canSend}
           >
-            {askQuestion.isPending ? (
+            {isBusy ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Ionicons name="arrow-up" size={20} color="#fff" />
