@@ -88,7 +88,7 @@ export default function ChatScreen() {
   const streamingStarted = useRef(false);
   const diarySheetRef = useRef<BottomSheetModal>(null);
 
-  const { data: analysis, refetch } = useGetAnalysis({ analysisId });
+  const { data: analysis, refetch } = useGetAnalysis(analysisId ?? "");
   const askQuestion = useAskQuestion();
 
   useEffect(() => {

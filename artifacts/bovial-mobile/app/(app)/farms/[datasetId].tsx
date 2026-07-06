@@ -11,7 +11,7 @@ export default function FarmRouterScreen() {
   const { datasetId } = useLocalSearchParams<{ datasetId: string }>();
   const colors = useColors();
 
-  const { data: analyses, isLoading } = useListAnalyses({ datasetId });
+  const { data: analyses, isLoading } = useListAnalyses(datasetId ?? "");
   const createAnalysis = useCreateAnalysis();
   const [targetId, setTargetId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(false);

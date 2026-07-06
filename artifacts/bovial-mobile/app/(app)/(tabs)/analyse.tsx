@@ -30,7 +30,7 @@ function DatasetAnalysisSection({
   onPressDataset: (id: string) => void;
 }) {
   const colors = useColors();
-  const { data: analyses } = useListAnalyses({ datasetId });
+  const { data: analyses } = useListAnalyses(datasetId);
   const [lastId, setLastId] = useState<string | null>(null);
 
   useEffect(() => {
