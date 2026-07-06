@@ -18,6 +18,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useDevAutoLogin } from "@/hooks/useDevAutoLogin";
 
 setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
 
@@ -49,6 +50,11 @@ const tokenCache = {
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
+function DevAutoLoginRunner() {
+  useDevAutoLogin();
+  return null;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -79,6 +85,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
           <ClerkLoaded>
+            <DevAutoLoginRunner />
             <QueryClientProvider client={queryClient}>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>

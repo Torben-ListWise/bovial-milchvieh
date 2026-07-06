@@ -28,16 +28,16 @@ export default function SignUpScreen() {
   const handleSubmit = async () => {
     const { error } = await signUp.password({ emailAddress: email, password });
     if (error) return;
-    if (!error) await signUp.verifications.sendEmailCode();
+    await signUp.verifications.sendEmailCode();
   };
 
   const handleVerify = async () => {
-    await signUp.verifications.verifyEmailCode({ code });
+    const { error } = await signUp.verifications.verifyEmailCode({ code });
+    if (error) return;
     if (signUp.status === "complete") {
       await signUp.finalize({
-        navigate: ({ decorateUrl }) => {
-          const url = decorateUrl("/");
-          if (!url.startsWith("http")) router.replace(url as any);
+        navigate: () => {
+          router.replace("/(app)/(tabs)" as any);
         },
       });
     }
@@ -121,6 +121,9 @@ export default function SignUpScreen() {
           autoComplete="new-password"
         />
         {errors.fields.password && <Text style={s.error}>{errors.fields.password.message}</Text>}
+        {errors.global && errors.global.length > 0 && (
+          <Text style={s.error}>{errors.global[0].message}</Text>
+        )}
 
         <Pressable
           style={({ pressed }) => [

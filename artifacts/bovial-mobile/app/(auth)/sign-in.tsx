@@ -31,12 +31,8 @@ export default function SignInScreen() {
 
     if (signIn.status === "complete") {
       await signIn.finalize({
-        navigate: ({ decorateUrl }) => {
-          const url = decorateUrl("/");
-          if (url.startsWith("http")) {
-            return;
-          }
-          router.replace(url as any);
+        navigate: () => {
+          router.replace("/(app)/(tabs)" as any);
         },
       });
     } else if (signIn.status === "needs_client_trust") {
@@ -45,12 +41,12 @@ export default function SignInScreen() {
   };
 
   const handleVerify = async () => {
-    await signIn.mfa.verifyEmailCode({ code: verifyCode });
+    const { error } = await signIn.mfa.verifyEmailCode({ code: verifyCode });
+    if (error) return;
     if (signIn.status === "complete") {
       await signIn.finalize({
-        navigate: ({ decorateUrl }) => {
-          const url = decorateUrl("/");
-          if (!url.startsWith("http")) router.replace(url as any);
+        navigate: () => {
+          router.replace("/(app)/(tabs)" as any);
         },
       });
     }
@@ -82,9 +78,6 @@ export default function SignInScreen() {
           ) : (
             <Text style={s.buttonText}>Bestätigen</Text>
           )}
-        </Pressable>
-        <Pressable style={s.linkButton} onPress={() => signIn.reset()}>
-          <Text style={s.linkText}>Zurück</Text>
         </Pressable>
       </View>
     );
@@ -130,6 +123,9 @@ export default function SignInScreen() {
           autoComplete="password"
         />
         {errors.fields.password && <Text style={s.error}>{errors.fields.password.message}</Text>}
+        {errors.global && errors.global.length > 0 && (
+          <Text style={s.error}>{errors.global[0].message}</Text>
+        )}
 
         <Pressable
           style={({ pressed }) => [
@@ -243,10 +239,6 @@ function createStyles(colors: ReturnType<typeof useColors>) {
       color: colors.primaryForeground,
       fontSize: 16,
       fontFamily: "Inter_600SemiBold",
-    },
-    linkButton: {
-      alignItems: "center",
-      paddingVertical: 12,
     },
     footer: {
       flexDirection: "row",
