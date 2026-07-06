@@ -217,7 +217,7 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
     const series = chart.series ?? [];
     const xKey = chart.xKey ?? "label";
     const valueKey = series[0]?.key ?? Object.keys(chart.data[0] ?? {}).find((k) => k !== xKey) ?? "value";
-    const barColor = series[0]?.color ?? colors.primary;
+    const barColor = colors.primary;
 
     const data = chart.data.slice(0, 12) as Record<string, any>[];
     const values = data.map((d) => Number(d[valueKey]) || 0);
@@ -269,7 +269,7 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
     const series = chart.series ?? [];
     const xKey = chart.xKey ?? "label";
     const valueKey = series[0]?.key ?? Object.keys(chart.data[0] ?? {}).find((k) => k !== xKey) ?? "value";
-    const lineColor = series[0]?.color ?? colors.primary;
+    const lineColor = colors.primary;
 
     const data = chart.data.slice(0, 20) as Record<string, any>[];
     const values = data.map((d) => Number(d[valueKey]) || 0);

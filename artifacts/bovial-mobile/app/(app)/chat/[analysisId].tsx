@@ -597,7 +597,7 @@ export default function ChatScreen() {
               onPress={() => diarySheetRef.current?.present()}
             >
               <Ionicons name="journal" size={16} color={colors.accent} />
-              <Text style={s.diaryCtaText}>📅 Ereignis wurde ins Tagebuch eingetragen</Text>
+              <Text style={s.diaryCtaText}>📅 Ereignis eintragen?</Text>
               <Ionicons name="chevron-forward" size={14} color={colors.accent} style={{ marginLeft: "auto" as any }} />
             </Pressable>
           </View>

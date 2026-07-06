@@ -7,7 +7,7 @@ export default function IndexRedirect() {
   if (!isLoaded) return null;
 
   if (isSignedIn) {
-    return <Redirect href="/(app)/(tabs)/" />;
+    return <Redirect href="/(app)/(tabs)" />;
   }
 
   return <Redirect href="/(auth)/sign-in" />;
