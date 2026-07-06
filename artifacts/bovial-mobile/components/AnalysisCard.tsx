@@ -104,7 +104,7 @@ export function AnalysisCard({ analysis, onPress }: Props) {
           <View style={s.footer}>
             {analysis.agentProgress ? (
               <View style={s.progressBadge}>
-                <ActivityIndicatorSmall color={colors.primary} />
+                <ActivityIndicator size="small" color={colors.primary} style={{ width: 12, height: 12 }} />
                 <Text style={s.progressText}>Läuft…</Text>
               </View>
             ) : null}

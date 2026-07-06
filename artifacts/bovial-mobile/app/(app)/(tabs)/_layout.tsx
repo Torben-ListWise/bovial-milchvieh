@@ -34,11 +34,29 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="diary"
+        name="analyse"
         options={{
-          title: "Tagebuch",
+          title: "Analysen",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="journal-outline" size={size} color={color} />
+            <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="berichte"
+        options={{
+          title: "Berichte",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bar-chart-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="einstellungen"
+        options={{
+          title: "Einstellungen",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />

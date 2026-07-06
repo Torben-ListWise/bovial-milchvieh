@@ -67,14 +67,21 @@ const allowedOrigins = (() => {
     ? [`https://${process.env["REPLIT_DEV_DOMAIN"]}`]
     : [];
 
+  // Expo mobile web preview runs on a separate subdomain.
+  // Note: *.expo.janeway.replit.dev ends in .replit.dev so it is already covered
+  // by REPLIT_TRUSTED_SUFFIXES, but we add it explicitly for clarity.
+  const expoDomain = process.env["REPLIT_EXPO_DEV_DOMAIN"]
+    ? [`https://${process.env["REPLIT_EXPO_DEV_DOMAIN"]}`]
+    : [];
+
   // Custom origins from operator config (e.g. production custom domains).
   const extra = (process.env["ALLOWED_ORIGINS"] ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const base = replitDomains.length > 0 ? replitDomains : devDomain;
-  return [...new Set([...base, ...extra])];
+  const base = replitDomains.length > 0 ? replitDomains : [...devDomain, ...expoDomain];
+  return [...new Set([...base, ...expoDomain, ...extra])];
 })();
 
 function isAllowedOrigin(origin: string): boolean {

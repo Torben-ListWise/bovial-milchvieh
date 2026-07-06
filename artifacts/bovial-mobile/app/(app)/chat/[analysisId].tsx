@@ -1,18 +1,19 @@
 import { useAuth } from "@clerk/expo";
 import { useGetAnalysis, useAskQuestion } from "@workspace/api-client-react";
-import type { AnalysisMessage, Chart } from "@workspace/api-client-react";
+import type { Chart } from "@workspace/api-client-react";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { fetch as expoFetch } from "expo/fetch";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
-  Platform,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { MessageBubble } from "@/components/MessageBubble";
 import { ProgressPill } from "@/components/ProgressPill";
+import { customFetch } from "@workspace/api-client-react";
 
 type StreamingState = {
   text: string;
@@ -28,6 +30,14 @@ type StreamingState = {
   chart: Chart | null;
   done: boolean;
 };
+
+const DIARY_CATEGORIES = [
+  { key: "gesundheit", label: "Gesundheit" },
+  { key: "fortpflanzung", label: "Fortpflanzung" },
+  { key: "fuetterung", label: "Fütterung" },
+  { key: "technik", label: "Technik" },
+  { key: "sonstiges", label: "Sonstiges" },
+];
 
 export default function ChatScreen() {
   const { analysisId, new: isNew } = useLocalSearchParams<{ analysisId: string; new?: string }>();
@@ -38,8 +48,15 @@ export default function ChatScreen() {
 
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  const [diaryModal, setDiaryModal] = useState(false);
+  const [diaryDesc, setDiaryDesc] = useState("");
+  const [diaryCategory, setDiaryCategory] = useState("sonstiges");
+  const [diaryDate, setDiaryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [diarySaving, setDiarySaving] = useState(false);
+
   const flatListRef = useRef<FlatList>(null);
   const abortRef = useRef<boolean>(false);
+  const streamingStarted = useRef<boolean>(false);
 
   const { data: analysis, refetch } = useGetAnalysis({ analysisId });
   const askQuestion = useAskQuestion();
@@ -51,7 +68,8 @@ export default function ChatScreen() {
   }, [analysis?.title]);
 
   useEffect(() => {
-    if (isNew === "1") {
+    if (isNew === "1" && !streamingStarted.current) {
+      streamingStarted.current = true;
       startStreaming();
     }
   }, [analysisId]);
@@ -148,12 +166,43 @@ export default function ChatScreen() {
     setInput("");
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    try {
+      await askQuestion.mutateAsync({
+        analysisId,
+        data: { question },
+      });
+    } catch {
+      return;
+    }
+
     startStreaming();
-    await askQuestion.mutateAsync({
-      analysisId,
-      data: { question },
-    });
   }, [input, streaming, askQuestion, analysisId, startStreaming]);
+
+  const handleDiarySave = async () => {
+    const desc = diaryDesc.trim();
+    if (!desc) return;
+    setDiarySaving(true);
+    try {
+      await customFetch("/api/diary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entryDate: diaryDate,
+          category: diaryCategory,
+          description: desc,
+        }),
+      });
+      setDiaryModal(false);
+      setDiaryDesc("");
+      setDiaryCategory("sonstiges");
+      setDiaryDate(new Date().toISOString().slice(0, 10));
+      Alert.alert("Gespeichert", "Ereignis wurde im Tagebuch gespeichert.");
+    } catch {
+      Alert.alert("Fehler", "Ereignis konnte nicht gespeichert werden.");
+    } finally {
+      setDiarySaving(false);
+    }
+  };
 
   const messages = analysis?.messages ?? [];
 
@@ -174,6 +223,27 @@ export default function ChatScreen() {
       borderTopWidth: 1,
       borderTopColor: colors.border,
       gap: 8,
+    },
+    diaryCtaWrap: {
+      paddingHorizontal: 16,
+      paddingBottom: 8,
+      backgroundColor: colors.background,
+    },
+    diaryCta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.accent + "22",
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: colors.accent + "55",
+    },
+    diaryCtaText: {
+      fontSize: 14,
+      fontFamily: "Inter_500Medium",
+      color: colors.accent,
     },
     inputWrap: {
       flex: 1,
@@ -210,6 +280,95 @@ export default function ChatScreen() {
     streamingBubble: {
       marginBottom: 8,
     },
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "flex-end",
+    },
+    sheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 24,
+      paddingBottom: insets.bottom + 24,
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+      alignSelf: "center",
+      marginBottom: 20,
+    },
+    sheetTitle: {
+      fontSize: 18,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+      marginBottom: 4,
+    },
+    sheetSub: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.mutedForeground,
+      marginBottom: 20,
+    },
+    label: {
+      fontSize: 13,
+      fontFamily: "Inter_500Medium",
+      color: colors.mutedForeground,
+      marginBottom: 6,
+    },
+    textInput: {
+      backgroundColor: colors.secondary,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
+      minHeight: 80,
+    },
+    catRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 16,
+    },
+    catChip: {
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.secondary,
+    },
+    catChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    catChipText: {
+      fontSize: 13,
+      fontFamily: "Inter_500Medium",
+      color: colors.mutedForeground,
+    },
+    catChipTextActive: {
+      color: "#fff",
+    },
+    saveBtn: {
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    saveBtnDisabled: { opacity: 0.5 },
+    saveBtnText: {
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+      color: "#fff",
+    },
   });
 
   if (!analysis) {
@@ -221,6 +380,7 @@ export default function ChatScreen() {
   }
 
   const canSend = input.trim().length > 0 && !streaming && !askQuestion.isPending;
+  const showDiaryCta = !streaming && messages.length > 0;
 
   return (
     <KeyboardAvoidingView
@@ -261,6 +421,15 @@ export default function ChatScreen() {
         }
       />
 
+      {showDiaryCta && (
+        <View style={s.diaryCtaWrap}>
+          <Pressable style={s.diaryCta} onPress={() => setDiaryModal(true)}>
+            <Ionicons name="journal-outline" size={16} color={colors.accent} />
+            <Text style={s.diaryCtaText}>📅 Ereignis eintragen?</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={s.inputRow}>
         <View style={s.inputWrap}>
           <TextInput
@@ -287,6 +456,59 @@ export default function ChatScreen() {
           )}
         </Pressable>
       </View>
+
+      <Modal
+        visible={diaryModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDiaryModal(false)}
+      >
+        <Pressable style={s.overlay} onPress={() => setDiaryModal(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Ereignis eintragen</Text>
+            <Text style={s.sheetSub}>Im Tagebuch für diesen Betrieb speichern</Text>
+
+            <Text style={s.label}>Beschreibung</Text>
+            <TextInput
+              style={s.textInput}
+              value={diaryDesc}
+              onChangeText={setDiaryDesc}
+              placeholder="Was ist passiert?"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              autoFocus
+            />
+
+            <Text style={s.label}>Kategorie</Text>
+            <View style={s.catRow}>
+              {DIARY_CATEGORIES.map((cat) => (
+                <Pressable
+                  key={cat.key}
+                  style={[s.catChip, diaryCategory === cat.key && s.catChipActive]}
+                  onPress={() => setDiaryCategory(cat.key)}
+                >
+                  <Text style={[s.catChipText, diaryCategory === cat.key && s.catChipTextActive]}>
+                    {cat.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={[s.saveBtn, (!diaryDesc.trim() || diarySaving) && s.saveBtnDisabled]}
+              onPress={handleDiarySave}
+              disabled={!diaryDesc.trim() || diarySaving}
+            >
+              {diarySaving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.saveBtnText}>Im Tagebuch speichern</Text>
+              )}
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
