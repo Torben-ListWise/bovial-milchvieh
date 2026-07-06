@@ -25,3 +25,4 @@
 - [Milchvieh auth token in manual fetch](milchvieh-auth-token-fetch.md) — use getAuthToken() from @workspace/api-client-react, NOT Clerk's getToken(); in dev the former returns the dev-bypass token that the API accepts
 - [Milchvieh GetAnalysisResponse passthrough](milchvieh-getanalysis-passthrough.md) — messages inner zod.object() needs .passthrough() or widgetSpec/backQuestions get stripped; re-apply after every orval codegen run
 - [Milchvieh streaming race condition](milchvieh-streaming-race.md) — never call startStream() in mutation callbacks; use streamNonce trigger so Effect B (start) always runs after Effect A (stop)
+- [Bovial mobile setup](bovial-mobile-setup.md) — Clerk+expo-secure-store, SSE via expo/fetch getReader(), nav structure, customFetch export for non-spec endpoints

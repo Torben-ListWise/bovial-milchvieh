@@ -91,6 +91,48 @@ router.patch("/diary/:id/reminded", requireAuth, async (req: Request, res: Respo
   res.json({ ok: true });
 });
 
+router.post("/diary", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { entryDate, category, description, reminderDays } = req.body as {
+    entryDate?: string;
+    category?: string;
+    description?: string;
+    reminderDays?: number | null;
+  };
+
+  if (!entryDate || !category || !description) {
+    res.status(400).json({ error: "entryDate, category und description sind Pflichtfelder" });
+    return;
+  }
+
+  const reminderDueAt =
+    reminderDays != null && reminderDays > 0
+      ? new Date(new Date(entryDate + "T12:00:00Z").getTime() + reminderDays * 86_400_000)
+      : null;
+
+  const [entry] = await db
+    .insert(farmDiaryEntriesTable)
+    .values({
+      userId,
+      entryDate,
+      category,
+      description,
+      reminderDays: reminderDays ?? null,
+      reminderDueAt,
+    } as any)
+    .returning();
+
+  res.status(201).json({
+    id: entry.id,
+    entryDate: entry.entryDate,
+    category: entry.category,
+    description: entry.description,
+    reminderDays: entry.reminderDays,
+    reminderDueAt: entry.reminderDueAt,
+    createdAt: entry.createdAt,
+  });
+});
+
 router.get("/admin/diary", requireAuth, requireOperator, async (req: Request, res: Response) => {
   const filterUserId = req.query.userId as string | undefined;
   const filterCategory = req.query.category as string | undefined;
