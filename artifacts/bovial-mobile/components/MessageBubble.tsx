@@ -9,10 +9,12 @@ import { DiaryChip } from "@/components/DiaryChip";
 type Props = {
   message: AnalysisMessage;
   isStreaming?: boolean;
+  isLast?: boolean;
   onFeedback?: (messageId: string, rating: "up" | "down") => void;
+  onFollowUpTap?: (question: string) => void;
 };
 
-export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
+export function MessageBubble({ message, isStreaming, isLast, onFeedback, onFollowUpTap }: Props) {
   const colors = useColors();
   const isUser = message.role === "user";
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
@@ -157,6 +159,27 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
     feedbackBtnActive: {
       backgroundColor: colors.primary + "22",
       borderColor: colors.primary,
+    },
+    followUpRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8,
+      maxWidth: "88%",
+    },
+    followUpChip: {
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    followUpChipText: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+      lineHeight: 18,
     },
   });
 
@@ -345,6 +368,11 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
     );
   };
 
+  const followUps =
+    !isUser && isLast && !isStreaming && onFollowUpTap
+      ? (message.followUpQuestions ?? []).slice(0, 3)
+      : [];
+
   return (
     <View style={s.wrapper}>
       <View style={[s.bubble, isUser ? s.userBubble : s.assistantBubble]}>
@@ -401,6 +429,19 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
           </>
         )}
       </View>
+      {followUps.length > 0 && (
+        <View style={s.followUpRow}>
+          {followUps.map((q, i) => (
+            <Pressable
+              key={i}
+              style={s.followUpChip}
+              onPress={() => onFollowUpTap!(q)}
+            >
+              <Text style={s.followUpChipText}>{q}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

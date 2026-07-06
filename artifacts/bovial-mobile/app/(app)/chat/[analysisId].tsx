@@ -270,6 +270,17 @@ export default function ChatScreen() {
     connectSSE(question);
   }, [input, streaming, askQuestion, connectSSE]);
 
+  const handleFollowUpTap = useCallback(
+    async (question: string) => {
+      if (streaming || askQuestion.isPending) return;
+      setInput("");
+      setAgentError(null);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      connectSSE(question);
+    },
+    [streaming, askQuestion, connectSSE]
+  );
+
   const handleRetry = useCallback(() => {
     if (!agentError) return;
     const lastQ = agentError.lastQuestion;
@@ -314,8 +325,10 @@ export default function ChatScreen() {
   const lastAssistantMsg = [...messages]
     .reverse()
     .find((m) => m.role === "assistant");
+  const lastAssistantMsgId = lastAssistantMsg?.id ?? null;
   const showDiaryCta =
     !streaming && lastAssistantMsg && lastAssistantMsg.loggedEvent != null;
+  const showFollowUps = !streaming && !input.trim();
 
   const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -594,6 +607,8 @@ export default function ChatScreen() {
         renderItem={({ item }) => (
           <MessageBubble
             message={item}
+            isLast={item.id === lastAssistantMsgId}
+            onFollowUpTap={showFollowUps ? handleFollowUpTap : undefined}
             onFeedback={async (messageId, rating) => {
               try {
                 await customFetch(`/api/messages/${messageId}/feedback`, {
