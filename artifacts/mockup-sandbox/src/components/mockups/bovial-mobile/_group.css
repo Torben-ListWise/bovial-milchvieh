@@ -1,0 +1,30 @@
+:root {
+  --background: oklch(0.13 0.03 265);
+  --foreground: oklch(0.95 0.01 265);
+  --card: oklch(0.17 0.03 265);
+  --card-foreground: oklch(0.95 0.01 265);
+  --card-border: oklch(0.28 0.03 265);
+  --primary: oklch(0.75 0.04 265);
+  --primary-foreground: oklch(0.13 0.03 265);
+  --secondary: oklch(0.20 0.03 265);
+  --secondary-foreground: oklch(0.95 0.01 265);
+  --muted: oklch(0.22 0.03 265);
+  --muted-foreground: oklch(0.55 0.03 265);
+  --border: oklch(0.28 0.03 265);
+  --destructive: oklch(0.55 0.22 25);
+  --radius: 0.75rem;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+}
