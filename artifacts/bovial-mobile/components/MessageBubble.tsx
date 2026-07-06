@@ -53,13 +53,6 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
       color: colors.destructive,
       fontStyle: "italic",
     },
-    cursor: {
-      width: 8,
-      height: 16,
-      backgroundColor: colors.primary,
-      borderRadius: 2,
-      marginTop: 2,
-    },
     chartContainer: {
       marginTop: 10,
       borderRadius: 12,
@@ -362,7 +355,7 @@ export function MessageBubble({ message, isStreaming, onFeedback }: Props) {
             {message.content ? (
               <Text style={s.content}>
                 {message.content}
-                {isStreaming && <View style={s.cursor} />}
+                {isStreaming ? "\u258C" : ""}
               </Text>
             ) : null}
             {!isUser && message.charts && message.charts.length > 0 && (
