@@ -232,24 +232,51 @@ function SignUpPage() {
 
 function AppPortal() {
   const { data: dbUser, isLoading } = useGetCurrentUser();
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('milchvieh_onboarding_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const dismissOnboarding = () => {
+    try {
+      localStorage.setItem('milchvieh_onboarding_dismissed', '1');
+    } catch {
+      // ignore storage errors (private browsing, quota exceeded)
+    }
+    setOnboardingDismissed(true);
+  };
   const search = useSearch();
   const [location] = useLocation();
   const datasetId = new URLSearchParams(search).get("datasetId");
 
   const role = (dbUser?.role || 'customer') as 'operator' | 'customer';
 
-  // Show onboarding dialog if focusAreas has never been set (null = not yet configured)
-  const showOnboarding =
-    !onboardingDismissed &&
+  // Candidate: user is loaded and has never set focusAreas.
+  // We still need to check whether they have existing datasets before showing the dialog.
+  const onboardingCandidate =
     !isLoading &&
     dbUser !== undefined &&
     dbUser.focusAreas == null;
 
-  // Fetch datasets to surface auto-detected farm type for the onboarding dialog.
+  // Fetch datasets whenever the user is a candidate so we can distinguish truly
+  // new users (no datasets) from existing users whose focusAreas column is NULL
+  // only because the column was added after they signed up.
   const { data: datasets } = useListDatasets({
-    query: { enabled: showOnboarding },
+    query: { enabled: onboardingCandidate },
   });
+
+  // Show the dialog only when:
+  //  1. Not permanently dismissed (localStorage flag)
+  //  2. User is loaded with focusAreas still null
+  //  3. Datasets have loaded and the user has none — confirming they are truly new
+  const showOnboarding =
+    !onboardingDismissed &&
+    onboardingCandidate &&
+    datasets !== undefined &&
+    datasets.length === 0;
 
   // Pick the dataset with the highest detection confidence.
   const bestDetection = datasets
@@ -286,7 +313,7 @@ function AppPortal() {
     <>
       <FocusAreasOnboardingDialog
         open={showOnboarding}
-        onClose={() => setOnboardingDismissed(true)}
+        onClose={dismissOnboarding}
         detectedFocusArea={bestDetection?.area}
         detectedFocusAreaConfidence={bestDetection?.confidence}
       />
