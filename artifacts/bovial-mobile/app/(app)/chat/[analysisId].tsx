@@ -94,6 +94,7 @@ export default function ChatScreen() {
 
   const streamingTextRef = useRef("");
   const rafPendingRef = useRef(false);
+  const lastFollowUpsRef = useRef<string[]>([]);
 
   const { data: analysis, refetch } = useGetAnalysis(analysisId ?? "");
   const askQuestion = useAskQuestion();
@@ -239,9 +240,9 @@ export default function ChatScreen() {
         es.close();
         esRef.current = null;
         streamingTextRef.current = "";
-        await refetch();
-        await fetchDiaryPreview();
         setStreaming(null);
+        refetch();
+        fetchDiaryPreview();
       });
 
       es.addEventListener("agenterror" as any, (e: any) => {
@@ -326,6 +327,13 @@ export default function ChatScreen() {
     .reverse()
     .find((m) => m.role === "assistant");
   const lastAssistantMsgId = lastAssistantMsg?.id ?? null;
+
+  useEffect(() => {
+    if (lastAssistantMsg?.followUpQuestions?.length) {
+      lastFollowUpsRef.current = lastAssistantMsg.followUpQuestions;
+    }
+  }, [lastAssistantMsg?.id]);
+
   const showDiaryCta =
     !streaming && lastAssistantMsg && lastAssistantMsg.loggedEvent != null;
   const showFollowUps = !streaming && !input.trim();
