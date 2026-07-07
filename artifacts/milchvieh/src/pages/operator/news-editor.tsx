@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useAuth } from "@clerk/react";
+import { getAuthToken } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -515,7 +515,6 @@ function TopicManager({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function NewsEditorPage() {
-  const { getToken } = useAuth();
   const { toast } = useToast();
 
   const [editions, setEditions] = useState<NewsletterEdition[] | undefined>(undefined);
@@ -527,12 +526,12 @@ export function NewsEditorPage() {
   const [weekAnchor, setWeekAnchor] = useState<string>(() => toMonday(new Date().toISOString().slice(0, 10)));
 
   async function apiFetch(path: string, opts?: RequestInit) {
-    const token = await getToken();
+    const token = await getAuthToken();
     return fetch(`${API_BASE}/api${path}`, {
       ...opts,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...opts?.headers,
       },
     });

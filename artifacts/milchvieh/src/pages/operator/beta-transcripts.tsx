@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@clerk/react";
+import { getAuthToken } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -71,10 +71,9 @@ type TranscriptDetail = {
 };
 
 function useApiAuth() {
-  const { getToken } = useAuth();
   return async () => {
-    const token = await getToken();
-    return { Authorization: `Bearer ${token}` };
+    const token = await getAuthToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
   };
 }
 
