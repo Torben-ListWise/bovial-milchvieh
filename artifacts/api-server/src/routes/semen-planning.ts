@@ -98,8 +98,7 @@ function calcSemenPlanning(inp: {
 // GET /api/datasets/:datasetId/semen-planning
 router.get("/datasets/:datasetId/semen-planning", requireAuth, async (req: Request, res: Response) => {
   const { datasetId } = req.params as { datasetId: string };
-  const userId = (req as any).auth?.userId as string | undefined;
-  if (!userId) { res.status(401).json({ error: "Unauthenticated" }); return; }
+  const userId = req.userId!;
   if (!await canReadDataset(datasetId, userId)) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const rows = await db.select().from(semenPlanningTable).where(eq(semenPlanningTable.datasetId, datasetId)).limit(1);
@@ -113,8 +112,7 @@ router.get("/datasets/:datasetId/semen-planning", requireAuth, async (req: Reque
 // POST /api/datasets/:datasetId/semen-planning/calculate
 router.post("/datasets/:datasetId/semen-planning/calculate", requireAuth, async (req: Request, res: Response) => {
   const { datasetId } = req.params as { datasetId: string };
-  const userId = (req as any).auth?.userId as string | undefined;
-  if (!userId) { res.status(401).json({ error: "Unauthenticated" }); return; }
+  const userId = req.userId!;
   if (!await canReadDataset(datasetId, userId)) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const inp = req.body as Parameters<typeof calcSemenPlanning>[0];
