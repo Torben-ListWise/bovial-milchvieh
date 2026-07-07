@@ -5,6 +5,7 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import { Ionicons } from "@expo/vector-icons";
 import { ClerkLoaded, ClerkProvider } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -70,6 +71,7 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    ...Ionicons.font,
   });
 
   useEffect(() => {

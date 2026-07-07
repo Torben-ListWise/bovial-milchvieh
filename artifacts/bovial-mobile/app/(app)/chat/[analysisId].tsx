@@ -402,7 +402,7 @@ export default function ChatScreen() {
     inputRow: {
       flexDirection: "row",
       alignItems: "flex-end",
-      paddingHorizontal: 12,
+      paddingHorizontal: 16,
       paddingTop: 10,
       paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
       backgroundColor: colors.card,
@@ -454,7 +454,7 @@ export default function ChatScreen() {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      paddingHorizontal: 14,
+      paddingHorizontal: 16,
       paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
@@ -483,7 +483,7 @@ export default function ChatScreen() {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 10,
-      paddingHorizontal: 14,
+      paddingHorizontal: 16,
       paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
@@ -717,6 +717,7 @@ export default function ChatScreen() {
               placeholder="Frage stellen…"
               placeholderTextColor={colors.mutedForeground}
               multiline
+              scrollEnabled={false}
               returnKeyType="send"
               onSubmitEditing={canSend ? handleSend : undefined}
               editable={!isBusy}
