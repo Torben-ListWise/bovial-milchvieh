@@ -14,7 +14,9 @@
       "backgroundColor": "#1a1b2e"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.bovial.app",
+      "buildNumber": "1"
     },
     "android": {},
     "web": {
