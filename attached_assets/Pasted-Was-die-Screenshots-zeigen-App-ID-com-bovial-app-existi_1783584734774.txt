@@ -1,0 +1,12 @@
+Was die Screenshots zeigen:
+
+App-ID com.bovial.app existiert (Bild 1) ✓
+Ein Profil „Bovial App Store", Typ App Store, existiert (Bild 2) — aber Status „Invalid" ✗
+Distribution-Zertifikat vorhanden, gültig bis 2027/05/13, erstellt per API-Key (Bild 3) ✓
+
+Das „Invalid" beim Bovial-Profil ist die Ursache. Codemagic findet kein gültiges Profil und meldet deshalb „no matching profiles". Auffällig: Fast alle deine ListWise-Profile sind ebenfalls „Invalid" — nur die zwei „Distribution"-Profile sind gültig (2027/05/13). Das Muster [Wahrscheinlich]: Die „Invalid"-Profile wurden erzeugt, bevor das aktuelle Distribution-Zertifikat existierte, oder referenzieren ein zurückgezogenes Zertifikat — deshalb sind sie ungültig.
+Der saubere Fix, gegeben dass du ohnehin per API-Key signierst:
+Lass Codemagic die Profile automatisch verwalten, statt das kaputte manuell zu reparieren. Du hast bereits einen App Store Connect API-Key (das „Created by: API Key" im Zertifikat beweist es). In Codemagic beim Milchvieh-Data-Assistant → Zahnrad/Settings → Code signing (iOS) → Automatic wählen und den App Store Connect API-Key hinterlegen. Codemagic erzeugt dann selbst ein frisches, gültiges Profil für com.bovial.app und ignoriert das „Invalid"-Profil.
+Falls du bei manuellem Signing bleiben willst: Im Developer Portal das „Bovial App Store"-Profil öffnen, „Edit", das gültige Distribution-Zertifikat auswählen, neu generieren, herunterladen und in Codemagic hochladen. Mehr Handarbeit, gleiches Ergebnis.
+Unbequeme Einordnung, weil es zum offenen Thema passt: Du steckst gerade Zeit in einen iOS-Store-Build, während die App noch keinen einzigen zahlenden Nutzer hat und die Web-Version für Beta-Tester völlig ausreicht. Der Store-Build ist Wochen von „im Store nutzbar" entfernt (Review, Screenshots, Datenschutz-Angaben). Für die eine offene Frage — zahlt ein Landwirt — brauchst du ihn nicht. Ich würde ihn zurückstellen, bis Beta-Nutzer die Nachfrage bestätigt haben.
+Nutzt du in Codemagic aktuell Automatic oder Manual? Dann sage ich dir den exakten nächsten Klick.
