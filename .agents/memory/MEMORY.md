@@ -28,3 +28,4 @@
 - [Milchvieh streaming race condition](milchvieh-streaming-race.md) — never call startStream() in mutation callbacks; use streamNonce trigger so Effect B (start) always runs after Effect A (stop)
 - [Bovial mobile setup](bovial-mobile-setup.md) — Clerk+expo-secure-store, SSE via react-native-sse (NOT expo/fetch), NativeTabs from expo-router/unstable-native-tabs, customFetch export
 - [Milchvieh workflow restart after migration](milchvieh-workflow-restart-migration.md) — `pnpm run dev` is build+start; a running process keeps old code until explicitly restarted, so new migrations silently never run
+- [Clerk SPM static frameworks](clerk-spm-static-frameworks.md) — @clerk/expo's ClerkKit SPM dependency needs use_frameworks! static or pod install crashes
