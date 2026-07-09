@@ -5,9 +5,6 @@ workflows:
     integrations:
       app_store_connect: Bovial
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.bovial.app
       node: v20
       xcode: latest
       cocoapods: default
@@ -16,6 +13,7 @@ workflows:
       vars:
         BUNDLE_ID: com.bovial.app
         APP_STORE_APP_ID: "6788433068"
+        APPLE_TEAM_ID: W65GNXZJFL
     scripts:
       - name: Enable pnpm via corepack
         script: |
@@ -36,9 +34,10 @@ workflows:
           cd artifacts/bovial-mobile/ios
           pod install
 
-      - name: Build IPA
+      - name: Set up signing & build IPA
         script: |
           cd artifacts/bovial-mobile
+          xcode-project use-profiles
           xcode-project build-ipa \
             --workspace ios/Bovial.xcworkspace \
             --scheme Bovial
