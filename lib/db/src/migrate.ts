@@ -499,6 +499,35 @@ export async function ensureExtensions(): Promise<void> {
       SELECT 1 FROM master_data WHERE key = 'beta_quota_monatlich'
     )
   `);
+
+  // Migration: context_facts table — persistent, dataset-scoped farm context facts
+  // extracted from chat (Task #375). Deliberately NOT granted to milchvieh_analyst.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS context_facts (
+      id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      dataset_id          UUID        NOT NULL,
+      user_id             TEXT        NOT NULL,
+      category            TEXT        NOT NULL DEFAULT 'sonstiges',
+      fact_text           TEXT        NOT NULL,
+      original_text       TEXT        NOT NULL,
+      status              TEXT        NOT NULL DEFAULT 'vorgeschlagen',
+      source_analysis_id  UUID,
+      source_message_id   UUID,
+      confirmed_by        TEXT,
+      confirmed_at        TIMESTAMPTZ,
+      embedding           vector(768),
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS context_facts_dataset_idx ON context_facts (dataset_id, status)"
+  );
+
+  // Migration: context_facts_intro_seen_at — one-time explanation banner dismissal
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS context_facts_intro_seen_at TIMESTAMPTZ"
+  );
 }
 
 /**

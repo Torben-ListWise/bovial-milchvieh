@@ -7,6 +7,7 @@ import {
   rulesTable,
   farmNotesTable,
   farmDiaryEntriesTable,
+  contextFactsTable,
   usersTable,
   datasetsTable,
   betaToolLogsTable,
@@ -14,6 +15,7 @@ import {
   type Message,
 } from "@workspace/db";
 import { runAgent, getModelForTask, type ModelTaskType, MissingApiKeyError, type Chart, type Citation, type BetaToolEntry } from "./agent";
+import { classifyAndProposeContextFacts } from "./contextFacts";
 import { categorizeQuestion } from "./categorize";
 import { logger } from "./logger";
 import { normalizeSector } from "./serializers";
@@ -281,6 +283,38 @@ export async function processQuestion(
             .join("\n")}`
         : "";
 
+    // Confirmed, dataset-scoped context facts (Task #375). Strictly filtered by
+    // dataset_id — never by userId — so facts never leak across datasets, even
+    // for the same owner or a team guest with access to multiple farms.
+    // Cap the number of injected facts (most recently confirmed first) so the
+    // system prompt cannot grow unbounded as owners confirm more facts over time.
+    const CONTEXT_FACTS_MAX_COUNT = 30;
+    const CONTEXT_FACTS_MAX_CHARS = 3000;
+    const contextFactsRaw = await db
+      .select({ category: contextFactsTable.category, factText: contextFactsTable.factText })
+      .from(contextFactsTable)
+      .where(and(eq(contextFactsTable.datasetId, analysis.datasetId), eq(contextFactsTable.status, "aktiv")))
+      .orderBy(desc(contextFactsTable.confirmedAt))
+      .limit(CONTEXT_FACTS_MAX_COUNT);
+    const CONTEXT_FACT_CATEGORY_DE: Record<string, string> = {
+      verfahren: "Verfahren",
+      ausruestung: "Ausrüstung",
+      wartezeiten: "Wartezeiten",
+      sonstiges: "Sonstiges",
+    };
+    const contextFactLines: string[] = [];
+    let contextFactsCharCount = 0;
+    for (const f of contextFactsRaw) {
+      const line = `- [${CONTEXT_FACT_CATEGORY_DE[f.category] ?? f.category}] ${f.factText}`;
+      if (contextFactsCharCount + line.length > CONTEXT_FACTS_MAX_CHARS) break;
+      contextFactLines.push(line);
+      contextFactsCharCount += line.length;
+    }
+    const contextFactsContext =
+      contextFactLines.length > 0
+        ? `\nBestätigte Betriebs-Fakten (dauerhafte Eigenschaften dieses Betriebs — beachte diese bei jeder Analyse):\n${contextFactLines.join("\n")}`
+        : "";
+
     // Reset step tracking for this run
     const completedSteps: string[] = [];
     let lastProgressStep: string | null = null;
@@ -344,7 +378,7 @@ export async function processQuestion(
           datasetId: analysis.datasetId,
           conversation,
           sector,
-          systemExtra: [rulesContext, farmNotesContext, diaryContext].filter(Boolean).join("") || undefined,
+          systemExtra: [rulesContext, farmNotesContext, diaryContext, contextFactsContext].filter(Boolean).join("") || undefined,
           userId: analysis.userId ?? undefined,
           isBeta: isBetaUser,
           betaAnalysisId: analysis.id,
@@ -451,6 +485,19 @@ export async function processQuestion(
     // Signal SSE listener that the final result (including citations, charts,
     // follow-up questions) is now persisted and ready to reload from DB.
     sse?.onDone?.();
+
+    // Fire-and-forget: detect durable farm-context facts (Task #375). Never
+    // awaited by the response path and all errors are swallowed internally.
+    if (!error && assistant?.id) {
+      void classifyAndProposeContextFacts({
+        datasetId: analysis.datasetId,
+        ownerUserId: analysis.userId!,
+        question,
+        answer: content,
+        sourceAnalysisId: analysis.id,
+        sourceMessageId: assistant.id,
+      });
+    }
 
     const category = analysis.category ?? categorizeQuestion(question);
     await db

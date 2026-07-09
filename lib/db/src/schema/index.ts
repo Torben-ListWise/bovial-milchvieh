@@ -22,3 +22,4 @@ export * from "./thiForecasts";
 export * from "./semenPlanning";
 export * from "./questionLog";
 export * from "./dailyChips";
+export * from "./contextFacts";

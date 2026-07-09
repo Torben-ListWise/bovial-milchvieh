@@ -47,6 +47,7 @@ export type ModelTaskType =
   | "doc_categorization"
   | "follow_up_generation"
   | "benchmark_extraction"
+  | "context_fact_extraction"
   | "chat_analysis_simple"
   | "chat_analysis"
   | "chat_analysis_deep";
@@ -58,6 +59,7 @@ export function getModelForTask(taskType: ModelTaskType): string {
     case "doc_categorization":
     case "follow_up_generation":
     case "benchmark_extraction":
+    case "context_fact_extraction":
       return "claude-haiku-4-5-20251001";
     case "chat_analysis_simple":
     case "chat_analysis":

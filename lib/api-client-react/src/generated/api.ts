@@ -31,6 +31,9 @@ import type {
   AskQuestionResponse,
   BadRequestResponse,
   ColumnMappingUpdate,
+  ContextFact,
+  ContextFactConfirmBody,
+  ContextFactCorrection,
   CurrentUser,
   DataExport,
   Dataset,
@@ -2299,6 +2302,367 @@ export const useUpdateWarning = <TError = ErrorType<NotFoundResponse>,
         TContext
       > => {
       return useMutation(getUpdateWarningMutationOptions(options));
+    }
+
+export const getListContextFactsUrl = (datasetId: string,) => {
+
+
+
+
+  return `/api/datasets/${datasetId}/context-facts`
+}
+
+/**
+ * @summary List persistent farm-context facts (suggestions + active) for a dataset
+ */
+export const listContextFacts = async (datasetId: string, options?: RequestInit): Promise<ContextFact[]> => {
+
+  return customFetch<ContextFact[]>(getListContextFactsUrl(datasetId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContextFactsQueryKey = (datasetId: string,) => {
+    return [
+    `/api/datasets/${datasetId}/context-facts`
+    ] as const;
+    }
+
+
+export const getListContextFactsQueryOptions = <TData = Awaited<ReturnType<typeof listContextFacts>>, TError = ErrorType<NotFoundResponse>>(datasetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContextFacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContextFactsQueryKey(datasetId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContextFacts>>> = ({ signal }) => listContextFacts(datasetId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(datasetId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContextFacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContextFactsQueryResult = NonNullable<Awaited<ReturnType<typeof listContextFacts>>>
+export type ListContextFactsQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary List persistent farm-context facts (suggestions + active) for a dataset
+ */
+
+export function useListContextFacts<TData = Awaited<ReturnType<typeof listContextFacts>>, TError = ErrorType<NotFoundResponse>>(
+ datasetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContextFacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContextFactsQueryOptions(datasetId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCorrectContextFactUrl = (contextFactId: string,) => {
+
+
+
+
+  return `/api/context-facts/${contextFactId}`
+}
+
+/**
+ * @summary Correct the proposed text of a context fact before confirming (owner only)
+ */
+export const correctContextFact = async (contextFactId: string,
+    contextFactCorrection: ContextFactCorrection, options?: RequestInit): Promise<ContextFact> => {
+
+  return customFetch<ContextFact>(getCorrectContextFactUrl(contextFactId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      contextFactCorrection,)
+  }
+);}
+
+
+
+
+export const getCorrectContextFactMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof correctContextFact>>, TError,{contextFactId: string;data: BodyType<ContextFactCorrection>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof correctContextFact>>, TError,{contextFactId: string;data: BodyType<ContextFactCorrection>}, TContext> => {
+
+const mutationKey = ['correctContextFact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof correctContextFact>>, {contextFactId: string;data: BodyType<ContextFactCorrection>}> = (props) => {
+          const {contextFactId,data} = props ?? {};
+
+          return  correctContextFact(contextFactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CorrectContextFactMutationResult = NonNullable<Awaited<ReturnType<typeof correctContextFact>>>
+    export type CorrectContextFactMutationBody = BodyType<ContextFactCorrection>
+    export type CorrectContextFactMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Correct the proposed text of a context fact before confirming (owner only)
+ */
+export const useCorrectContextFact = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof correctContextFact>>, TError,{contextFactId: string;data: BodyType<ContextFactCorrection>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof correctContextFact>>,
+        TError,
+        {contextFactId: string;data: BodyType<ContextFactCorrection>},
+        TContext
+      > => {
+      return useMutation(getCorrectContextFactMutationOptions(options));
+    }
+
+export const getConfirmContextFactUrl = (contextFactId: string,) => {
+
+
+
+
+  return `/api/context-facts/${contextFactId}/confirm`
+}
+
+/**
+ * @summary Confirm a proposed context fact, activating it for future analyses (owner only)
+ */
+export const confirmContextFact = async (contextFactId: string,
+    contextFactConfirmBody?: ContextFactConfirmBody, options?: RequestInit): Promise<ContextFact> => {
+
+  return customFetch<ContextFact>(getConfirmContextFactUrl(contextFactId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      contextFactConfirmBody,)
+  }
+);}
+
+
+
+
+export const getConfirmContextFactMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmContextFact>>, TError,{contextFactId: string;data?: BodyType<ContextFactConfirmBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmContextFact>>, TError,{contextFactId: string;data?: BodyType<ContextFactConfirmBody>}, TContext> => {
+
+const mutationKey = ['confirmContextFact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmContextFact>>, {contextFactId: string;data?: BodyType<ContextFactConfirmBody>}> = (props) => {
+          const {contextFactId,data} = props ?? {};
+
+          return  confirmContextFact(contextFactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmContextFactMutationResult = NonNullable<Awaited<ReturnType<typeof confirmContextFact>>>
+    export type ConfirmContextFactMutationBody = BodyType<ContextFactConfirmBody> | undefined
+    export type ConfirmContextFactMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Confirm a proposed context fact, activating it for future analyses (owner only)
+ */
+export const useConfirmContextFact = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmContextFact>>, TError,{contextFactId: string;data?: BodyType<ContextFactConfirmBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmContextFact>>,
+        TError,
+        {contextFactId: string;data?: BodyType<ContextFactConfirmBody>},
+        TContext
+      > => {
+      return useMutation(getConfirmContextFactMutationOptions(options));
+    }
+
+export const getRejectContextFactUrl = (contextFactId: string,) => {
+
+
+
+
+  return `/api/context-facts/${contextFactId}/reject`
+}
+
+/**
+ * @summary Reject a proposed context fact (owner only)
+ */
+export const rejectContextFact = async (contextFactId: string, options?: RequestInit): Promise<ContextFact> => {
+
+  return customFetch<ContextFact>(getRejectContextFactUrl(contextFactId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRejectContextFactMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectContextFact>>, TError,{contextFactId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectContextFact>>, TError,{contextFactId: string}, TContext> => {
+
+const mutationKey = ['rejectContextFact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectContextFact>>, {contextFactId: string}> = (props) => {
+          const {contextFactId} = props ?? {};
+
+          return  rejectContextFact(contextFactId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectContextFactMutationResult = NonNullable<Awaited<ReturnType<typeof rejectContextFact>>>
+
+    export type RejectContextFactMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Reject a proposed context fact (owner only)
+ */
+export const useRejectContextFact = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectContextFact>>, TError,{contextFactId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectContextFact>>,
+        TError,
+        {contextFactId: string},
+        TContext
+      > => {
+      return useMutation(getRejectContextFactMutationOptions(options));
+    }
+
+export const getDeactivateContextFactUrl = (contextFactId: string,) => {
+
+
+
+
+  return `/api/context-facts/${contextFactId}/deactivate`
+}
+
+/**
+ * @summary Deactivate a previously confirmed context fact (owner only)
+ */
+export const deactivateContextFact = async (contextFactId: string, options?: RequestInit): Promise<ContextFact> => {
+
+  return customFetch<ContextFact>(getDeactivateContextFactUrl(contextFactId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDeactivateContextFactMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deactivateContextFact>>, TError,{contextFactId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deactivateContextFact>>, TError,{contextFactId: string}, TContext> => {
+
+const mutationKey = ['deactivateContextFact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deactivateContextFact>>, {contextFactId: string}> = (props) => {
+          const {contextFactId} = props ?? {};
+
+          return  deactivateContextFact(contextFactId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeactivateContextFactMutationResult = NonNullable<Awaited<ReturnType<typeof deactivateContextFact>>>
+
+    export type DeactivateContextFactMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Deactivate a previously confirmed context fact (owner only)
+ */
+export const useDeactivateContextFact = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deactivateContextFact>>, TError,{contextFactId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deactivateContextFact>>,
+        TError,
+        {contextFactId: string},
+        TContext
+      > => {
+      return useMutation(getDeactivateContextFactMutationOptions(options));
     }
 
 export const getListReportsUrl = (datasetId: string,) => {

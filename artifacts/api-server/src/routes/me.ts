@@ -19,6 +19,9 @@ function serializeUser(u: typeof usersTable.$inferSelect) {
       ? new Date((u as any).onboardingCompletedAt).toISOString()
       : null,
     themePreference: tp === "light" || tp === "dark" ? tp : null,
+    contextFactsIntroSeenAt: (u as any).contextFactsIntroSeenAt
+      ? new Date((u as any).contextFactsIntroSeenAt).toISOString()
+      : null,
   });
 }
 
@@ -42,6 +45,7 @@ const UpdateMeBodySchema = z.object({
     .nullable()
     .optional(),
   themePreference: z.enum(["light", "dark"]).nullable().optional(),
+  markContextFactsIntroSeen: z.boolean().optional(),
 });
 
 router.patch("/me", requireAuth, async (req: Request, res: Response) => {
@@ -51,11 +55,12 @@ router.patch("/me", requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  const { focusAreas, themePreference } = parsed.data;
+  const { focusAreas, themePreference, markContextFactsIntroSeen } = parsed.data;
 
   const updateFields: Record<string, unknown> = {};
   if (focusAreas !== undefined) updateFields.focusAreas = focusAreas ?? null;
   if (themePreference !== undefined) updateFields.themePreference = themePreference ?? null;
+  if (markContextFactsIntroSeen) updateFields.contextFactsIntroSeenAt = new Date();
 
   const [updated] = await db
     .update(usersTable)

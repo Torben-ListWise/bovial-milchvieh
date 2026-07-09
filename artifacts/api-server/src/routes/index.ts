@@ -26,6 +26,7 @@ import thiRouter from "./thi";
 import chipsRouter from "./chips";
 import semenPlanningRouter from "./semen-planning";
 import diaryRouter from "./diary";
+import contextFactsRouter from "./context-facts";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(thiRouter);
 router.use(chipsRouter);
 router.use(semenPlanningRouter);
 router.use(diaryRouter);
+router.use(contextFactsRouter);
 
 export default router;

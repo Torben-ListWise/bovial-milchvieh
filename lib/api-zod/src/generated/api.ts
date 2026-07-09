@@ -26,7 +26,8 @@ export const GetCurrentUserResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['customer', 'operator']),
   "focusAreas": zod.array(zod.string()).nullish(),
-  "themePreference": zod.enum(['light', 'dark']).nullish()
+  "themePreference": zod.enum(['light', 'dark']).nullish(),
+  "contextFactsIntroSeenAt": zod.coerce.date().nullish()
 })
 
 
@@ -35,7 +36,8 @@ export const GetCurrentUserResponse = zod.object({
  */
 export const UpdateMeBody = zod.object({
   "focusAreas": zod.array(zod.string()).nullish(),
-  "themePreference": zod.enum(['light', 'dark']).nullish()
+  "themePreference": zod.enum(['light', 'dark']).nullish(),
+  "markContextFactsIntroSeen": zod.boolean().optional()
 })
 
 export const UpdateMeResponse = zod.object({
@@ -44,7 +46,8 @@ export const UpdateMeResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['customer', 'operator']),
   "focusAreas": zod.array(zod.string()).nullish(),
-  "themePreference": zod.enum(['light', 'dark']).nullish()
+  "themePreference": zod.enum(['light', 'dark']).nullish(),
+  "contextFactsIntroSeenAt": zod.coerce.date().nullish()
 })
 
 
@@ -441,6 +444,13 @@ export const GetAnalysisResponse = zod.object({
 })).optional(),
   "followUpQuestions": zod.array(zod.string()).optional(),
   "error": zod.string().nullish(),
+  "loggedEvent": zod.object({
+  "id": zod.string().optional(),
+  "description": zod.string().optional(),
+  "entryDate": zod.string().optional(),
+  "category": zod.string().optional(),
+  "reminderDueAt": zod.string().nullish()
+}).nullish(),
   "createdAt": zod.coerce.date()
 }).passthrough())
 })
@@ -629,6 +639,141 @@ export const UpdateWarningResponse = zod.object({
   "status": zod.enum(['open', 'acknowledged', 'dismissed']),
   "ruleId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List persistent farm-context facts (suggestions + active) for a dataset
+ */
+export const ListContextFactsParams = zod.object({
+  "datasetId": zod.coerce.string()
+})
+
+export const ListContextFactsResponseItem = zod.object({
+  "id": zod.string(),
+  "datasetId": zod.string(),
+  "category": zod.enum(['verfahren', 'ausruestung', 'wartezeiten', 'sonstiges']),
+  "factText": zod.string(),
+  "originalText": zod.string(),
+  "status": zod.enum(['vorgeschlagen', 'aktiv', 'abgelehnt', 'deaktiviert']),
+  "sourceAnalysisId": zod.string().nullish(),
+  "sourceMessageId": zod.string().nullish(),
+  "sourceAnalysisExists": zod.boolean().optional(),
+  "confirmedBy": zod.string().nullish(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListContextFactsResponse = zod.array(ListContextFactsResponseItem)
+
+
+/**
+ * @summary Correct the proposed text of a context fact before confirming (owner only)
+ */
+export const CorrectContextFactParams = zod.object({
+  "contextFactId": zod.coerce.string()
+})
+
+
+
+
+export const CorrectContextFactBody = zod.object({
+  "factText": zod.string().min(1)
+})
+
+export const CorrectContextFactResponse = zod.object({
+  "id": zod.string(),
+  "datasetId": zod.string(),
+  "category": zod.enum(['verfahren', 'ausruestung', 'wartezeiten', 'sonstiges']),
+  "factText": zod.string(),
+  "originalText": zod.string(),
+  "status": zod.enum(['vorgeschlagen', 'aktiv', 'abgelehnt', 'deaktiviert']),
+  "sourceAnalysisId": zod.string().nullish(),
+  "sourceMessageId": zod.string().nullish(),
+  "sourceAnalysisExists": zod.boolean().optional(),
+  "confirmedBy": zod.string().nullish(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Confirm a proposed context fact, activating it for future analyses (owner only)
+ */
+export const ConfirmContextFactParams = zod.object({
+  "contextFactId": zod.coerce.string()
+})
+
+
+
+
+export const ConfirmContextFactBody = zod.object({
+  "factText": zod.string().min(1).optional()
+})
+
+export const ConfirmContextFactResponse = zod.object({
+  "id": zod.string(),
+  "datasetId": zod.string(),
+  "category": zod.enum(['verfahren', 'ausruestung', 'wartezeiten', 'sonstiges']),
+  "factText": zod.string(),
+  "originalText": zod.string(),
+  "status": zod.enum(['vorgeschlagen', 'aktiv', 'abgelehnt', 'deaktiviert']),
+  "sourceAnalysisId": zod.string().nullish(),
+  "sourceMessageId": zod.string().nullish(),
+  "sourceAnalysisExists": zod.boolean().optional(),
+  "confirmedBy": zod.string().nullish(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reject a proposed context fact (owner only)
+ */
+export const RejectContextFactParams = zod.object({
+  "contextFactId": zod.coerce.string()
+})
+
+export const RejectContextFactResponse = zod.object({
+  "id": zod.string(),
+  "datasetId": zod.string(),
+  "category": zod.enum(['verfahren', 'ausruestung', 'wartezeiten', 'sonstiges']),
+  "factText": zod.string(),
+  "originalText": zod.string(),
+  "status": zod.enum(['vorgeschlagen', 'aktiv', 'abgelehnt', 'deaktiviert']),
+  "sourceAnalysisId": zod.string().nullish(),
+  "sourceMessageId": zod.string().nullish(),
+  "sourceAnalysisExists": zod.boolean().optional(),
+  "confirmedBy": zod.string().nullish(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Deactivate a previously confirmed context fact (owner only)
+ */
+export const DeactivateContextFactParams = zod.object({
+  "contextFactId": zod.coerce.string()
+})
+
+export const DeactivateContextFactResponse = zod.object({
+  "id": zod.string(),
+  "datasetId": zod.string(),
+  "category": zod.enum(['verfahren', 'ausruestung', 'wartezeiten', 'sonstiges']),
+  "factText": zod.string(),
+  "originalText": zod.string(),
+  "status": zod.enum(['vorgeschlagen', 'aktiv', 'abgelehnt', 'deaktiviert']),
+  "sourceAnalysisId": zod.string().nullish(),
+  "sourceMessageId": zod.string().nullish(),
+  "sourceAnalysisExists": zod.boolean().optional(),
+  "confirmedBy": zod.string().nullish(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

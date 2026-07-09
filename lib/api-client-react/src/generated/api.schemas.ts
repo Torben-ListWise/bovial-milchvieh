@@ -38,6 +38,8 @@ export interface CurrentUser {
   role: CurrentUserRole;
   focusAreas?: string[] | null;
   themePreference?: CurrentUserThemePreference;
+  /** @nullable */
+  contextFactsIntroSeenAt?: string | null;
 }
 
 export type UpdateMeBodyThemePreference = typeof UpdateMeBodyThemePreference[keyof typeof UpdateMeBodyThemePreference] | null;
@@ -51,6 +53,7 @@ export const UpdateMeBodyThemePreference = {
 export interface UpdateMeBody {
   focusAreas?: string[] | null;
   themePreference?: UpdateMeBodyThemePreference;
+  markContextFactsIntroSeen?: boolean;
 }
 
 export interface UploadUrlRequest {
@@ -398,6 +401,14 @@ export const AnalysisMessageRole = {
   assistant: 'assistant',
 } as const;
 
+export type AnalysisMessageLoggedEvent = {
+  id?: string;
+  description?: string;
+  entryDate?: string;
+  category?: string;
+  reminderDueAt?: string | null;
+} | null;
+
 export interface AnalysisMessage {
   id: string;
   analysisId: string;
@@ -409,13 +420,7 @@ export interface AnalysisMessage {
   followUpQuestions?: string[];
   /** @nullable */
   error?: string | null;
-  loggedEvent?: {
-    id: string;
-    description: string;
-    entryDate: string;
-    category: string;
-    reminderDueAt?: string | null;
-  } | null;
+  loggedEvent?: AnalysisMessageLoggedEvent;
   createdAt: string;
 }
 
@@ -615,6 +620,56 @@ export const WarningUpdateStatus = {
 
 export interface WarningUpdate {
   status: WarningUpdateStatus;
+}
+
+export type ContextFactCategory = typeof ContextFactCategory[keyof typeof ContextFactCategory];
+
+
+export const ContextFactCategory = {
+  verfahren: 'verfahren',
+  ausruestung: 'ausruestung',
+  wartezeiten: 'wartezeiten',
+  sonstiges: 'sonstiges',
+} as const;
+
+export type ContextFactStatus = typeof ContextFactStatus[keyof typeof ContextFactStatus];
+
+
+export const ContextFactStatus = {
+  vorgeschlagen: 'vorgeschlagen',
+  aktiv: 'aktiv',
+  abgelehnt: 'abgelehnt',
+  deaktiviert: 'deaktiviert',
+} as const;
+
+export interface ContextFact {
+  id: string;
+  datasetId: string;
+  category: ContextFactCategory;
+  factText: string;
+  originalText: string;
+  status: ContextFactStatus;
+  /** @nullable */
+  sourceAnalysisId?: string | null;
+  /** @nullable */
+  sourceMessageId?: string | null;
+  sourceAnalysisExists?: boolean;
+  /** @nullable */
+  confirmedBy?: string | null;
+  /** @nullable */
+  confirmedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContextFactCorrection {
+  /** @minLength 1 */
+  factText: string;
+}
+
+export interface ContextFactConfirmBody {
+  /** @minLength 1 */
+  factText?: string;
 }
 
 export type ReportPeriod = typeof ReportPeriod[keyof typeof ReportPeriod];

@@ -12,7 +12,15 @@ import {
   useGetCurrentUser,
   useListReports,
   getListReportsQueryKey,
+  useListContextFacts,
+  getListContextFactsQueryKey,
+  useCorrectContextFact,
+  useConfirmContextFact,
+  useRejectContextFact,
+  useDeactivateContextFact,
+  useUpdateMe,
   type AnalysisTemplate,
+  type ContextFact,
 } from "@workspace/api-client-react";
 
 function filterTemplatesByFocusAreas(
@@ -29,7 +37,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil } from "lucide-react";
+import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil, CheckCircle2, XCircle, PowerOff, Info, ExternalLink, BookOpen } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { AiIcon } from "@/components/AiIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -897,6 +907,296 @@ function SemenPlanningCard({ datasetId }: { datasetId: string }) {
   );
 }
 
+const CONTEXT_FACT_CATEGORY_LABELS: Record<string, string> = {
+  verfahren: "Verfahren",
+  ausruestung: "Ausrüstung",
+  wartezeiten: "Wartezeiten",
+  sonstiges: "Sonstiges",
+};
+
+function ContextFactsIntroBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-xl px-5 py-4">
+      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+        <BookOpen className="w-4 h-4 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0 text-sm text-foreground">
+        <p className="font-semibold mb-1">Neu: Betriebs-Wissen</p>
+        <p className="text-muted-foreground">
+          Wenn du im Chat feste Betriebseigenschaften erwähnst (z. B. Verfahren, Ausrüstung, Wartezeiten),
+          erkennt der Assistent das automatisch und schlägt sie hier zur Bestätigung vor. Bestätigte Fakten
+          werden ab sofort bei jeder Analyse dieses Betriebs berücksichtigt — nichts wird ohne deine
+          Bestätigung übernommen.
+        </p>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-muted-foreground hover:text-foreground shrink-0"
+        aria-label="Hinweis schließen"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function ContextFactProposalRow({
+  fact,
+  datasetId,
+  hostId,
+  isOwner,
+}: {
+  fact: ContextFact;
+  datasetId: string;
+  hostId: string | null;
+  isOwner: boolean;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(fact.factText);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: getListContextFactsQueryKey(datasetId) });
+  }
+
+  const correct = useCorrectContextFact({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        setEditing(false);
+      },
+      onError: (err: any) => {
+        toast({ variant: "destructive", title: "Konnte nicht gespeichert werden", description: err?.error ?? undefined });
+      },
+    },
+  });
+  const confirm = useConfirmContextFact({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Fakt bestätigt", description: "Wird ab sofort in Analysen dieses Betriebs berücksichtigt." });
+      },
+      onError: (err: any) => {
+        toast({ variant: "destructive", title: "Konnte nicht bestätigt werden", description: err?.error ?? undefined });
+      },
+    },
+  });
+  const reject = useRejectContextFact({
+    mutation: {
+      onSuccess: () => invalidate(),
+    },
+  });
+
+  const sourceLink =
+    fact.sourceAnalysisExists && fact.sourceAnalysisId
+      ? `/app/analyses?datasetId=${datasetId}&analysisId=${fact.sourceAnalysisId}${
+          fact.sourceMessageId ? `&highlightMessageId=${fact.sourceMessageId}` : ""
+        }${hostId ? `&hostId=${hostId}` : ""}`
+      : null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <Badge variant="secondary" className="text-xs font-normal">
+            {CONTEXT_FACT_CATEGORY_LABELS[fact.category] ?? fact.category}
+          </Badge>
+          {editing ? (
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="mt-2 text-sm"
+              rows={2}
+            />
+          ) : (
+            <p className="text-sm font-medium text-foreground mt-1">{fact.factText}</p>
+          )}
+          <p className="text-xs text-muted-foreground italic">„{fact.originalText}"</p>
+          {sourceLink && (
+            <Link href={sourceLink} className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1">
+              <ExternalLink className="w-3 h-3" />
+              Zur Chat-Stelle
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {isOwner && (
+        <div className="flex flex-wrap gap-2 pt-1 border-t border-border/60">
+          {editing ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditing(false);
+                  setDraft(fact.factText);
+                }}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => correct.mutate({ contextFactId: fact.id, data: { factText: draft } })}
+                disabled={correct.isPending || draft.trim().length === 0}
+              >
+                {correct.isPending && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+                Speichern
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(true)}
+                className="text-muted-foreground"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1" />
+                Korrigieren
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => reject.mutate({ contextFactId: fact.id })}
+                disabled={reject.isPending}
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <XCircle className="w-3.5 h-3.5 mr-1" />
+                Ablehnen
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => confirm.mutate({ contextFactId: fact.id })}
+                disabled={confirm.isPending}
+              >
+                {confirm.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                )}
+                Bestätigen
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActiveContextFactRow({ fact, datasetId, isOwner }: { fact: ContextFact; datasetId: string; isOwner: boolean }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const deactivate = useDeactivateContextFact({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListContextFactsQueryKey(datasetId) });
+        toast({ title: "Fakt deaktiviert" });
+      },
+    },
+  });
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-2.5">
+      <div className="min-w-0 flex-1 flex items-center gap-2">
+        <Badge variant="outline" className="text-xs font-normal shrink-0">
+          {CONTEXT_FACT_CATEGORY_LABELS[fact.category] ?? fact.category}
+        </Badge>
+        <p className="text-sm text-foreground truncate">{fact.factText}</p>
+      </div>
+      {isOwner && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => deactivate.mutate({ contextFactId: fact.id })}
+          disabled={deactivate.isPending}
+          className="text-muted-foreground hover:text-destructive shrink-0"
+        >
+          <PowerOff className="w-3.5 h-3.5 mr-1" />
+          Deaktivieren
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ContextFactsSection({
+  datasetId,
+  hostId,
+  isOwner,
+}: {
+  datasetId: string;
+  hostId: string | null;
+  isOwner: boolean;
+}) {
+  const { data: currentUser } = useGetCurrentUser();
+  const { data: facts } = useListContextFacts(datasetId, {
+    query: { queryKey: getListContextFactsQueryKey(datasetId), staleTime: 15_000 },
+  });
+
+  const updateMe = useUpdateMe();
+  const [introDismissed, setIntroDismissed] = useState(false);
+
+  const pending = (facts ?? []).filter((f) => f.status === "vorgeschlagen");
+  const active = (facts ?? []).filter((f) => f.status === "aktiv");
+
+  const showIntro =
+    pending.length > 0 && !introDismissed && (currentUser as any)?.contextFactsIntroSeenAt == null;
+
+  function dismissIntro() {
+    setIntroDismissed(true);
+    updateMe.mutate({ data: { markContextFactsIntroSeen: true } as any });
+  }
+
+  if (pending.length === 0 && active.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Info className="w-4 h-4 text-primary" />
+          Betriebs-Wissen
+        </CardTitle>
+        <CardDescription>
+          Dauerhafte Eigenschaften dieses Betriebs, die der Assistent im Chat erkannt hat und die künftig bei
+          Analysen berücksichtigt werden.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {showIntro && <ContextFactsIntroBanner onDismiss={dismissIntro} />}
+
+        {pending.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Offene Vorschläge ({pending.length})
+            </p>
+            <div className="space-y-2">
+              {pending.map((f) => (
+                <ContextFactProposalRow key={f.id} fact={f} datasetId={datasetId} hostId={hostId} isOwner={isOwner} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {active.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Bestätigte Fakten ({active.length})
+            </p>
+            <div className="space-y-1.5">
+              {active.map((f) => (
+                <ActiveContextFactRow key={f.id} fact={f} datasetId={datasetId} isOwner={isOwner} />
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function DatasetOverview() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -1055,6 +1355,8 @@ export function DatasetOverview() {
 
       <StartChipsSection datasetId={datasetId} />
       <SchnellauswertungenSection datasetId={datasetId} />
+
+      <ContextFactsSection datasetId={datasetId} hostId={hostId} isOwner={!hostId} />
 
       <NewsPreviewCard datasetId={datasetId} />
       <InsightsSummaryCard datasetId={datasetId} />

@@ -2270,6 +2270,7 @@ function AnalysisResultsPanel({
   streamingText,
   streamingCharts,
   onFollowUpClick,
+  highlightMessageId,
 }: {
   analysis: AnalysisDetail | undefined;
   isWorking: boolean;
@@ -2277,12 +2278,27 @@ function AnalysisResultsPanel({
   streamingText?: string;
   streamingCharts?: Chart[];
   onFollowUpClick?: (q: string) => void;
+  highlightMessageId?: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCardRef = useRef<HTMLDivElement>(null);
   const resultBottomRef = useRef<HTMLDivElement>(null);
   const streamingCardRef = useRef<HTMLDivElement>(null);
   const [showResultScrollButton, setShowResultScrollButton] = useState(false);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const handledHighlightRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!highlightMessageId || !analysis) return;
+    if (handledHighlightRef.current === highlightMessageId) return;
+    const el = scrollRef.current?.querySelector(`[data-result-card="${highlightMessageId}"]`);
+    if (!el) return;
+    handledHighlightRef.current = highlightMessageId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMsgId(highlightMessageId);
+    const timer = setTimeout(() => setHighlightedMsgId(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightMessageId, analysis]);
 
   function handleResultScroll() {
     const el = scrollRef.current;
@@ -2499,7 +2515,14 @@ function AnalysisResultsPanel({
     <div className="relative h-full flex flex-col">
       <div ref={scrollRef} onScroll={handleResultScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {resultPairs.map((pair, idx) => (
-          <div key={pair.msg.id}>
+          <div
+            key={pair.msg.id}
+            className={
+              highlightedMsgId === pair.msg.id
+                ? "rounded-xl ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow duration-500"
+                : undefined
+            }
+          >
             <ResultCard
               questionTitle={pair.questionTitle}
               msg={pair.msg}
@@ -2682,6 +2705,7 @@ export function AnalysesPage() {
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(() => {
     return new URLSearchParams(searchStr).get("analysisId") ?? null;
   });
+  const highlightMessageId = useMemo(() => new URLSearchParams(searchStr).get("highlightMessageId"), [searchStr]);
   const [question, setQuestion] = useState("");
   const [mobileTab, setMobileTab] = useState<"chat" | "chart">(() => {
     if (typeof window !== "undefined") {
@@ -4166,7 +4190,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
           </div>
         </div>
       </div>
@@ -4188,7 +4212,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
             </div>
           )}
         </div>

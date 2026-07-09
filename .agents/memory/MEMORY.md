@@ -27,3 +27,4 @@
 - [Milchvieh GetAnalysisResponse passthrough](milchvieh-getanalysis-passthrough.md) — messages inner zod.object() needs .passthrough() or widgetSpec/backQuestions get stripped; re-apply after every orval codegen run
 - [Milchvieh streaming race condition](milchvieh-streaming-race.md) — never call startStream() in mutation callbacks; use streamNonce trigger so Effect B (start) always runs after Effect A (stop)
 - [Bovial mobile setup](bovial-mobile-setup.md) — Clerk+expo-secure-store, SSE via react-native-sse (NOT expo/fetch), NativeTabs from expo-router/unstable-native-tabs, customFetch export
+- [Milchvieh workflow restart after migration](milchvieh-workflow-restart-migration.md) — `pnpm run dev` is build+start; a running process keeps old code until explicitly restarted, so new migrations silently never run

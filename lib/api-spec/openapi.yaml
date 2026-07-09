@@ -590,6 +590,100 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /datasets/{datasetId}/context-facts:
+    get:
+      tags: [Insights]
+      operationId: listContextFacts
+      summary: List persistent farm-context facts (suggestions + active) for a dataset
+      parameters:
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Context facts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContextFact"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /context-facts/{contextFactId}:
+    patch:
+      tags: [Insights]
+      operationId: correctContextFact
+      summary: Correct the proposed text of a context fact before confirming (owner only)
+      parameters:
+        - $ref: "#/components/parameters/ContextFactId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContextFactCorrection"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextFact"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /context-facts/{contextFactId}/confirm:
+    post:
+      tags: [Insights]
+      operationId: confirmContextFact
+      summary: Confirm a proposed context fact, activating it for future analyses (owner only)
+      parameters:
+        - $ref: "#/components/parameters/ContextFactId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContextFactConfirmBody"
+      responses:
+        "200":
+          description: Confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextFact"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /context-facts/{contextFactId}/reject:
+    post:
+      tags: [Insights]
+      operationId: rejectContextFact
+      summary: Reject a proposed context fact (owner only)
+      parameters:
+        - $ref: "#/components/parameters/ContextFactId"
+      responses:
+        "200":
+          description: Rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextFact"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /context-facts/{contextFactId}/deactivate:
+    post:
+      tags: [Insights]
+      operationId: deactivateContextFact
+      summary: Deactivate a previously confirmed context fact (owner only)
+      parameters:
+        - $ref: "#/components/parameters/ContextFactId"
+      responses:
+        "200":
+          description: Deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextFact"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /datasets/{datasetId}/reports:
     get:
       tags: [Reports]
@@ -961,6 +1055,12 @@ components:
       required: true
       schema:
         type: string
+    ContextFactId:
+      name: contextFactId
+      in: path
+      required: true
+      schema:
+        type: string
     ReportId:
       name: reportId
       in: path
@@ -1041,6 +1141,9 @@ components:
           type: string
           enum: [light, dark]
           nullable: true
+        contextFactsIntroSeenAt:
+          type: ["string", "null"]
+          format: date-time
 
     UpdateMeBody:
       type: object
@@ -1054,6 +1157,8 @@ components:
           type: string
           enum: [light, dark]
           nullable: true
+        markContextFactsIntroSeen:
+          type: boolean
 
     UploadUrlRequest:
       type: object
@@ -1608,6 +1713,55 @@ components:
         status:
           type: string
           enum: [open, acknowledged, dismissed]
+
+    ContextFact:
+      type: object
+      required: [id, datasetId, category, factText, originalText, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        datasetId:
+          type: string
+        category:
+          type: string
+          enum: [verfahren, ausruestung, wartezeiten, sonstiges]
+        factText:
+          type: string
+        originalText:
+          type: string
+        status:
+          type: string
+          enum: [vorgeschlagen, aktiv, abgelehnt, deaktiviert]
+        sourceAnalysisId:
+          type: ["string", "null"]
+        sourceMessageId:
+          type: ["string", "null"]
+        sourceAnalysisExists:
+          type: boolean
+        confirmedBy:
+          type: ["string", "null"]
+        confirmedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ContextFactCorrection:
+      type: object
+      required: [factText]
+      properties:
+        factText:
+          type: string
+          minLength: 1
+    ContextFactConfirmBody:
+      type: object
+      properties:
+        factText:
+          type: string
+          minLength: 1
 
     Report:
       type: object

@@ -15,6 +15,7 @@ export const usersTable = pgTable("users", {
   lat: doublePrecision("lat"),
   lng: doublePrecision("lng"),
   stallCoolingCorrection: integer("stall_cooling_correction").notNull().default(0),
+  contextFactsIntroSeenAt: timestamp("context_facts_intro_seen_at", { withTimezone: true }),
 });
 
 export type User = typeof usersTable.$inferSelect;
