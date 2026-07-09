@@ -38,7 +38,8 @@
             "useFrameworks": "dynamic"
           }
         }
-      ]
+      ],
+      "./plugins/withSpmPostInstallFix.js"
     ],
     "experiments": {
       "typedRoutes": true,
