@@ -18,7 +18,7 @@ workflows:
       - name: Enable pnpm via corepack
         script: |
           corepack enable
-          corepack prepare pnpm@latest --activate
+          corepack prepare pnpm@10.26.1 --activate
 
       - name: Install dependencies
         script: |
