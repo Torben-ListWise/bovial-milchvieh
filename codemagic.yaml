@@ -24,6 +24,26 @@ workflows:
         script: |
           pnpm install --frozen-lockfile
 
+      - name: Diagnose react-native patch
+        script: |
+          echo "=== Git commit ==="
+          git rev-parse HEAD
+          git log -1 --oneline
+          echo "=== Patch file present? ==="
+          ls -la patches/react-native.patch
+          sha256sum patches/react-native.patch
+          echo "=== patchedDependencies entry ==="
+          grep -A2 "patchedDependencies" pnpm-workspace.yaml
+          echo "=== Resolved react-native dirs in store ==="
+          ls node_modules/.pnpm | grep "^react-native@0.81.5" || echo "NONE FOUND"
+          echo "=== Which react-native does bovial-mobile resolve to? ==="
+          cd artifacts/bovial-mobile
+          node -e "console.log(require.resolve('react-native/package.json'))"
+          echo "=== Does the resolved spm.rb contain our patch? ==="
+          RN_PKG=$(node -e "console.log(require.resolve('react-native/package.json'))")
+          RN_DIR=$(dirname "$RN_PKG")
+          grep -n "package_product_dependencies.nil\|target.nil?" "$RN_DIR/scripts/cocoapods/spm.rb" || echo "PATCH NOT FOUND IN RESOLVED FILE"
+
       - name: Expo prebuild (iOS)
         script: |
           cd artifacts/bovial-mobile
