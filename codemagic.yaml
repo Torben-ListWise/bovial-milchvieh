@@ -9,6 +9,8 @@ workflows:
       node: v20
       xcode: latest
       cocoapods: default
+      groups:
+        - ios_credentials
       vars:
         BUNDLE_ID: com.bovial.app
         APP_STORE_APP_ID: "6788433068"
