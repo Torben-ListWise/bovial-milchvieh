@@ -1,5 +1,5 @@
 diff --git a/scripts/cocoapods/spm.rb b/scripts/cocoapods/spm.rb
-index 0b132076169b5d1c9757523439fad46edf7f59e0..1a5f43cbf2ec1684438933f74581cf5dc7710e7e 100644
+index 0b132076169b5d1c9757523439fad46edf7f59e0..35ff7c325b387e650c68da35065becb12f5e2530 100644
 --- a/scripts/cocoapods/spm.rb
 +++ b/scripts/cocoapods/spm.rb
 @@ -20,17 +20,21 @@ class SPMManager
@@ -26,3 +26,14 @@ index 0b132076169b5d1c9757523439fad46edf7f59e0..1a5f43cbf2ec1684438933f74581cf5d
          target.build_configurations.each do |config|
            target.build_settings(config.name)['SWIFT_INCLUDE_PATHS'] ||= ['$(inherited)']
            search_path = '${SYMROOT}/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/'
+@@ -68,6 +72,10 @@ class SPMManager
+   def add_spm_to_target(project, target, url, requirement, products)
+     pkg_class = Xcodeproj::Project::Object::XCRemoteSwiftPackageReference
+     ref_class = Xcodeproj::Project::Object::XCSwiftPackageProductDependency
++    if !target.respond_to?(:package_product_dependencies) || target.package_product_dependencies.nil?
++      log_warning "Target '#{target.name}' does not support Swift Package Manager product dependencies (package_product_dependencies is nil). Skipping SPM linkage for products #{products.join(", ")}. This can happen when the pod's target is not a native target. If the app crashes at runtime due to missing symbols, the SPM products may need to be linked manually in Xcode."
++      return
++    end
+     pkg = project.root_object.package_references.find { |p| p.class == pkg_class && p.repositoryURL == url }
+     if !pkg
+       pkg = project.new(pkg_class)
