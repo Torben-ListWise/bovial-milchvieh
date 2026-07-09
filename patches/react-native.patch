@@ -1,0 +1,28 @@
+diff --git a/scripts/cocoapods/spm.rb b/scripts/cocoapods/spm.rb
+index 0b132076169b5d1c9757523439fad46edf7f59e0..1a5f43cbf2ec1684438933f74581cf5dc7710e7e 100644
+--- a/scripts/cocoapods/spm.rb
++++ b/scripts/cocoapods/spm.rb
+@@ -20,17 +20,21 @@ class SPMManager
+     clean_spm_dependencies_from_target(project, @dependencies_by_pod)
+     log 'Adding SPM dependencies to Pods project'
+     @dependencies_by_pod.each do |pod_name, dependencies|
++      target = project.targets.find { |t| t.name == pod_name}
++      if target.nil?
++        log_warning "Could not find a Pods project target named '#{pod_name}' to attach Swift Package Manager dependencies to. Skipping SPM linkage for this pod (products: #{dependencies.map{|i| i[:products]}.flatten.uniq.join(", ")}). This can happen when the pod's target is merged/renamed by CocoaPods; if the app crashes at runtime due to missing symbols, the SPM products may need to be linked manually in Xcode."
++        next
++      end
+       dependencies.each do |spm_spec|
+         log "Adding SPM dependency on product #{spm_spec[:products]}"
+         add_spm_to_target(
+           project,
+-          project.targets.find { |t| t.name == pod_name},
++          target,
+           spm_spec[:url],
+           spm_spec[:requirement],
+           spm_spec[:products]
+         )
+         log " Adding workaround for Swift package not found issue"
+-        target = project.targets.find { |t| t.name == pod_name}
+         target.build_configurations.each do |config|
+           target.build_settings(config.name)['SWIFT_INCLUDE_PATHS'] ||= ['$(inherited)']
+           search_path = '${SYMROOT}/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/'
