@@ -18,6 +18,8 @@ import {
   useConfirmContextFact,
   useRejectContextFact,
   useDeactivateContextFact,
+  useEditActiveContextFact,
+  useDeleteContextFact,
   useUpdateMe,
   type AnalysisTemplate,
   type ContextFact,
@@ -1089,6 +1091,10 @@ function ContextFactProposalRow({
 function ActiveContextFactRow({ fact, datasetId, isOwner }: { fact: ContextFact; datasetId: string; isOwner: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(fact.factText);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   const deactivate = useDeactivateContextFact({
     mutation: {
       onSuccess: () => {
@@ -1097,6 +1103,92 @@ function ActiveContextFactRow({ fact, datasetId, isOwner }: { fact: ContextFact;
       },
     },
   });
+
+  const edit = useEditActiveContextFact({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListContextFactsQueryKey(datasetId) });
+        setEditing(false);
+        toast({ title: "Fakt aktualisiert" });
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.error ?? err?.message ?? "Unbekannter Fehler";
+        toast({ variant: "destructive", title: "Fehler beim Speichern", description: msg });
+      },
+    },
+  });
+
+  const deleteFact = useDeleteContextFact({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListContextFactsQueryKey(datasetId) });
+        toast({ title: "Fakt gelöscht" });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Fehler", description: "Fakt konnte nicht gelöscht werden." });
+      },
+    },
+  });
+
+  if (editing) {
+    return (
+      <div className="rounded-lg border border-primary/40 bg-muted/20 px-4 py-3 space-y-2">
+        <Badge variant="outline" className="text-xs font-normal">
+          {CONTEXT_FACT_CATEGORY_LABELS[fact.category] ?? fact.category}
+        </Badge>
+        <Textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="text-sm"
+          rows={2}
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setEditing(false);
+              setDraft(fact.factText);
+            }}
+          >
+            Abbrechen
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => edit.mutate({ contextFactId: fact.id, data: { factText: draft } })}
+            disabled={edit.isPending || draft.trim().length === 0 || draft === fact.factText}
+          >
+            {edit.isPending && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+            Speichern
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (confirmingDelete) {
+    return (
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 space-y-2">
+        <p className="text-sm font-medium text-foreground">Fakt wirklich dauerhaft löschen?</p>
+        <p className="text-xs text-muted-foreground line-clamp-2">{fact.factText}</p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setConfirmingDelete(false)}>
+            Abbrechen
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => deleteFact.mutate({ contextFactId: fact.id })}
+            disabled={deleteFact.isPending}
+          >
+            {deleteFact.isPending && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+            Löschen
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-2.5">
@@ -1107,16 +1199,35 @@ function ActiveContextFactRow({ fact, datasetId, isOwner }: { fact: ContextFact;
         <p className="text-sm text-foreground truncate">{fact.factText}</p>
       </div>
       {isOwner && (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => deactivate.mutate({ contextFactId: fact.id })}
-          disabled={deactivate.isPending}
-          className="text-muted-foreground hover:text-destructive shrink-0"
-        >
-          <PowerOff className="w-3.5 h-3.5 mr-1" />
-          Deaktivieren
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => { setDraft(fact.factText); setEditing(true); }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="w-3.5 h-3.5 mr-1" />
+            Bearbeiten
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => deactivate.mutate({ contextFactId: fact.id })}
+            disabled={deactivate.isPending}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <PowerOff className="w-3.5 h-3.5 mr-1" />
+            Deaktivieren
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setConfirmingDelete(true)}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <XCircle className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       )}
     </div>
   );

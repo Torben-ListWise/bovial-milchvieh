@@ -778,6 +778,49 @@ export const DeactivateContextFactResponse = zod.object({
 
 
 /**
+ * @summary Edit the text of an already-active context fact (owner only)
+ */
+export const EditActiveContextFactParams = zod.object({
+  "contextFactId": zod.coerce.string()
+})
+
+
+
+
+export const EditActiveContextFactBody = zod.object({
+  "factText": zod.string().min(1)
+})
+
+export const EditActiveContextFactResponse = zod.object({
+  "id": zod.string(),
+  "datasetId": zod.string(),
+  "category": zod.enum(['verfahren', 'ausruestung', 'wartezeiten', 'sonstiges']),
+  "factText": zod.string(),
+  "originalText": zod.string(),
+  "status": zod.enum(['vorgeschlagen', 'aktiv', 'abgelehnt', 'deaktiviert']),
+  "sourceAnalysisId": zod.string().nullish(),
+  "sourceMessageId": zod.string().nullish(),
+  "sourceAnalysisExists": zod.boolean().optional(),
+  "confirmedBy": zod.string().nullish(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Permanently delete a context fact (owner only)
+ */
+export const DeleteContextFactParams = zod.object({
+  "contextFactId": zod.coerce.string()
+})
+
+export const DeleteContextFactResponse = zod.object({
+  "deleted": zod.boolean()
+})
+
+
+/**
  * @summary List reports for a dataset
  */
 export const ListReportsParams = zod.object({

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, ne, desc } from "drizzle-orm";
 import {
   db,
   datasetsTable,
@@ -20,6 +20,11 @@ import {
   RejectContextFactResponse,
   DeactivateContextFactParams,
   DeactivateContextFactResponse,
+  EditActiveContextFactParams,
+  EditActiveContextFactBody,
+  EditActiveContextFactResponse,
+  DeleteContextFactParams,
+  DeleteContextFactResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { canReadDataset } from "../lib/teamAccess";
@@ -253,6 +258,72 @@ router.post("/context-facts/:contextFactId/deactivate", requireAuth, async (req:
     .where(eq(contextFactsTable.id, contextFactId))
     .returning();
   res.json(DeactivateContextFactResponse.parse(await serializeFact(updated)));
+});
+
+router.patch("/context-facts/:contextFactId/edit", requireAuth, async (req: Request, res: Response) => {
+  const { contextFactId } = EditActiveContextFactParams.parse(req.params);
+  const parsed = EditActiveContextFactBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Ungültige Eingabe" });
+    return;
+  }
+  const existing = await ownedFact(contextFactId, req.userId!);
+  if (!existing) {
+    res.status(404).json({ error: "Betriebs-Kontext-Fakt nicht gefunden" });
+    return;
+  }
+  if (existing.status !== "aktiv") {
+    res.status(400).json({ error: "Nur aktive Fakten können bearbeitet werden" });
+    return;
+  }
+
+  // Re-run dedup against other active facts (exclude the fact being edited from comparison).
+  // Fail-open: if embedding fails, the edit proceeds unchecked.
+  try {
+    const [editedEmbedding] = await embedTexts([parsed.data.factText]);
+    const otherActiveFacts = await db
+      .select({ embedding: contextFactsTable.embedding })
+      .from(contextFactsTable)
+      .where(
+        and(
+          eq(contextFactsTable.datasetId, existing.datasetId),
+          eq(contextFactsTable.status, "aktiv"),
+          ne(contextFactsTable.id, contextFactId),
+        ),
+      );
+    const isDuplicate = otherActiveFacts
+      .filter((f) => f.embedding)
+      .some((f) => {
+        const sim = cosineSimilarity(editedEmbedding, f.embedding!);
+        return sim >= DEDUP_SIMILARITY_THRESHOLD;
+      });
+    if (isDuplicate) {
+      res.status(409).json({ error: "Ein sehr ähnlicher aktiver Fakt existiert bereits" });
+      return;
+    }
+  } catch (err) {
+    logger.warn({ err, contextFactId }, "Dedup-Prüfung bei Bearbeitung fehlgeschlagen — fahre ungeprüft fort");
+  }
+
+  const [updated] = await db
+    .update(contextFactsTable)
+    .set({ factText: parsed.data.factText, updatedAt: new Date() })
+    .where(eq(contextFactsTable.id, contextFactId))
+    .returning();
+  logger.info({ contextFactId, datasetId: existing.datasetId }, "Aktiver Betriebs-Kontext-Fakt bearbeitet");
+  res.json(EditActiveContextFactResponse.parse(await serializeFact(updated)));
+});
+
+router.delete("/context-facts/:contextFactId", requireAuth, async (req: Request, res: Response) => {
+  const { contextFactId } = DeleteContextFactParams.parse(req.params);
+  const existing = await ownedFact(contextFactId, req.userId!);
+  if (!existing) {
+    res.status(404).json({ error: "Betriebs-Kontext-Fakt nicht gefunden" });
+    return;
+  }
+  await db.delete(contextFactsTable).where(eq(contextFactsTable.id, contextFactId));
+  logger.info({ contextFactId, datasetId: existing.datasetId, status: existing.status }, "Betriebs-Kontext-Fakt gelöscht");
+  res.json(DeleteContextFactResponse.parse({ deleted: true }));
 });
 
 export default router;

@@ -2665,6 +2665,141 @@ export const useDeactivateContextFact = <TError = ErrorType<NotFoundResponse>,
       return useMutation(getDeactivateContextFactMutationOptions(options));
     }
 
+export const getEditActiveContextFactUrl = (contextFactId: string,) => {
+
+
+
+
+  return `/api/context-facts/${contextFactId}/edit`
+}
+
+/**
+ * @summary Edit the text of an already-active context fact (owner only)
+ */
+export const editActiveContextFact = async (contextFactId: string,
+    editActiveContextFactBody: BodyType<{factText: string}>, options?: RequestInit): Promise<ContextFact> => {
+
+  return customFetch<ContextFact>(getEditActiveContextFactUrl(contextFactId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(editActiveContextFactBody)
+  }
+);}
+
+
+
+
+export const getEditActiveContextFactMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof editActiveContextFact>>, TError,{contextFactId: string;data: BodyType<{factText: string}>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof editActiveContextFact>>, TError,{contextFactId: string;data: BodyType<{factText: string}>}, TContext> => {
+
+const mutationKey = ['editActiveContextFact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof editActiveContextFact>>, {contextFactId: string;data: BodyType<{factText: string}>}> = (props) => {
+          const {contextFactId,data} = props ?? {};
+
+          return  editActiveContextFact(contextFactId,data,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EditActiveContextFactMutationResult = NonNullable<Awaited<ReturnType<typeof editActiveContextFact>>>
+
+    export type EditActiveContextFactMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Edit the text of an already-active context fact (owner only)
+ */
+export const useEditActiveContextFact = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof editActiveContextFact>>, TError,{contextFactId: string;data: BodyType<{factText: string}>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof editActiveContextFact>>,
+        TError,
+        {contextFactId: string;data: BodyType<{factText: string}>},
+        TContext
+      > => {
+      return useMutation(getEditActiveContextFactMutationOptions(options));
+    }
+
+export const getDeleteContextFactUrl = (contextFactId: string,) => {
+
+
+
+
+  return `/api/context-facts/${contextFactId}`
+}
+
+/**
+ * @summary Permanently delete a context fact (owner only)
+ */
+export const deleteContextFact = async (contextFactId: string, options?: RequestInit): Promise<{deleted: boolean}> => {
+
+  return customFetch<{deleted: boolean}>(getDeleteContextFactUrl(contextFactId),
+  {
+    ...options,
+    method: 'DELETE'
+  }
+);}
+
+
+
+
+export const getDeleteContextFactMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContextFact>>, TError,{contextFactId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContextFact>>, TError,{contextFactId: string}, TContext> => {
+
+const mutationKey = ['deleteContextFact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContextFact>>, {contextFactId: string}> = (props) => {
+          const {contextFactId} = props ?? {};
+
+          return  deleteContextFact(contextFactId,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContextFactMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContextFact>>>
+
+    export type DeleteContextFactMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Permanently delete a context fact (owner only)
+ */
+export const useDeleteContextFact = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContextFact>>, TError,{contextFactId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContextFact>>,
+        TError,
+        {contextFactId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteContextFactMutationOptions(options));
+    }
+
 export const getListReportsUrl = (datasetId: string,) => {
 
 
