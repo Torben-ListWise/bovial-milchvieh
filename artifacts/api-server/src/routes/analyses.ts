@@ -26,6 +26,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { checkQuota, incrementQuota, maybeSendQuotaWarning } from "../lib/quota";
+import { checkRateLimit } from "../lib/rateLimiter";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { type Chart, type Citation } from "../lib/agent";
 import { logger } from "../lib/logger";
@@ -273,6 +274,18 @@ router.post(
       res.status(404).json({ error: "Datensatz nicht gefunden" });
       return;
     }
+    // ── Rate limit check (burst protection) ──────────────────────────────────
+    const isOperator = req.appUser?.role === "operator";
+    const rateLimit = checkRateLimit(userId, isOperator);
+    if (!rateLimit.allowed) {
+      res.status(429).set("Retry-After", String(rateLimit.retryAfterSeconds ?? 60)).json({
+        error: "rate_limit_exceeded",
+        message: rateLimit.reason,
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      });
+      return;
+    }
+
     // ── Quota check ───────────────────────────────────────────────────────────
     const quotaCheck = await checkQuota(userId);
     if (!quotaCheck.allowed) {
@@ -552,6 +565,18 @@ router.post(
       res.status(404).json({ error: "Analyse nicht gefunden" });
       return;
     }
+    // ── Rate limit check (burst protection) ──────────────────────────────────
+    const msgIsOperator = req.appUser?.role === "operator";
+    const msgRateLimit = checkRateLimit(req.userId!, msgIsOperator);
+    if (!msgRateLimit.allowed) {
+      res.status(429).set("Retry-After", String(msgRateLimit.retryAfterSeconds ?? 60)).json({
+        error: "rate_limit_exceeded",
+        message: msgRateLimit.reason,
+        retryAfterSeconds: msgRateLimit.retryAfterSeconds,
+      });
+      return;
+    }
+
     // ── Quota check ───────────────────────────────────────────────────────────
     const msgQuotaCheck = await checkQuota(req.userId!);
     if (!msgQuotaCheck.allowed) {
