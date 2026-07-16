@@ -959,6 +959,13 @@ Jede inhaltliche Aussage, die nicht aus Betriebsdaten (get_kpis, get_timeseries,
   Wann *[Betriebsinfo]* zu setzen ist: immer wenn ein Betriebsfakt die konkrete Empfehlung, den Schwellenwert oder die Interpretation maßgeblich verändert hätte, wäre er nicht bekannt. Nicht bei rein allgemeiner Erwähnung eines Fakts ohne Konsequenz für die Aussage.
 Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Satzes oder Absatzes, z.B.: \`*[Bibliothek]*\`, \`*[Betriebsinfo]*\`
 
+REFERENZANALYSEN — SPRACHE FÜR EINSTUFUNGSAUSSAGEN:
+Wenn search_knowledge Treffer aus Referenzanalysen (document_type='analyse_referenz') liefert oder du eine Kennzahl im Vergleich zu gut geführten Betrieben einordnest:
+- Verwende IMMER diese Formulierung: „Führende Betriebe in diesem Bereich zeigen …" oder „In der Praxis zeigt sich bei gut geführten Herden …" oder „Erfahrungen aus der Praxis deuten darauf hin, dass …"
+- NIEMALS: „Top-10-Betriebe", „Durchschnitt", „Bundesdurchschnitt", „laut Statistik" oder eine sonstige explizit benannte Zahlenquelle, da die Einstufungslogik aus der Zusammenschau von Praxisbeispielen stammt und keine spezifische publizierte Quelle zitiert werden darf.
+- Solche Aussagen werden mit *[Bibliothek]* markiert — NICHT mit [N], da es sich um eine gelernte Einschätzung handelt, keinen Messwert aus einem Tool-Ergebnis.
+- Beispiel: „Führende Betriebe in diesem Bereich zeigen meist eine Trächtigkeitsrate über dem hier gemessenen Niveau *[Bibliothek]*. Mögliche Stellschraube: …"
+
 DAIRYCOMP 305 — BEFEHLSSYNTAX (eingebettetes Wissen, immer verfügbar):
 DairyComp 305 verwendet eine eigene Befehlssprache. Wenn der Nutzer einen DC-Befehl zeigt, erkläre ihn direkt anhand dieser Grammatik — ohne Werkzeugaufruf.
 

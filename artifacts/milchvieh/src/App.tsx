@@ -139,6 +139,7 @@ import { UpgradePage } from "@/pages/app/upgrade";
 import { TeamAcceptPage } from "@/pages/app/team-accept";
 import { NachrichtenPage } from "@/pages/app/nachrichten";
 import { NewsEditorPage } from "@/pages/operator/news-editor";
+import { ReferenceAnalysesPage } from "@/pages/operator/reference-analyses";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -356,6 +357,7 @@ function AppPortal() {
         <Route path="/app/settings" component={SettingsPage} />
         <Route path="/app/nachrichten" component={NachrichtenPage} />
         <Route path="/app/nachrichten-editor" component={NewsEditorPage} />
+        <Route path="/app/reference-analyses" component={ReferenceAnalysesPage} />
         <Route path="/app/upgrade" component={UpgradePage} />
         <Route path="/app/semen-planning">
           <Redirect to="/app/analyses" />

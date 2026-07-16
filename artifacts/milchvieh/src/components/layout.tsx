@@ -30,6 +30,7 @@ import {
   Moon,
   FlaskConical,
   Newspaper,
+  Sparkles,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -256,6 +257,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Wissensbibliothek", href: "/app/knowledge", icon: BookOpen, preserveDataset: false },
     { name: "Auswertungsvorlagen", href: "/app/templates", icon: LayoutList, preserveDataset: false },
     { name: "Nachrichten", href: "/app/nachrichten-editor", icon: Newspaper, preserveDataset: false },
+    { name: "Referenzanalysen", href: "/app/reference-analyses", icon: Sparkles, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;
