@@ -955,7 +955,9 @@ Jede inhaltliche Aussage, die nicht aus Betriebsdaten (get_kpis, get_timeseries,
 - *[Bibliothek]* — der Abschnitt basiert auf search_knowledge-Treffern mit score ≥ 0.55
 - *[Web]* — der Abschnitt basiert auf search_web-Ergebnissen
 - *[Allgemeinwissen]* — weder Bibliothek noch Web lieferten relevante Treffer; Antwort stammt aus Modell-Trainingswissen
-Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Absatzes, z.B.: \`*[Bibliothek]*\`
+- *[Betriebsinfo]* — der Satz oder Absatz wurde durch einen gespeicherten Betriebsfakt (aus dem Block „Bestätigte Betriebs-Fakten") beeinflusst. Setze diesen Marker direkt am Ende des betreffenden Satzes oder Absatzes, z.B.: „Da ihr selektiv trockenstellt *[Betriebsinfo]*, empfehlen wir…" oder „Auf Basis der hinterlegten Wartezeit von 50 Tagen *[Betriebsinfo]* ergibt sich…"
+  Wann *[Betriebsinfo]* zu setzen ist: immer wenn ein Betriebsfakt die konkrete Empfehlung, den Schwellenwert oder die Interpretation maßgeblich verändert hätte, wäre er nicht bekannt. Nicht bei rein allgemeiner Erwähnung eines Fakts ohne Konsequenz für die Aussage.
+Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Satzes oder Absatzes, z.B.: \`*[Bibliothek]*\`, \`*[Betriebsinfo]*\`
 
 DAIRYCOMP 305 — BEFEHLSSYNTAX (eingebettetes Wissen, immer verfügbar):
 DairyComp 305 verwendet eine eigene Befehlssprache. Wenn der Nutzer einen DC-Befehl zeigt, erkläre ihn direkt anhand dieser Grammatik — ohne Werkzeugaufruf.
@@ -1622,12 +1624,38 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           rating = "nicht empfohlen";
         }
 
+        // ── Sensitivity analysis: ±15 % on annualBenefit ─────────────────────
+        const SENS_PCT = 0.15;
+        const computeSensCumulative = (benefit: number): { breakEven: number | null; cum10: number } => {
+          let cum = 0;
+          let bEven: number | null = null;
+          for (let y = 1; y <= 10; y++) {
+            cum = Math.round((cum + benefit - annuity) * 100) / 100;
+            if (bEven === null && cum > 0) bEven = y;
+          }
+          return { breakEven: bEven, cum10: cum };
+        };
+        const benefitLow  = Math.round(annualBenefit * (1 - SENS_PCT));
+        const benefitHigh = Math.round(annualBenefit * (1 + SENS_PCT));
+        const sensLow  = computeSensCumulative(benefitLow);
+        const sensHigh = computeSensCumulative(benefitHigh);
+        const sensitivity = {
+          annualBenefitLow:   benefitLow,
+          annualBenefitHigh:  benefitHigh,
+          breakEvenYearLow:   sensLow.breakEven,
+          breakEvenYearHigh:  sensHigh.breakEven,
+          cumulative10Low:    sensLow.cum10,
+          cumulative10High:   sensHigh.cum10,
+          rangeNote: `Bandbreite basiert auf ±${Math.round(SENS_PCT * 100)} % Schwankung des jährlichen Nettonutzens (${benefitLow.toLocaleString("de-DE")}–${benefitHigh.toLocaleString("de-DE")} €/Jahr). Die tatsächliche Wirtschaftlichkeit hängt von den eingegebenen Annahmen ab — keine Garantie.`,
+        };
+
         return {
           annuity,
           breakEvenYear,
           rating,
           effectiveCost,
           cashflowTable,
+          sensitivity,
           summary: {
             investmentCost,
             subsidy,
@@ -1750,6 +1778,32 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           (inp.preisHoGesext - inp.preisHoKonv) * portHoGes / kuehe / 12, 2
         );
 
+        // ── Sensitivity analysis: ±10 % on Konzeptionsrate Kühe & Färsen ────
+        //    Higher CR → fewer inseminations needed → lower cost (optimistic = +10 %)
+        //    Lower  CR → more  inseminations needed → higher cost (pessimistic = −10 %)
+        const SENS_KR = 0.10;
+        const computeNetto = (kzK: number, kzF: number): { nettokosten: number; nettokostenProKuhJahr: number } => {
+          const totBesK = traechtigkeitenKuehe   / kzK;
+          const totBesF = traechtigkeitenFaersen / kzF;
+          const totBes  = totBesK + totBesF;
+          const kosten  = round(
+            totBes * (aHoGes * inp.preisHoGesext + aHoKonv * inp.preisHoKonv +
+                      aBeefGes * inp.preisBeefGesext + aBeefKonv * inp.preisBeefKonv),
+          );
+          const netto = round(kosten - gesamterlös);
+          return { nettokosten: netto, nettokostenProKuhJahr: round(netto / kuehe) };
+        };
+        const sensOpt  = computeNetto(kzKuehe * (1 + SENS_KR), kzFaersen * (1 + SENS_KR)); // best case
+        const sensPess = computeNetto(kzKuehe * (1 - SENS_KR), kzFaersen * (1 - SENS_KR)); // worst case
+        const semenSensitivity = {
+          konzRateVariation: `±${Math.round(SENS_KR * 100)} %`,
+          nettokostenMin: sensOpt.nettokosten,
+          nettokostenMax: sensPess.nettokosten,
+          nettokostenProKuhJahrMin: sensOpt.nettokostenProKuhJahr,
+          nettokostenProKuhJahrMax: sensPess.nettokostenProKuhJahr,
+          rangeNote: `Bandbreite basiert auf ±${Math.round(SENS_KR * 100)} % Schwankung der Konzeptionsraten (Kühe ${round(kzKuehe * 100 * (1 - SENS_KR), 1)}–${round(kzKuehe * 100 * (1 + SENS_KR), 1)} %, Färsen analog). Nettosaldo-Spanne: ${sensPess.nettokosten.toLocaleString("de-DE")}–${sensOpt.nettokosten.toLocaleString("de-DE")} € / Jahr.`,
+        };
+
         const outputs = {
           herdendynamik: {
             benoetigteFaersen,
@@ -1779,6 +1833,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           nettokosten,
           nettokostenProKuhJahr,
           sexingMehrpreisProKuhMonat,
+          sensitivity: semenSensitivity,
         };
 
         const nowTs = new Date();

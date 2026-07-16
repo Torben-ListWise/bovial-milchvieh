@@ -122,9 +122,24 @@ export async function evaluateWarnings(
   }
 
   // 3. Statistical anomaly detection for key metrics.
-  for (const metric of ["milk_yield_kg", "scc", "fat_pct", "protein_pct"]) {
+  //    Table-driven: each entry specifies sigma and severity so new metrics
+  //    can be added without touching the warning-creation logic.
+  const ANOMALY_METRICS: { metric: string; sigma: number; severity: string }[] = [
+    { metric: "milk_yield_kg", sigma: 2.5, severity: "warning" },
+    { metric: "scc",           sigma: 2.5, severity: "critical" },
+    { metric: "fat_pct",       sigma: 2.5, severity: "warning" },
+    { metric: "protein_pct",   sigma: 2.5, severity: "warning" },
+    // Extended KPIs — present in MLP / DairyComp exports
+    { metric: "urea",          sigma: 2.0, severity: "warning" },   // Harnstoff — sensitive metabolic indicator
+    { metric: "lactose_pct",   sigma: 2.5, severity: "warning" },   // Laktose
+    { metric: "days_in_milk",  sigma: 3.0, severity: "info" },      // DIM outliers often signal data-entry errors
+    { metric: "body_weight_kg", sigma: 2.5, severity: "warning" },  // Körpergewicht
+    { metric: "milking_count",  sigma: 2.5, severity: "info" },     // Melkungen — AMS-Betriebe
+  ];
+
+  for (const { metric, sigma, severity } of ANOMALY_METRICS) {
     if (!presentMetrics.has(metric)) continue;
-    const anomaly = await detectAnomalies(datasetId, metric, 2.5);
+    const anomaly = await detectAnomalies(datasetId, metric, sigma);
     if (anomaly && anomaly.outlierCount > 0) {
       const field = CANONICAL_FIELD_MAP[metric];
       newWarnings.push({
@@ -134,7 +149,7 @@ export async function evaluateWarnings(
         detail: `${anomaly.outlierCount} Ausreißer außerhalb des Normbereichs (${anomaly.lowerBound}–${anomaly.upperBound}${field?.unit ? " " + field.unit : ""}) erkannt.`,
         metric,
         value: anomaly.outlierCount,
-        severity: metric === "scc" ? "critical" : "warning",
+        severity,
         ruleId: null,
       });
     }
