@@ -2698,6 +2698,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   // the same metric/groupBy/interval that was already fetched in the same turn.
   const turnResultCache = new Map<string, unknown>();
 
+  const agentStartMs = Date.now();
+  let firstToolFired = false;
   let finalText = "";
   let toolWasCalled = false;
   let searchKnowledgeCalled = false;
@@ -2806,6 +2808,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           if (!firstTextDeltaFired) {
             firstTextDeltaFired = true;
             opts.onProgress?.("Generiere Antwort…");
+            logger.info(
+              { analysisId: opts.betaAnalysisId ?? null, firstDeltaMs: Date.now() - agentStartMs },
+              "agent:first-delta",
+            );
           }
           opts.onTextDelta!(delta);
         });
@@ -2874,10 +2880,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       );
       // emit_chart is valid when:
       // - follow-up turn (numbers already grounded in prior turn), OR
-      // - document context is available (agent reads PDF numbers and builds chart manually)
+      // - document context is available (agent reads PDF numbers and builds chart manually), OR
+      // - a grounded DB/tool call appears in the same agentic batch (same tool_use response)
       const isFollowUp = opts.conversation.length > 0;
       const hasDocContext = docContext.length > 0 || knowledgeDocsExist;
-      if (toolUses.some((t) => groundedTools.has(t.name) || ((isFollowUp || hasDocContext) && t.name === "emit_chart"))) {
+      const hasGroundedToolInBatch = toolUses.some((t) => groundedTools.has(t.name));
+      if (toolUses.some((t) => groundedTools.has(t.name) || ((isFollowUp || hasDocContext || hasGroundedToolInBatch) && t.name === "emit_chart"))) {
         toolWasCalled = true;
       }
       // Track ask_farmer calls for Opus escalation on next turn
@@ -2889,6 +2897,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const tu of toolUses) {
+        if (!firstToolFired) {
+          firstToolFired = true;
+          logger.info(
+            { analysisId: opts.betaAnalysisId ?? null, firstToolMs: Date.now() - agentStartMs, tool: tu.name },
+            "agent:first-tool",
+          );
+        }
         const label = progressLabel(tu.name, (tu.input ?? {}) as Record<string, unknown>);
         await opts.onProgress?.(label);
         let result: unknown;
@@ -2971,5 +2986,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent: null };
   }
 
+  logger.info(
+    { analysisId: opts.betaAnalysisId ?? null, totalMs: Date.now() - agentStartMs, turns: turnToolCounts.length },
+    "agent:done",
+  );
   return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent };
 }

@@ -602,6 +602,7 @@ function MessageBubble({
 
 function FeedbackBar({ messageId }: { messageId: string }) {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [rating, setRating] = useState<"up" | "down" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -638,7 +639,10 @@ function FeedbackBar({ messageId }: { messageId: string }) {
       });
       if (res.status === 403) { setHidden(true); return; }
       if (res.ok) setRating(newRating);
-    } catch { /* silently ignore */ } finally {
+      else toast({ variant: "destructive", title: "Bewertung nicht gespeichert", description: "Bitte versuche es erneut.", duration: 4000 });
+    } catch {
+      toast({ variant: "destructive", title: "Bewertung nicht gespeichert", description: "Bitte versuche es erneut.", duration: 4000 });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -2848,6 +2852,12 @@ export function AnalysesPage() {
       streamingAnalysisIdRef.current = null;
       if (id) sseStartedForRef.current.delete(id);
       setPollFallback(true);
+      toast({
+        variant: "destructive",
+        title: "Verbindung unterbrochen",
+        description: "Die Verbindung zum Analyse-Server wurde unterbrochen. Das Ergebnis wird geladen, sobald es verfügbar ist.",
+        duration: 6000,
+      });
     },
   });
 

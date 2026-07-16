@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import compression from "compression";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
@@ -47,6 +48,17 @@ app.use(
 );
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
+// Response compression (gzip/brotli) — skip SSE stream endpoint to avoid
+// buffering that would break chunked streaming delivery.
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.path.startsWith("/api/stream")) return false;
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 // CORS: allow only explicitly-listed origins and Replit-owned TLDs.
 // Never use origin:true (reflects arbitrary origins) with credentials:true.
