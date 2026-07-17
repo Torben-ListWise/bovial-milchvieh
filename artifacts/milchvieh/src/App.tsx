@@ -18,6 +18,7 @@ const deDULocalization: typeof deDE = {
     ...(deDE as any).signIn,
     start: {
       ...(deDE as any).signIn?.start,
+      title: "Anmelden bei Bovial",
       subtitleCombined: "Willkommen zurück! Melde dich an, um fortzufahren.",
     },
     alternativeMethods: {
@@ -84,7 +85,7 @@ const deDULocalization: typeof deDE = {
     ...(deDE as any).signUp,
     start: {
       ...(deDE as any).signUp?.start,
-      title: "Erstelle dein Konto",
+      title: "Konto bei Bovial erstellen",
       actionText: "Hast du ein Konto?",
     },
     continue: {
@@ -192,9 +193,10 @@ const clerkAppearance = {
     footerActionText: "text-[#4a5c54] text-sm",
     dividerText: "text-[#4a5c54] text-sm",
     dividerLine: "bg-[#e5e1d8]",
-    socialButtonsBlockButton: "border-2 border-[#c8c3b8] bg-white hover:bg-[#f7f5f0] text-[#202e29] h-11 rounded-lg shadow-sm",
-    socialButtonsBlockButtonText: "font-semibold text-base text-[#202e29]",
+    socialButtonsBlockButton: "border-2 border-[#c8c3b8] bg-white hover:bg-[#f7f5f0] text-[#202e29] h-11 rounded-lg shadow-sm !opacity-100",
+    socialButtonsBlockButtonText: "font-semibold text-base text-[#202e29] !opacity-100",
     socialButtonsBlockButtonArrow: "text-[#202e29]",
+    socialButtonsBlockButton__google: "border-2 border-[#c8c3b8] bg-white hover:bg-[#f7f5f0] text-[#202e29] h-11 rounded-lg shadow-sm !opacity-100",
     alternativeMethodsBlockButton: "border-2 border-[#c8c3b8] bg-white hover:bg-[#f7f5f0] text-[#202e29] h-11 rounded-lg shadow-sm",
     alternativeMethodsBlockButtonText: "font-semibold text-base text-[#202e29]",
     alternativeMethodsBlockButtonArrow: "text-[#202e29]",
@@ -231,18 +233,30 @@ function TeamAcceptPageWrapper() {
   return <TeamAcceptPage />;
 }
 
+function AuthFooter() {
+  return (
+    <p className="text-xs text-[#6b7c74] mt-3 text-center">
+      <a href={`${basePath}/impressum`} className="hover:underline hover:text-[#2b5242] transition-colors">Impressum</a>
+      <span className="mx-2 opacity-40">·</span>
+      <a href={`${basePath}/datenschutz`} className="hover:underline hover:text-[#2b5242] transition-colors">Datenschutz</a>
+    </p>
+  );
+}
+
 function SignInPage() {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4">
       <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <AuthFooter />
     </div>
   );
 }
 
 function SignUpPage() {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4">
       <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <AuthFooter />
     </div>
   );
 }
