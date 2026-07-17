@@ -154,7 +154,7 @@ overrides:
   rollup>@rollup/rollup-win32-x64-msvc: '-'
 
 patchedDependencies:
-  react-native:
+  react-native@0.81.5:
     hash: 1a4c4d151346ab3a0c632406bbbc5569ce36132b6a1db547a145dfa5e0898ebc
     path: patches/react-native.patch
 
