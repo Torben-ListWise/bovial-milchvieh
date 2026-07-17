@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { asc, desc, eq, gte, sql } from "drizzle-orm";
 import {
   db,
@@ -603,10 +603,31 @@ router.post(
 );
 
 // POST /api/admin/plan/assign — assign any plan to a registered user by email
+//
+// Two auth forms are accepted:
+//
+// 1. Machine-auth (no browser session required) — use CRON_SECRET:
+//      curl -X POST https://<host>/api/admin/plan/assign \
+//        -H "Authorization: Bearer <CRON_SECRET>" \
+//        -H "Content-Type: application/json" \
+//        -d '{"email":"farmer@example.com","plan":"pro"}'
+//    The X-Cron-Secret header is accepted as an alternative to Authorization.
+//
+// 2. Browser-auth — standard Clerk operator JWT (existing behaviour unchanged).
 router.post(
   "/admin/plan/assign",
-  requireAuth,
-  requireOperator,
+  async (req: Request, res: Response, next: NextFunction) => {
+    const cronSecret = process.env["CRON_SECRET"];
+    const provided =
+      (req.headers["x-cron-secret"] as string | undefined) ??
+      (req.headers["authorization"] as string | undefined)?.replace(/^Bearer\s+/i, "");
+    if (cronSecret && provided === cronSecret) {
+      req.userId = "system";
+      req.appUser = { id: "system", email: null, name: null, role: "operator" } as any;
+      return next();
+    }
+    await requireAuth(req, res, () => requireOperator(req, res, next));
+  },
   async (req: Request, res: Response) => {
     const { email, plan } = req.body as { email?: string; plan?: string };
     if (!email || typeof email !== "string") {
