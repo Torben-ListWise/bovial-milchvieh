@@ -5,25 +5,32 @@ import Stripe from "stripe";
 
 const router: IRouter = Router();
 
-// Instantiate Stripe once at module load — not on every request.
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, { apiVersion: "2025-05-28.basil" })
   : null;
 
 const STRIPE_PLANS: Record<string, { priceId: string; name: string }> = {
+  basis: {
+    priceId: process.env.STRIPE_BASIS_PRICE_ID ?? "",
+    name: "Basis",
+  },
   starter: {
-    priceId: process.env.STRIPE_PRICE_STARTER ?? "",
+    priceId: process.env.STRIPE_STARTER_PRICE_ID ?? "",
     name: "Professional",
   },
   pro: {
-    priceId: process.env.STRIPE_PRICE_PRO ?? "",
+    priceId: process.env.STRIPE_PRO_PRICE_ID ?? "",
     name: "Premium",
+  },
+  premium_max: {
+    priceId: process.env.STRIPE_PREMIUM_MAX_PRICE_ID ?? "",
+    name: "Premium Max",
   },
 };
 
 const CreateCheckoutSessionBody = z.object({
-  planKey: z.enum(["starter", "pro"]),
+  planKey: z.enum(["basis", "starter", "pro", "premium_max"]),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });

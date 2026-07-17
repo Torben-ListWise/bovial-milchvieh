@@ -3,12 +3,64 @@ import { db, subscriptionsTable, analysisQuotaTable, usersTable, masterDataTable
 import { sendQuotaWarning, fireEmail } from "./emailService";
 import { logger } from "./logger";
 
+// Credit limits per plan (monthly)
+// basis: 1,99 €/Monat — 15 Credits
+// starter: Professional 19 €/Monat — 60 Credits
+// pro: Premium 49 €/Monat — 200 Credits
+// premium_max: Premium Max 99 €/Monat — intern 1500-Credit-Soft-Limit, nach außen unbegrenzt
+// beta: Testzugang — konfigurierbar (Standard 200 Credits)
 export const PLAN_LIMITS: Record<string, number> = {
-  free: 10,
-  starter: 50,
-  pro: Infinity,
+  free: 15,
+  basis: 15,
+  starter: 60,
+  pro: 200,
+  premium_max: Infinity,
   beta: 200,
 };
+
+// Soft fair-use-Grenze für premium_max (intern, wird nie dem Nutzer angezeigt)
+export const PREMIUM_MAX_SOFT_LIMIT = 1500;
+
+// Credit-Gewichte nach Komplexitätsstufe
+export const CREDIT_WEIGHTS = {
+  simple: 1,
+  complex: 3,
+  calculator: 5,
+} as const;
+
+export type AnalysisComplexity = keyof typeof CREDIT_WEIGHTS;
+
+// Tools, die keine Credits kosten (reine Wissensfragen)
+const KNOWLEDGE_ONLY_TOOLS = new Set(["search_knowledge", "search_web"]);
+// Kalkulator-Tools (5 Credits)
+const CALCULATOR_TOOLS = new Set(["calculate_investment", "calculate_semen_planning", "ask_farmer"]);
+// Komplexe Analysen (3 Credits)
+const COMPLEX_TOOLS = new Set([
+  "get_timeseries",
+  "get_group_aggregate",
+  "detect_anomalies",
+  "run_sql",
+]);
+
+/**
+ * Klassifiziert die Komplexitätsstufe basierend auf den tatsächlich aufgerufenen Tools.
+ * Gibt 0 Credits zurück für reine Wissensfragen (search_knowledge/search_web only).
+ */
+export function classifyComplexityFromTools(
+  toolsCalled: string[],
+): { complexity: AnalysisComplexity; credits: number } {
+  const dataTools = toolsCalled.filter((t) => !KNOWLEDGE_ONLY_TOOLS.has(t));
+  if (dataTools.length === 0) {
+    return { complexity: "simple", credits: 0 };
+  }
+  if (dataTools.some((t) => CALCULATOR_TOOLS.has(t))) {
+    return { complexity: "calculator", credits: CREDIT_WEIGHTS.calculator };
+  }
+  if (dataTools.some((t) => COMPLEX_TOOLS.has(t))) {
+    return { complexity: "complex", credits: CREDIT_WEIGHTS.complex };
+  }
+  return { complexity: "simple", credits: CREDIT_WEIGHTS.simple };
+}
 
 export function currentYearMonth(): string {
   const now = new Date();
@@ -79,22 +131,23 @@ export async function getQuotaStatus(userId: string): Promise<{
 }
 
 /**
- * Atomically increments the quota counter for the current month.
- * Uses INSERT ... ON CONFLICT DO UPDATE so it works even if no row exists yet.
+ * Atomically adds `credits` to the quota counter for the current month.
+ * Skips the increment when credits <= 0 (knowledge-only queries).
  */
-export async function incrementQuota(userId: string): Promise<void> {
+export async function incrementQuota(userId: string, credits = 1): Promise<void> {
+  if (credits <= 0) return;
   const yearMonth = currentYearMonth();
   await db.execute(sql`
     INSERT INTO analysis_quota (user_id, year_month, count)
-    VALUES (${userId}, ${yearMonth}, 1)
+    VALUES (${userId}, ${yearMonth}, ${credits})
     ON CONFLICT (user_id, year_month)
-    DO UPDATE SET count = analysis_quota.count + 1
+    DO UPDATE SET count = analysis_quota.count + ${credits}
   `);
 }
 
 /**
- * Returns true if the user is within their quota, false if they've exceeded it.
- * Does NOT increment the counter — call incrementQuota() after a successful analysis.
+ * Returns true if the user is within their credit quota.
+ * premium_max is always allowed (soft-limit warning only).
  */
 export async function checkQuota(userId: string): Promise<{
   allowed: boolean;
@@ -105,6 +158,9 @@ export async function checkQuota(userId: string): Promise<{
   const { plan, limit, used } = await getQuotaStatus(userId);
 
   if (limit === Infinity) {
+    if (used >= PREMIUM_MAX_SOFT_LIMIT) {
+      logger.warn({ userId, used, plan }, "premium_max soft-limit überschritten");
+    }
     return { allowed: true, plan, limit: -1, used };
   }
 
@@ -112,11 +168,8 @@ export async function checkQuota(userId: string): Promise<{
 }
 
 /**
- * Checks if the user just crossed the 80% quota threshold after an increment,
- * and if so, fires a one-time quota warning e-mail (fire-and-forget).
- *
- * Call this after incrementQuota() completes. It fires exactly once per month
- * when `used === ceil(limit * 0.8)`.
+ * Fires a quota-warning e-mail when the user just crossed the 80 % threshold.
+ * Call this after incrementQuota() completes.
  */
 export async function maybeSendQuotaWarning(userId: string): Promise<void> {
   try {

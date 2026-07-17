@@ -29,3 +29,5 @@
 - [Bovial mobile setup](bovial-mobile-setup.md) — Clerk+expo-secure-store, SSE via react-native-sse (NOT expo/fetch), NativeTabs from expo-router/unstable-native-tabs, customFetch export
 - [Milchvieh workflow restart after migration](milchvieh-workflow-restart-migration.md) — `pnpm run dev` is build+start; a running process keeps old code until explicitly restarted, so new migrations silently never run
 - [Clerk SPM static frameworks](clerk-spm-static-frameworks.md) — @clerk/expo's ClerkKit SPM dependency needs use_frameworks! static or pod install crashes
+- [Milchvieh credit system](milchvieh-credit-system.md) — credit-weighted quota (1/3/5), credit_usage_log table, processQuestion returns ProcessQuestionResult not Message
+- [Milchvieh DB project references](milchvieh-db-project-references.md) — api-server uses TS project references; after adding a new schema file run `cd lib/db && npx tsc --build` or new exports won't resolve

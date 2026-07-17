@@ -114,17 +114,23 @@ function FocusAreasSection() {
 
 type BillingStatus = {
   plan: string;
-  analysesUsed: number;
-  analysesLimit: number | null;
+  creditsUsed: number;
+  creditsLimit: number | null;
+  // Legacy aliases (backwards compat)
+  analysesUsed?: number;
+  analysesLimit?: number | null;
   periodEnd: string | null;
   gracePeriodEndsAt: string | null;
   stripeCustomerId: string | null;
 };
 
 const PLAN_LABELS: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  free:    { label: "Free",    color: "text-muted-foreground", icon: Zap },
-  starter: { label: "Starter", color: "text-blue-600",         icon: TrendingUp },
-  pro:     { label: "Pro",     color: "text-primary",          icon: Crown },
+  free:        { label: "Basis",       color: "text-muted-foreground", icon: Zap },
+  basis:       { label: "Basis",       color: "text-muted-foreground", icon: Zap },
+  starter:     { label: "Professional", color: "text-blue-600",         icon: TrendingUp },
+  pro:         { label: "Premium",      color: "text-primary",          icon: Crown },
+  premium_max: { label: "Premium Max",  color: "text-amber-600",        icon: Crown },
+  beta:        { label: "Beta",         color: "text-purple-600",       icon: Zap },
 };
 
 function useBillingStatus() {
@@ -259,11 +265,11 @@ function BillingSection() {
 
   if (!status) return null;
 
-  const planInfo = PLAN_LABELS[status.plan] ?? PLAN_LABELS.free;
+  const planInfo = PLAN_LABELS[status.plan] ?? PLAN_LABELS.basis;
   const PlanIcon = planInfo.icon;
-  const isPro = status.plan === "pro";
-  const limit = status.analysesLimit ?? null;
-  const used = status.analysesUsed;
+  const isPro = status.plan === "pro" || status.plan === "premium_max";
+  const limit = status.creditsLimit ?? status.analysesLimit ?? null;
+  const used = status.creditsUsed ?? status.analysesUsed ?? 0;
   const usedPct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const isNearLimit = limit != null && usedPct >= 80;
   const isAtLimit = limit != null && used >= limit;
@@ -281,7 +287,7 @@ function BillingSection() {
           Abonnement & Kontingent
         </CardTitle>
         <CardDescription>
-          Verwalte deinen Tarif und verfolge den Verbrauch deiner monatlichen Analysen.
+          Verwalte deinen Tarif und verfolge deinen monatlichen Credit-Verbrauch.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -331,10 +337,10 @@ function BillingSection() {
           )}
         </div>
 
-        {/* Quota progress */}
+        {/* Credit progress */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Analysen diesen Monat</span>
+            <span className="text-muted-foreground">Credits diesen Monat</span>
             <span className={`font-medium ${isAtLimit ? "text-destructive" : isNearLimit ? "text-amber-600" : "text-foreground"}`}>
               {isPro ? `${used} / ∞` : `${used} / ${limit ?? "—"}`}
             </span>
@@ -352,12 +358,15 @@ function BillingSection() {
           {isPro && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-              Unbegrenzte Analysen inklusive
+              Unbegrenzte Credits inklusive
             </div>
           )}
+          <p className="text-xs text-muted-foreground">
+            Einfache Analyse = 1 Credit · Komplexe Analyse = 3 Credits · Kalkulator = 5 Credits
+          </p>
           {isAtLimit && (
             <p className="text-xs text-destructive">
-              Kontingent aufgebraucht. Upgrade auf Starter oder Pro für weitere Analysen.
+              Credits aufgebraucht. Upgrade für weitere Analysen diesen Monat.
             </p>
           )}
         </div>
@@ -365,17 +374,17 @@ function BillingSection() {
         {/* Upgrade options */}
         {!isPro && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {status.plan !== "starter" && (
+            {(status.plan === "free" || status.plan === "basis") && (
               <div className="border rounded-xl p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-600" />
-                  <span className="font-semibold text-sm">Starter</span>
-                  <span className="ml-auto text-xs text-muted-foreground">50 €/Monat zzgl. USt.</span>
+                  <span className="font-semibold text-sm">Professional</span>
+                  <span className="ml-auto text-xs text-muted-foreground">19 €/Monat zzgl. USt.</span>
                 </div>
                 <ul className="text-xs text-muted-foreground space-y-1">
-                  <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> 50 Analysen/Monat</li>
+                  <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> 60 Credits/Monat</li>
                   <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Alle Vorlagen</li>
-                  <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Unbegrenzte Folgefragen</li>
+                  <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Unbegrenzte Wissensfragen</li>
                 </ul>
                 <Button
                   size="sm"
@@ -385,21 +394,23 @@ function BillingSection() {
                   disabled={checkoutLoading !== null}
                 >
                   {checkoutLoading === "starter" && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                  Auf Starter upgraden
+                  Auf Professional upgraden
                 </Button>
               </div>
             )}
 
-            <div className={`border rounded-xl p-4 space-y-2 ${status.plan !== "starter" ? "border-primary/30 bg-primary/3" : "col-span-full sm:col-auto"}`}>
+            <div className={`border rounded-xl p-4 space-y-2 ${
+              status.plan !== "starter" ? "border-primary/30 bg-primary/3" : "col-span-full sm:col-auto"
+            }`}>
               <div className="flex items-center gap-2">
                 <Crown className="w-4 h-4 text-primary" />
-                <span className="font-semibold text-sm">Pro</span>
-                <span className="ml-auto text-xs text-muted-foreground">100 €/Monat zzgl. USt.</span>
+                <span className="font-semibold text-sm">Premium</span>
+                <span className="ml-auto text-xs text-muted-foreground">49 €/Monat zzgl. USt.</span>
               </div>
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Unbegrenzte Analysen</li>
-                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Alle Vorlagen</li>
-                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Priorität-Support</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> 200 Credits/Monat</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> Daten-Upload & Tiefenanalysen</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> 3 Team-Einladungen</li>
               </ul>
               <Button
                 size="sm"
@@ -408,7 +419,7 @@ function BillingSection() {
                 disabled={checkoutLoading !== null}
               >
                 {checkoutLoading === "pro" && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                Auf Pro upgraden
+                Auf Premium upgraden
               </Button>
             </div>
           </div>
@@ -465,8 +476,8 @@ function TeamSection({ billingPlan }: { billingPlan: string | null }) {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
 
-  const MAX_SLOTS = 3;
-  const isPro = billingPlan === "pro";
+  const MAX_SLOTS = billingPlan === "premium_max" ? Infinity : 3;
+  const isPro = billingPlan === "pro" || billingPlan === "premium_max";
 
   const now = new Date();
   const activeInvites = invites?.filter((i) => {

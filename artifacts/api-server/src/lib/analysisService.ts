@@ -19,7 +19,7 @@ import { classifyAndProposeContextFacts } from "./contextFacts";
 import { categorizeQuestion } from "./categorize";
 import { logger } from "./logger";
 import { normalizeSector } from "./serializers";
-import { getSubscription } from "./quota";
+import { getSubscription, classifyComplexityFromTools, type AnalysisComplexity } from "./quota";
 import Anthropic from "@anthropic-ai/sdk";
 import { ObjectStorageService } from "./objectStorage";
 
@@ -129,6 +129,16 @@ export type SseCallbacks = {
 
 const chatObjectStorage = new ObjectStorageService();
 
+export type ProcessQuestionResult = {
+  message: Message;
+  complexity: AnalysisComplexity;
+  /** Credits consumed (0 for knowledge-only or failed analyses) */
+  credits: number;
+  toolsCalled: string[];
+  inputTokens: number;
+  outputTokens: number;
+};
+
 export type ProcessQuestionOptions = {
   hidden?: boolean;
   imageObjectPath?: string;
@@ -141,7 +151,7 @@ export async function processQuestion(
   question: string,
   sse?: SseCallbacks,
   opts?: ProcessQuestionOptions,
-): Promise<Message> {
+): Promise<ProcessQuestionResult> {
   try {
     await db.insert(messagesTable).values({
       analysisId: analysis.id,
@@ -217,6 +227,8 @@ export async function processQuestion(
     let agentToolLog: BetaToolEntry[] = [];
     let agentEscalationTrigger: { type: string; reason: string } | null = null;
     let agentLoggedEvent: import("./agent").AgentResult["loggedEvent"] = null;
+    let agentInputTokens = 0;
+    let agentOutputTokens = 0;
 
     // Load customer-defined rules and pass them as structured context so the
     // agent can reference them in every analysis (e.g. custom thresholds).
@@ -410,6 +422,8 @@ export async function processQuestion(
       widgetSpec = result.widgetSpec ?? null;
       agentResultText = result.text;
       agentToolLog = result.toolLog ?? [];
+      agentInputTokens = result.inputTokens ?? 0;
+      agentOutputTokens = result.outputTokens ?? 0;
       agentEscalationTrigger = result.escalationTrigger ?? null;
       agentLoggedEvent = result.loggedEvent ?? null;
 
@@ -512,7 +526,16 @@ export async function processQuestion(
       datasetRef: analysis.datasetId.slice(0, 8),
     });
 
-    return assistant;
+    const toolsCalled = agentToolLog.map((e) => e.toolName);
+    const { complexity, credits } = classifyComplexityFromTools(toolsCalled);
+    return {
+      message: assistant,
+      complexity,
+      credits: error ? 0 : credits,
+      toolsCalled,
+      inputTokens: agentInputTokens,
+      outputTokens: agentOutputTokens,
+    };
   } finally {
     // Outer safety net: clear agentProgress if an early DB operation threw
     // before the inner try/finally around runAgent was reached. Idempotent.

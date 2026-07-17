@@ -13,11 +13,13 @@ import {
   knowledgeMissedQueriesTable,
   apiUsageLogTable,
   subscriptionsTable,
+  creditUsageLogTable,
 } from "@workspace/db";
 import {
   GetAdminStatsResponse,
   GetAdminActivityResponse,
 } from "@workspace/api-zod";
+import { logger } from "../lib/logger";
 import { requireAuth, requireOperator } from "../lib/auth";
 import { runScheduledReports } from "../lib/scheduler";
 import { runMonthlyDigest } from "../lib/digestScheduler";
@@ -680,6 +682,159 @@ router.get(
       ORDER BY u.email
     `);
     res.json((rows as any).rows ?? rows);
+  },
+);
+
+// ── GET /api/admin/credit-usage ──────────────────────────────────────────────
+// Operator-Dashboard: Credit-Verbrauch mit Aggregaten und Ausreißer-Markierung
+router.get(
+  "/admin/credit-usage",
+  requireOperator,
+  async (req: Request, res: Response) => {
+    try {
+      const limit = Math.min(200, parseInt(req.query.limit as string) || 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const filterUserId = req.query.userId as string | undefined;
+      const filterComplexity = req.query.complexity as string | undefined;
+
+      // ── Recent entries ────────────────────────────────────────────────────
+      const conditions: string[] = ["1=1"];
+      const params: unknown[] = [];
+
+      if (filterUserId) {
+        params.push(filterUserId);
+        conditions.push(`c.user_id = $${params.length}`);
+      }
+      if (filterComplexity) {
+        params.push(filterComplexity);
+        conditions.push(`c.complexity = $${params.length}`);
+      }
+
+      const whereClause = conditions.join(" AND ");
+
+      const entriesResult = await db.execute(sql.raw(`
+        SELECT
+          c.id,
+          c.analysis_id AS "analysisId",
+          c.user_id AS "userId",
+          c.dataset_id AS "datasetId",
+          c.complexity,
+          c.credits,
+          c.tools_called AS "toolsCalled",
+          c.input_tokens AS "inputTokens",
+          c.output_tokens AS "outputTokens",
+          c.api_cost_millicents AS "apiCostMillicents",
+          c.plan,
+          c.created_at AS "createdAt",
+          u.name AS "userName",
+          u.email AS "userEmail"
+        FROM credit_usage_log c
+        LEFT JOIN users u ON u.id = c.user_id
+        WHERE ${whereClause}
+        ORDER BY c.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `));
+      const entries = (entriesResult as any).rows ?? entriesResult;
+
+      const totalResult = await db.execute(sql.raw(`
+        SELECT COUNT(*) AS total FROM credit_usage_log c WHERE ${whereClause}
+      `));
+      const total = parseInt(((totalResult as any).rows ?? totalResult)[0]?.total ?? "0", 10);
+
+      // ── Aggregates by complexity ──────────────────────────────────────────
+      const aggResult = await db.execute(sql`
+        SELECT
+          complexity,
+          COUNT(*) AS count,
+          ROUND(AVG(credits), 2) AS "avgCredits",
+          ROUND(AVG(api_cost_millicents), 0) AS "avgApiCostMillicents",
+          SUM(credits) AS "totalCredits",
+          SUM(api_cost_millicents) AS "totalApiCostMillicents"
+        FROM credit_usage_log
+        GROUP BY complexity
+        ORDER BY "avgApiCostMillicents" DESC
+      `);
+      const byComplexity = (aggResult as any).rows ?? aggResult;
+
+      // ── Per-user totals this month ────────────────────────────────────────
+      const yearMonth = new Date().toISOString().slice(0, 7);
+      const userResult = await db.execute(sql.raw(`
+        SELECT
+          c.user_id AS "userId",
+          u.name AS "userName",
+          u.email AS "userEmail",
+          SUM(c.credits) AS "totalCredits",
+          SUM(c.api_cost_millicents) AS "totalApiCostMillicents",
+          COUNT(*) AS "requestCount"
+        FROM credit_usage_log c
+        LEFT JOIN users u ON u.id = c.user_id
+        WHERE c.created_at >= '${yearMonth}-01'
+        GROUP BY c.user_id, u.name, u.email
+        ORDER BY "totalCredits" DESC
+        LIMIT 50
+      `));
+      const byUser = (userResult as any).rows ?? userResult;
+
+      // ── Outlier detection ─────────────────────────────────────────────────
+      // An entry is flagged when its API cost is >= 2× the average for its
+      // complexity class — suggesting the complexity label may be too low.
+      const avgByComplexity: Record<string, number> = {};
+      for (const row of byComplexity as any[]) {
+        avgByComplexity[row.complexity] = parseFloat(row.avgApiCostMillicents ?? "0");
+      }
+
+      const outlierResult = await db.execute(sql`
+        SELECT
+          c.id,
+          c.analysis_id AS "analysisId",
+          c.user_id AS "userId",
+          c.complexity,
+          c.credits,
+          c.tools_called AS "toolsCalled",
+          c.input_tokens AS "inputTokens",
+          c.output_tokens AS "outputTokens",
+          c.api_cost_millicents AS "apiCostMillicents",
+          c.created_at AS "createdAt",
+          u.name AS "userName"
+        FROM credit_usage_log c
+        LEFT JOIN users u ON u.id = c.user_id
+        WHERE c.api_cost_millicents > 0
+        ORDER BY c.api_cost_millicents DESC
+        LIMIT 200
+      `);
+      const allForOutlier = (outlierResult as any).rows ?? outlierResult;
+
+      const outliers: unknown[] = [];
+      for (const row of allForOutlier as any[]) {
+        const avg = avgByComplexity[row.complexity] ?? 0;
+        if (avg > 0 && row.apiCostMillicents > avg * 2.0) {
+          outliers.push({
+            ...row,
+            avgForComplexity: avg,
+            costRatio: (row.apiCostMillicents / avg).toFixed(2),
+          });
+        }
+        if (outliers.length >= 20) break;
+      }
+
+      res.json({
+        entries,
+        total,
+        byComplexity,
+        byUser,
+        outliers,
+        meta: {
+          limit,
+          offset,
+          filterUserId: filterUserId ?? null,
+          filterComplexity: filterComplexity ?? null,
+          currentYearMonth: yearMonth,
+        },
+      });
+    } catch (err) {
+      logger.error({ err }, "admin/credit-usage failed");
+      res.status(500).json({ error: "Fehler beim Laden der Credit-Nutzungsdaten" });
+    }
   },
 );
 

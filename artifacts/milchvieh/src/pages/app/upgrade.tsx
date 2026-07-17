@@ -9,18 +9,32 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ""
 
 const PLANS: (PlanDetails & { key: string })[] = [
   {
+    key: "basis",
+    name: "Basis",
+    pricePerMonth: 1.99,
+    analysesPerMonth: 15,
+    description: "Einstieg — 15 Credits/Monat für einfache Auswertungen und Wissensfragen.",
+  },
+  {
     key: "starter",
     name: "Professional",
-    pricePerMonth: 29.0,
-    analysesPerMonth: 100,
-    description: "Für Herdenmanager und Mitarbeiter — 100 Analysen pro Monat, erweiterte Auswertungen.",
+    pricePerMonth: 19.0,
+    analysesPerMonth: 60,
+    description: "Für aktive Betriebe — 60 Credits/Monat, alle Vorlagen, Folgefragen inklusive.",
   },
   {
     key: "pro",
     name: "Premium",
-    pricePerMonth: 79.0,
+    pricePerMonth: 49.0,
+    analysesPerMonth: 200,
+    description: "Für Betriebsleiter — 200 Credits/Monat, Daten-Upload, KI-Tiefenanalysen, 3 Team-Einladungen.",
+  },
+  {
+    key: "premium_max",
+    name: "Premium Max",
+    pricePerMonth: 99.0,
     analysesPerMonth: "unbegrenzt",
-    description: "Für Betriebsleiter — unbegrenzte Analysen, Daten-Upload, KI-Tiefenanalysen, 3 Team-Einladungen.",
+    description: "Maximale Leistung — unbegrenzte Credits, Prioritäts-Support, ideal für Berater.",
   },
 ];
 
@@ -113,8 +127,8 @@ export function UpgradePage() {
               <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>
               <p className="text-xs text-muted-foreground">
                 {typeof plan.analysesPerMonth === "number"
-                  ? `${plan.analysesPerMonth} Analysen / Monat`
-                  : "Unbegrenzte Analysen / Monat"}
+                  ? `${plan.analysesPerMonth} Credits / Monat`
+                  : "Unbegrenzte Credits / Monat"}
               </p>
               <p className="text-[10px] text-muted-foreground/70 mt-1">zzgl. 19 % MwSt.</p>
             </button>

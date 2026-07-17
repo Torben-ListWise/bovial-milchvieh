@@ -233,6 +233,9 @@ export interface AgentResult {
     category: string;
     reminderDueAt: string | null;
   } | null;
+  /** Total input + output tokens consumed across all turns of this agent run */
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export class MissingApiKeyError extends Error {}
@@ -1312,6 +1315,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const citations: Citation[] = [];
   let loggedEvent: AgentResult["loggedEvent"] = null;
   const { datasetId } = opts;
+  // Per-run token accumulator (distinct from module-level _cacheStats)
+  let runInputTokens = 0;
+  let runOutputTokens = 0;
 
   const messages: MessageParam[] = opts.conversation.map((m) => ({
     role: m.role,
@@ -2840,6 +2846,9 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     _cacheStats.totalCalls += 1;
     _cacheStats.totalInputTokens += usage.input_tokens;
     _cacheStats.totalOutputTokens += usage.output_tokens;
+    // Per-run accumulator for credit cost calculation
+    runInputTokens += usage.input_tokens;
+    runOutputTokens += usage.output_tokens;
     _cacheStats.totalCacheCreationTokens += cacheCreation;
     _cacheStats.totalCacheReadTokens += cacheRead;
     _cacheStats.lastUpdatedAt = new Date().toISOString();
@@ -2992,12 +3001,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       "Für diese Frage wurden allgemeine Richtwerte verwendet — mit Ihren hochgeladenen Betriebsdaten " +
       "(Milchleistung, Herdendaten, Ereignisprotokoll) kann die Analyse gezielt auf Ihren Betrieb " +
       "zugeschnitten werden und liefert deutlich präzisere Ergebnisse.";
-    return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent: null };
+    return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent: null, inputTokens: runInputTokens, outputTokens: runOutputTokens };
   }
 
   logger.info(
     { analysisId: opts.betaAnalysisId ?? null, totalMs: Date.now() - agentStartMs, turns: turnToolCounts.length },
     "agent:done",
   );
-  return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent };
+  return { text: finalText, charts, citations, backQuestions, widgetSpec, toolLog: betaToolLog, escalationTrigger: capturedEscalation, loggedEvent, inputTokens: runInputTokens, outputTokens: runOutputTokens };
 }

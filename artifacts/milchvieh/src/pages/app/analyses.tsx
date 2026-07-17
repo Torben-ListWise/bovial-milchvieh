@@ -1582,20 +1582,20 @@ function StarterQuestions({
         <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8 text-amber-500" />
         </div>
-        <h3 className="text-xl font-semibold mb-2">Analyse-Kontingent erschöpft</h3>
+        <h3 className="text-xl font-semibold mb-2">Credits aufgebraucht</h3>
         <p className="text-muted-foreground mb-6 max-w-sm">
-          Du hast das Limit deines aktuellen Tarifs für diesen Monat erreicht.
-          Upgrade auf Starter oder Pro für weitere Analysen.
+          Du hast das Credit-Limit deines aktuellen Tarifs für diesen Monat erreicht.
+          Upgrade auf Professional oder Premium für weitere Analysen.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <Button asChild variant="outline">
             <Link href="/app/settings">
-              Auf Starter upgraden (50 €/Monat)
+              Auf Professional upgraden (19 €/Monat)
             </Link>
           </Button>
           <Button asChild>
             <Link href="/app/settings">
-              Auf Pro upgraden (100 €/Monat)
+              Auf Premium upgraden (49 €/Monat)
             </Link>
           </Button>
         </div>
@@ -3902,7 +3902,7 @@ export function AnalysesPage() {
         <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-amber-800">Analyse-Kontingent erschöpft</p>
+            <p className="text-sm font-medium text-amber-800">Credits aufgebraucht</p>
             <p className="text-xs text-amber-700 mt-0.5">
               Monatslimit erreicht.{" "}
               <a href="/app/settings" className="underline font-medium hover:text-amber-900">

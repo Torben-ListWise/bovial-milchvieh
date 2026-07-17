@@ -6,6 +6,7 @@ import {
   analysesTable,
   messagesTable,
   questionLogTable,
+  creditUsageLogTable,
   type Analysis,
   type Message,
 } from "@workspace/db";
@@ -362,13 +363,28 @@ router.post(
           onTurnReset: () => w.sendTurnReset(),
           onDone: () => w.sendDone(),
         })
-          .then((msg) => {
-            if (!msg.error) {
-              incrementQuota(userId)
+          .then(({ message, credits, complexity, toolsCalled, inputTokens, outputTokens }) => {
+            if (!message.error && credits > 0) {
+              const apiCostMillicents = Math.round(inputTokens * 0.276 + outputTokens * 1.38);
+              incrementQuota(userId, credits)
                 .then(() => maybeSendQuotaWarning(userId))
                 .catch((err) =>
                   logger.error({ err, userId }, "Quota-Increment fehlgeschlagen"),
                 );
+              db.insert(creditUsageLogTable).values({
+                analysisId: analysis.id,
+                userId,
+                datasetId: analysis.datasetId,
+                complexity,
+                credits,
+                toolsCalled,
+                inputTokens,
+                outputTokens,
+                apiCostMillicents,
+                plan: quotaCheck.plan,
+              } as any).catch((err: unknown) =>
+                logger.warn({ err, analysisId: analysis.id }, "credit_usage_log insert fehlgeschlagen"),
+              );
             }
           })
           .catch((err) => {
@@ -619,13 +635,28 @@ router.post(
         onTurnReset: () => w.sendTurnReset(),
         onDone: () => w.sendDone(),
       }, imageObjectPath ? { imageObjectPath } : undefined)
-        .then((msg) => {
-          if (!msg.error) {
-            incrementQuota(msgUserId)
+        .then(({ message, credits, complexity, toolsCalled, inputTokens, outputTokens }) => {
+          if (!message.error && credits > 0) {
+            const apiCostMillicents = Math.round(inputTokens * 0.276 + outputTokens * 1.38);
+            incrementQuota(msgUserId, credits)
               .then(() => maybeSendQuotaWarning(msgUserId))
               .catch((err) =>
                 logger.error({ err, userId: msgUserId }, "Quota-Increment fehlgeschlagen"),
               );
+            db.insert(creditUsageLogTable).values({
+              analysisId: a.id,
+              userId: msgUserId,
+              datasetId: a.datasetId,
+              complexity,
+              credits,
+              toolsCalled,
+              inputTokens,
+              outputTokens,
+              apiCostMillicents,
+              plan: msgQuotaCheck.plan,
+            } as any).catch((err: unknown) =>
+              logger.warn({ err, analysisId: a.id }, "credit_usage_log insert fehlgeschlagen"),
+            );
           }
         })
         .catch((err) => {

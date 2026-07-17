@@ -671,9 +671,9 @@ Schreibe für den Betriebsleiter, nicht für einen Spezialisten. Nenne konkrete 
               logger.info({ userId: autoUserId }, "Automatische Erstanalyse übersprungen: Kontingent erschöpft");
               return;
             }
-            const msg = await processQuestion(analysis, betriebsspiegelPrompt, undefined, { hidden: true });
-            if (!msg.error) {
-              await incrementQuota(autoUserId)
+            const result = await processQuestion(analysis, betriebsspiegelPrompt, undefined, { hidden: true });
+            if (!result.message.error && result.credits > 0) {
+              await incrementQuota(autoUserId, result.credits)
                 .then(() => maybeSendQuotaWarning(autoUserId))
                 .catch((err) =>
                   logger.error({ err, userId: autoUserId }, "Quota-Increment für Auto-Analyse fehlgeschlagen"),

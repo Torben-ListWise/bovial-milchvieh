@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { db, subscriptionsTable, stripeEventsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
-import { getStripeClient, isStripeConfigured, planFromPriceId, STARTER_PRICE_ID, PRO_PRICE_ID, WEBHOOK_SECRET } from "../lib/stripe";
+import { getStripeClient, isStripeConfigured, planFromPriceId, BASIS_PRICE_ID, STARTER_PRICE_ID, PRO_PRICE_ID, PREMIUM_MAX_PRICE_ID, WEBHOOK_SECRET } from "../lib/stripe";
 import { getQuotaStatus, PLAN_LIMITS } from "../lib/quota";
 import { sendPlanActivated, sendPaymentFailed, fireEmail } from "../lib/emailService";
 import type Stripe from "stripe";
@@ -30,6 +30,9 @@ router.get("/billing/status", requireAuth, async (req: Request, res: Response) =
 
     res.json({
       plan,
+      creditsUsed: used,
+      creditsLimit: limit === Infinity ? null : limit,
+      // Legacy aliases — kept for backwards compat during rollout
       analysesUsed: used,
       analysesLimit: limit === Infinity ? null : limit,
       periodEnd: periodEnd ?? null,
@@ -53,13 +56,15 @@ router.post("/billing/checkout", requireAuth, async (req: Request, res: Response
   };
 
   const priceIdMap: Record<string, string> = {
+    basis: BASIS_PRICE_ID,
     starter: STARTER_PRICE_ID,
     pro: PRO_PRICE_ID,
+    premium_max: PREMIUM_MAX_PRICE_ID,
   };
   const priceId = plan ? priceIdMap[plan] : undefined;
 
   if (!priceId) {
-    res.status(400).json({ error: "Ungültiger Plan. Erlaubt: starter, pro" });
+    res.status(400).json({ error: "Ungültiger Plan. Erlaubt: basis, starter, pro, premium_max" });
     return;
   }
 
@@ -68,7 +73,6 @@ router.post("/billing/checkout", requireAuth, async (req: Request, res: Response
     const userId = req.userId!;
     const user = req.appUser!;
 
-    // Find or create Stripe customer
     let [sub] = await db
       .select()
       .from(subscriptionsTable)
@@ -164,12 +168,10 @@ router.post("/billing/webhook", async (req: Request, res: Response) => {
     return;
   }
 
-  // Idempotency: insert event ID; ON CONFLICT means duplicate — skip processing
   const insertResult = await db.execute(
     sql`INSERT INTO stripe_events (event_id) VALUES (${event.id}) ON CONFLICT (event_id) DO NOTHING`,
   ).catch(() => null);
 
-  // If no rows were inserted, this event was already processed
   const rowCount = (insertResult as any)?.rowCount ?? (insertResult as any)?.count ?? 1;
   if (rowCount === 0) {
     logger.debug({ eventId: event.id, type: event.type }, "Webhook-Duplikat — übersprungen");
@@ -254,14 +256,14 @@ async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (!userId) break;
 
       await upsertSubscription(userId, {
-        plan: "free",
+        plan: "basis",
         status: "canceled",
         stripeSubscriptionId: null,
         stripePriceId: null,
         currentPeriodEnd: null,
         gracePeriodEndsAt: null,
       });
-      logger.info({ userId }, "Abo gekündigt — auf Free downgegradet");
+      logger.info({ userId }, "Abo gekündigt — auf Basis downgegradet");
       break;
     }
 
@@ -323,7 +325,6 @@ async function upsertSubscription(
     gracePeriodEndsAt: Date | null;
   }>,
 ): Promise<void> {
-  // Use raw SQL so we can do a proper upsert without conditional fragments
   await db.execute(sql`
     INSERT INTO subscriptions (
       user_id, stripe_customer_id, stripe_subscription_id, stripe_price_id,
@@ -333,7 +334,7 @@ async function upsertSubscription(
       ${data.stripeCustomerId ?? null},
       ${data.stripeSubscriptionId ?? null},
       ${data.stripePriceId ?? null},
-      ${data.plan ?? "free"},
+      ${data.plan ?? "basis"},
       ${data.status ?? "active"},
       ${data.currentPeriodEnd ?? null},
       ${data.gracePeriodEndsAt ?? null},
@@ -343,7 +344,7 @@ async function upsertSubscription(
       stripe_customer_id = COALESCE(${data.stripeCustomerId ?? null}, subscriptions.stripe_customer_id),
       stripe_subscription_id = COALESCE(${data.stripeSubscriptionId ?? null}, subscriptions.stripe_subscription_id),
       stripe_price_id = ${data.stripePriceId ?? null},
-      plan = ${data.plan ?? "free"},
+      plan = ${data.plan ?? "basis"},
       status = ${data.status ?? "active"},
       current_period_end = ${data.currentPeriodEnd ?? null},
       grace_period_ends_at = ${data.gracePeriodEndsAt ?? null},
@@ -360,7 +361,6 @@ async function userIdFromCustomer(customerId: string): Promise<string | null> {
 
   if (sub) return sub.userId;
 
-  // Fallback: look up via Stripe metadata
   try {
     const stripe = getStripeClient();
     const customer = await stripe.customers.retrieve(customerId);
@@ -372,12 +372,14 @@ async function userIdFromCustomer(customerId: string): Promise<string | null> {
 }
 
 // GET /api/quota/status — lightweight plan+quota status, no Stripe dependency
-// Used by the frontend to determine plan type (e.g. to show beta-only UI).
 router.get("/quota/status", requireAuth, async (req: Request, res: Response) => {
   try {
     const { plan, limit, used } = await getQuotaStatus(req.userId!);
     res.json({
       plan,
+      creditsUsed: used,
+      creditsLimit: limit === Infinity ? null : limit,
+      // Legacy aliases
       analysesUsed: used,
       analysesLimit: limit === Infinity ? null : limit,
     });

@@ -31,6 +31,7 @@ import {
   FlaskConical,
   Newspaper,
   Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -258,6 +259,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Auswertungsvorlagen", href: "/app/templates", icon: LayoutList, preserveDataset: false },
     { name: "Nachrichten", href: "/app/nachrichten-editor", icon: Newspaper, preserveDataset: false },
     { name: "Referenzanalysen", href: "/app/reference-analyses", icon: Sparkles, preserveDataset: false },
+    { name: "Credit-Dashboard", href: "/app/credit-dashboard", icon: BarChart3, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;
