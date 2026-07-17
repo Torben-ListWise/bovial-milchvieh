@@ -92,17 +92,77 @@ interface SystemMsg {
 // ── Progress label normalization ─────────────────────────────────────────────
 
 function normalizeStep(step: string): { icon: React.ElementType; label: string } {
-  if (step.startsWith("Lese"))               return { icon: BookOpen,       label: "Lese Datenschema" };
-  if (step.startsWith("Berechne alle"))      return { icon: Calculator,     label: "Berechne alle Kennzahlen" };
-  if (step.startsWith("Berechne Statistik")) return { icon: BarChart2,      label: "Berechne Statistiken" };
-  if (step.startsWith("Berechne Zeitreihe")) return { icon: TrendingUp,     label: "Berechne Zeitreihe" };
-  if (step.startsWith("Berechne Investition")) return { icon: Coins,        label: "Berechne Investitionswirtschaftlichkeit" };
-  if (step.startsWith("Erstelle Diagramm"))  return { icon: BarChart3,      label: "Erstelle Diagramm" };
-  if (step.startsWith("Erstelle Rangliste")) return { icon: Trophy,         label: "Erstelle Rangliste" };
-  if (step.startsWith("Erkenne Ausreißer"))  return { icon: AlertTriangle,  label: "Erkenne Ausreißer" };
-  if (step.startsWith("Aggregiere"))         return { icon: Layers,         label: "Aggregiere Daten nach Gruppe" };
-  if (step.startsWith("Lade"))               return { icon: Database,       label: "Lade Stammdaten" };
-  if (step.startsWith("Überprüfe"))          return { icon: Search,         label: "Überprüfe Ergebnisse" };
+  // Strip trailing ellipsis for pattern matching
+  const s = step.endsWith("…") ? step.slice(0, -1) : step;
+
+  // Zeitreihe / Verlauf
+  if (s.includes("Verlauf") || s.includes("Zeitreihe") || s.includes("Zeitverlauf") || s.includes("Zeitreihendaten"))
+    return { icon: TrendingUp,    label: "Zeitverlauf laden" };
+
+  // Investitionsplanung — alle Einzelschritte zeigen dasselbe Icon
+  if (s.includes("Cashflow") || s.includes("Amortisation") || s.includes("Break-even") ||
+      s.includes("Investition") || s.includes("Benchmarks"))
+    return { icon: Coins,         label: "Investition berechnen" };
+
+  // Diagramm
+  if (s.includes("Diagramm"))
+    return { icon: BarChart3,     label: "Diagramm erstellen" };
+
+  // Kennzahlen / Statistiken
+  if (s.includes("alle Kennzahlen") || s.includes("Alle Kennzahlen"))
+    return { icon: Calculator,    label: "Alle Kennzahlen berechnen" };
+  if (s.includes("Statistik") || s.includes("Kennzahlen werden") || s.includes("Fruchtbarkeit"))
+    return { icon: BarChart2,     label: "Statistiken berechnen" };
+
+  // Rangliste
+  if (s.includes("Rangliste"))
+    return { icon: Trophy,        label: "Rangliste erstellen" };
+
+  // Ausreißer
+  if (s.includes("Ausreißer"))
+    return { icon: AlertTriangle, label: "Ausreißer erkennen" };
+
+  // Gruppenvergleich
+  if (s.includes("verglichen") || s.includes("aggregiert") || s.includes("nach Gruppe") ||
+      s.startsWith("Aggregiere") || s.includes("Daten nach") || s.includes("Ereignisstatistiken"))
+    return { icon: Layers,        label: "Gruppen vergleichen" };
+
+  // Stammdaten / Dokument / Planung laden
+  if (s.includes("Stammdaten") || s.includes("Betriebsdokument") || s.includes("Besamungsplanung") ||
+      s.startsWith("Lese") || s.startsWith("Lade"))
+    return { icon: Database,      label: "Daten laden" };
+
+  // Wissensdatenbank / Handbuch / Web
+  if (s.includes("Wissensdatenbank") || s.includes("Handbuch") || s.includes("Kürzel") || s.includes("Informationen"))
+    return { icon: BookOpen,      label: "Nachschlagen" };
+
+  // Datenbankabfrage / SQL
+  if (s.includes("Datenbankabfrage") || s.startsWith("Analyse:") || s.includes("SQL"))
+    return { icon: BarChart2,     label: "Datenbankabfrage" };
+
+  // Besamungs- und Spermakosten
+  if (s.includes("Besamungs") || s.includes("Sperma"))
+    return { icon: Calculator,    label: "Besamungsplan berechnen" };
+
+  // Rückfragen
+  if (s.includes("Rückfragen"))
+    return { icon: MessageSquare, label: "Rückfragen formulieren" };
+
+  // Schema
+  if (s.includes("Datenschema"))
+    return { icon: BookOpen,      label: "Datenschema lesen" };
+
+  // Antwort generieren
+  if (s.includes("Generiere") || s.includes("Antwort"))
+    return { icon: Cog,           label: "Antwort generieren" };
+
+  // Betriebsereignis
+  if (s.includes("Ereignis"))
+    return { icon: Database,      label: "Ereignis speichern" };
+
+  // Legacy patterns (backwards compat with old agentProgress stored in DB)
+  if (s.startsWith("Überprüfe"))    return { icon: Search,   label: "Überprüfe Ergebnisse" };
+
   return { icon: Cog, label: step };
 }
 
@@ -785,6 +845,7 @@ function inferAnswerType(content: string, charts?: Chart[]): AnswerType {
 function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] }) {
   const answerType = useMemo(() => inferAnswerType(text, charts), [charts]);
   const badgeColor = BADGE_COLORS[answerType];
+  const hasCharts = charts && charts.length > 0;
 
   return (
     <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -800,16 +861,10 @@ function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] 
             {answerType}
           </span>
         </div>
-        {text ? (
-          <div className="text-sm leading-relaxed">
-            <MarkdownContent text={text} />
-            <span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 align-text-bottom animate-pulse" />
-          </div>
-        ) : (
-          <span className="inline-block w-0.5 h-3.5 bg-primary align-text-bottom animate-pulse" />
-        )}
-        {charts && charts.length > 0 && (
-          <div className="space-y-4 pt-1">
+
+        {/* Charts first — rendered as soon as chart data arrives (before final text) */}
+        {hasCharts && (
+          <div className="space-y-4">
             {charts.map((chart, i) => (
               <div key={chart.id ?? i} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
                 {chart.title && (
@@ -826,6 +881,17 @@ function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] 
             ))}
           </div>
         )}
+
+        {/* Text streams below charts */}
+        {text ? (
+          <div className="text-sm leading-relaxed">
+            <MarkdownContent text={text} />
+            <span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+          </div>
+        ) : !hasCharts ? (
+          /* Show cursor only when no charts yet */
+          <span className="inline-block w-0.5 h-3.5 bg-primary align-text-bottom animate-pulse" />
+        ) : null}
       </div>
     </div>
   );

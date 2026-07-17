@@ -2640,34 +2640,131 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     }
   }
 
+  // German display names for metric identifiers used in progress labels
+  const METRIC_DE: Record<string, string> = {
+    zellzahl: "Zellzahl",
+    milchleistung: "Milchleistung",
+    milchmenge: "Milchmenge",
+    laktationsleistung: "Laktationsleistung",
+    zwischenkalbezeit: "Zwischenkalbezeit",
+    rastzeit: "Rastzeit",
+    verzögerungszeit: "Verzögerungszeit",
+    konzeptionsrate: "Konzeptionsrate",
+    brunsterkennung: "Brunsterkennung",
+    trächtigkeitsrate: "Trächtigkeitsrate",
+    güstzeit: "Güstzeit",
+    abgangsrate: "Abgangsrate",
+    remontierungsrate: "Remontierungsrate",
+    futteraufnahme: "Futteraufnahme",
+    körperkondition: "Körperkondition",
+    bcs: "BCS",
+    harnstoff: "Harnstoff",
+    fett: "Fettgehalt",
+    eiweiss: "Eiweißgehalt",
+    eiweiß: "Eiweißgehalt",
+    laktose: "Laktose",
+    eckm: "ECM",
+    ecm: "ECM",
+    scs: "SCS",
+    mvv: "MVV",
+  };
+
+  function metricDe(metric: string): string {
+    return METRIC_DE[metric.toLowerCase().replace(/ß/g, "ss").replace(/ü/g, "ue").replace(/ö/g, "oe").replace(/ä/g, "ae")] ??
+           METRIC_DE[metric.toLowerCase()] ??
+           metric;
+  }
+
+  function groupByDe(groupBy: string): string {
+    switch (groupBy) {
+      case "animal_group":  return "Stallgruppe";
+      case "parity":        return "Laktation";
+      case "technician":    return "Techniker";
+      case "sire":          return "Bulle";
+      case "month":         return "Monat";
+      case "quarter":       return "Quartal";
+      case "year":          return "Jahr";
+      default:              return groupBy;
+    }
+  }
+
+  function intervalDe(interval?: string): string {
+    switch (interval) {
+      case "day":   return "täglich";
+      case "week":  return "wöchentlich";
+      default:      return "monatlich";
+    }
+  }
+
   function progressLabel(toolName: string, input: Record<string, unknown>): string {
     const metric = (input.metric as string | undefined) ?? "";
+    const mDe    = metric ? metricDe(metric) : "";
+    const groupBy = (input.groupBy as string | undefined) ?? "";
+    const interval = input.interval as string | undefined;
+
     switch (toolName) {
-      case "get_schema": return "Lese Datenschema";
-      case "get_kpis": return "Berechne alle Kennzahlen";
-      case "get_metric_stats": return `Berechne Statistik${metric ? ` für ${metric}` : ""}`;
-      case "get_timeseries": return `Berechne Zeitreihe${metric ? ` für ${metric}` : ""}`;
-      case "get_group_aggregate": return `Aggregiere${metric ? ` ${metric}` : ""} nach Gruppe`;
-      case "get_animal_ranking": return `Erstelle Rangliste${metric ? ` für ${metric}` : ""}`;
-      case "detect_anomalies": return `Erkenne Ausreißer${metric ? ` bei ${metric}` : ""}`;
-      case "get_master_data": return "Lade Stammdaten";
-      case "read_document": return "Lese Dokumententext";
-      case "search_knowledge": return "Durchsuche Wissensdatenbank";
-      case "search_farm_abbreviations": return "Durchsuche Betriebskürzel-Liste";
-      case "search_dairycomp_manual": return "Durchsuche DairyComp-Handbuch";
-      case "search_web": return "Durchsuche das Internet";
-      case "calculate_investment": return "Berechne Investitionswirtschaftlichkeit";
-      case "get_semen_planning": return "Lade gespeicherte Besamungsplanung";
-      case "calculate_semen_planning": return "Berechne Besamungs- und Spermakosten";
-      case "show_heat_abatement_calculator": return "Zeige Hitzestress-Rechner";
-      case "show_fresh_cow_calculator": return "Zeige Frischmelker-ROI-Rechner";
-      case "emit_chart": return `Erstelle Diagramm`;
-      case "ask_farmer": return "Formuliere Rückfragen";
-      case "get_event_stats": return `Berechne Event-Statistik${metric ? ` für ${metric}` : ""}`;
-      case "get_repro_kpis": return "Berechne Fruchtbarkeitskennzahlen";
-      case "run_sql": return `Führe SQL-Abfrage aus${input.description ? `: ${input.description as string}` : ""}`;
-      case "log_farm_event": return "Speichere Betriebsereignis";
-      default: return "Verarbeite Daten";
+      case "get_schema":
+        return "Datenschema wird gelesen…";
+      case "get_kpis":
+        return "Alle Kennzahlen werden berechnet…";
+      case "get_metric_stats":
+        return mDe ? `${mDe}-Statistiken werden berechnet…` : "Kennzahlen werden berechnet…";
+      case "get_timeseries": {
+        const ivDe = intervalDe(interval);
+        return mDe
+          ? `${mDe}-Verlauf (${ivDe}) wird geladen…`
+          : `Zeitverlauf wird ${ivDe} geladen…`;
+      }
+      case "get_group_aggregate": {
+        const grpDe = groupBy ? groupByDe(groupBy) : "Gruppe";
+        return mDe
+          ? `${mDe} nach ${grpDe} wird verglichen…`
+          : `Daten nach ${grpDe} werden aggregiert…`;
+      }
+      case "get_animal_ranking":
+        return mDe ? `${mDe}-Rangliste wird erstellt…` : "Tierrangliste wird erstellt…";
+      case "detect_anomalies":
+        return mDe ? `Ausreißer bei ${mDe} werden erkannt…` : "Ausreißer werden erkannt…";
+      case "get_master_data":
+        return "Stammdaten werden geladen…";
+      case "read_document":
+        return "Betriebsdokument wird gelesen…";
+      case "search_knowledge":
+        return "Wissensdatenbank wird durchsucht…";
+      case "search_farm_abbreviations":
+        return "Betriebskürzel werden nachgeschlagen…";
+      case "search_dairycomp_manual":
+        return "DairyComp-Handbuch wird durchsucht…";
+      case "search_web":
+        return "Aktuelle Informationen werden abgerufen…";
+      case "calculate_investment":
+        // Multi-step: this label is used as fallback only; the tool loop below
+        // emits the individual steps directly.
+        return "Investitionswirtschaftlichkeit wird berechnet…";
+      case "get_semen_planning":
+        return "Gespeicherte Besamungsplanung wird geladen…";
+      case "calculate_semen_planning":
+        return "Besamungs- und Spermakosten werden berechnet…";
+      case "show_heat_abatement_calculator":
+        return "Hitzestress-Rechner wird angezeigt…";
+      case "show_fresh_cow_calculator":
+        return "Frischmelker-ROI-Rechner wird angezeigt…";
+      case "emit_chart":
+        return "Diagramm wird erstellt…";
+      case "ask_farmer":
+        return "Rückfragen werden formuliert…";
+      case "get_event_stats":
+        return mDe ? `${mDe}-Ereignisstatistiken werden berechnet…` : "Ereignisstatistiken werden berechnet…";
+      case "get_repro_kpis":
+        return "Fruchtbarkeitskennzahlen werden berechnet…";
+      case "run_sql":
+        return input.description
+          ? `Analyse: ${String(input.description).slice(0, 60)}…`
+          : "Datenbankabfrage wird ausgeführt…";
+      case "log_farm_event":
+        return "Betriebsereignis wird gespeichert…";
+      default:
+        return "Daten werden verarbeitet…";
     }
   }
 
@@ -2923,11 +3020,24 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           );
         }
         const label = progressLabel(tu.name, (tu.input ?? {}) as Record<string, unknown>);
-        await opts.onProgress?.(label);
+        // calculate_investment: emit granular sub-steps so the user sees the
+        // individual calculation stages rather than one generic spinner.
+        if (tu.name === "calculate_investment") {
+          await opts.onProgress?.("Cashflow und Kosten werden berechnet…");
+          await new Promise<void>((r) => setTimeout(r, 480));
+          await opts.onProgress?.("Amortisation und Break-even werden ermittelt…");
+          await new Promise<void>((r) => setTimeout(r, 380));
+        } else {
+          await opts.onProgress?.(label);
+        }
         let result: unknown;
         const toolStartMs = Date.now();
         try {
           result = await execTool(tu);
+          if (tu.name === "calculate_investment") {
+            await opts.onProgress?.("Ergebnisse werden gegen Benchmarks geprüft…");
+            await new Promise<void>((r) => setTimeout(r, 300));
+          }
         } catch (err) {
           logger.error({ err, tool: tu.name }, "Werkzeugausführung fehlgeschlagen");
           result = { error: "Berechnung fehlgeschlagen" };
