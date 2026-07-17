@@ -634,15 +634,9 @@ router.post(
 
     await db.execute(sql`
       INSERT INTO subscriptions (user_id, plan, status, updated_at)
-<<<<<<< HEAD
-      VALUES (${targetUser.id}, ${plan}, 'active', NOW())
-      ON CONFLICT (user_id)
-      DO UPDATE SET plan = ${plan}, status = 'active', updated_at = NOW()
-=======
       VALUES (${targetUser.id}, ${validPlan}, 'active', NOW())
       ON CONFLICT (user_id)
       DO UPDATE SET plan = ${validPlan}, status = 'active', updated_at = NOW()
->>>>>>> 0ac6fa0 (Add POST /api/admin/plan/assign endpoint for operator plan management)
     `);
 
     await db.insert(activityLogTable).values({
