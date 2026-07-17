@@ -113,6 +113,60 @@ function ThiTile() {
   );
 }
 
+function ReturnVisitorSection({
+  lastVisitAt,
+  newAnalysesCount,
+  warningCount,
+  datasetId,
+}: {
+  lastVisitAt: Date;
+  newAnalysesCount: number;
+  warningCount: number;
+  datasetId: string;
+}) {
+  const dateLabel = lastVisitAt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  const timeLabel = lastVisitAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const hoursSince = (Date.now() - lastVisitAt.getTime()) / 3_600_000;
+  const visitLabel = hoursSince < 24 ? `heute ${timeLabel} Uhr` : `${dateLabel}`;
+
+  const items: { label: string; href: string; color?: string }[] = [];
+  if (newAnalysesCount > 0) {
+    items.push({
+      label: `${newAnalysesCount} neue ${newAnalysesCount === 1 ? "Analyse" : "Analysen"}`,
+      href: `/app/analyses?datasetId=${datasetId}`,
+    });
+  }
+  if (warningCount > 0) {
+    items.push({
+      label: `${warningCount} offene ${warningCount === 1 ? "Warnung" : "Warnungen"}`,
+      href: `/app/warnings?datasetId=${datasetId}`,
+      color: "text-destructive",
+    });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+      <AiIcon size={16} className="text-primary shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">
+          Seit deinem letzten Besuch ({visitLabel}):
+        </p>
+        <div className="flex flex-wrap gap-3 mt-1.5">
+          {items.map((item) => (
+            <Link key={item.href} href={item.href}>
+              <span className={`text-xs font-medium hover:underline cursor-pointer ${item.color ?? "text-primary"}`}>
+                {item.label} →
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AutoAnalysisBanner({ analysisId, datasetId }: { analysisId: string; datasetId: string }) {
   const [dismissed, setDismissed] = useState<boolean>(() => {
     return localStorage.getItem(`auto-banner-dismissed-${datasetId}`) === "1";
@@ -1339,6 +1393,30 @@ export function DatasetOverview() {
 
   const autoAnalysis = analyses?.find((a) => a.source === "auto" && a.templateRef === "auto_erstanalyse");
 
+  const [lastVisitAt] = useState<Date | null>(() => {
+    if (!datasetId) return null;
+    try {
+      const stored = localStorage.getItem(`milchvieh_last_overview_${datasetId}`);
+      return stored ? new Date(stored) : null;
+    } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (!datasetId) return;
+    try {
+      localStorage.setItem(`milchvieh_last_overview_${datasetId}`, new Date().toISOString());
+    } catch {}
+  }, [datasetId]);
+
+  const newAnalysesSinceLastVisit = useMemo(() => {
+    if (!lastVisitAt || !analyses) return [];
+    return analyses.filter((a) => new Date((a as any).createdAt) > lastVisitAt);
+  }, [lastVisitAt, analyses]);
+
+  const hoursSinceLastVisit = lastVisitAt
+    ? (Date.now() - lastVisitAt.getTime()) / 3_600_000
+    : 0;
+
   // State A: no dataset selected — show dataset picker
   if (!datasetId) {
     return (
@@ -1376,6 +1454,14 @@ export function DatasetOverview() {
       )}
       {autoAnalysis && files && files.length > 0 && (
         <AutoAnalysisBanner analysisId={autoAnalysis.id} datasetId={datasetId} />
+      )}
+      {lastVisitAt !== null && hoursSinceLastVisit >= 6 && (
+        <ReturnVisitorSection
+          lastVisitAt={lastVisitAt}
+          newAnalysesCount={newAnalysesSinceLastVisit.length}
+          warningCount={overview.warningCount}
+          datasetId={datasetId}
+        />
       )}
 
       <div className="flex justify-between items-center">

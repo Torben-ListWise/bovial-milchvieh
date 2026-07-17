@@ -9,12 +9,15 @@ import {
   useListAnalyses,
   getListAnalysesQueryKey,
   useCreateAnalysis,
+  useGetDatasetOverview,
+  getGetDatasetOverviewQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   UploadCloud, AlertCircle, CheckCircle, Clock, Trash2,
   FileText, FileSpreadsheet, Sheet, Plus, RefreshCw, X, Info, Activity,
+  Sparkles, ArrowRight, Loader2, AlertTriangle,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -33,6 +36,8 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useRequireDataset } from "@/hooks/use-require-dataset";
 import { getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { DataTile } from "@/components/DataTile";
+import { AiIcon } from "@/components/AiIcon";
 
 const IN_PROGRESS_STATUSES = ["uploaded", "parsing", "mapping", "processing"] as const;
 type InProgressStatus = typeof IN_PROGRESS_STATUSES[number];
@@ -111,12 +116,150 @@ const BETRIEBSSPIEGEL_QUESTION =
 
 import { PageLayout } from "@/components/PageLayout";
 
+function ProcessingStep({ label, done, active }: { label: string; done?: boolean; active?: boolean }) {
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      {done ? (
+        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+      ) : active ? (
+        <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+      ) : (
+        <Clock className="w-4 h-4 text-muted-foreground/30 shrink-0" />
+      )}
+      <span className={done ? "text-foreground" : active ? "text-foreground" : "text-muted-foreground/40"}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function FirstInsightsPanel({
+  datasetId,
+  files,
+  analysesList,
+  overviewData,
+  onNavigate,
+}: {
+  datasetId: string;
+  files: { id: string; status: string }[] | undefined;
+  analysesList: { id: string; source?: string | null; templateRef?: string | null }[] | undefined;
+  overviewData: { kpis: { key: string; label: string; value: number | null; unit?: string | null; trend?: string | null; basis?: string | null }[]; warningCount: number } | undefined;
+  onNavigate: (href: string) => void;
+}) {
+  const hasReadyFile = files?.some((f) => f.status === "ready") ?? false;
+  const isFileProcessing = files?.some((f) => isInProgress(f.status as never)) ?? false;
+  const autoAnalysis = analysesList?.find(
+    (a) => (a as any).templateRef === "auto_erstanalyse" || a.source === "auto"
+  );
+  const kpis = overviewData?.kpis ?? [];
+  const hasKpis = kpis.length > 0;
+  const isDone = hasReadyFile && hasKpis;
+
+  const analysesHref = autoAnalysis
+    ? `/app/analyses?datasetId=${datasetId}&analysisId=${autoAnalysis.id}`
+    : `/app/analyses?datasetId=${datasetId}`;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start gap-4">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isDone ? "bg-primary/10" : "bg-muted"}`}>
+          {isDone
+            ? <Sparkles className="w-5 h-5 text-primary" />
+            : <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />}
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">
+            {isDone ? "Erste Erkenntnisse zu deinem Betrieb" : "Wird analysiert…"}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isDone
+              ? "Die wichtigsten Kennzahlen aus deiner Datei auf einen Blick."
+              : "Das dauert meist weniger als eine Minute — bleib kurz hier."}
+          </p>
+        </div>
+      </div>
+
+      {!isDone && (
+        <div className="space-y-3 pl-14">
+          <ProcessingStep label="Datei hochgeladen" done />
+          <ProcessingStep
+            label="Daten werden verarbeitet"
+            done={hasReadyFile && !isFileProcessing}
+            active={isFileProcessing}
+          />
+          <ProcessingStep
+            label="Kennzahlen werden berechnet"
+            done={hasKpis}
+            active={hasReadyFile && !isFileProcessing && !hasKpis}
+          />
+        </div>
+      )}
+
+      {isDone && overviewData && overviewData.warningCount > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900 text-sm">
+              {overviewData.warningCount} {overviewData.warningCount === 1 ? "Auffälligkeit" : "Auffälligkeiten"} erkannt
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Der Plausibilitätscheck hat Abweichungen in deinen Betriebsdaten gefunden. Die vollständige Analyse zeigt Details.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isDone && kpis.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpis.slice(0, 4).map((kpi) => (
+            <DataTile
+              key={kpi.key}
+              label={kpi.label}
+              value={kpi.value !== null ? kpi.value.toLocaleString("de-DE") : "–"}
+              unit={kpi.unit ?? undefined}
+              trend={
+                kpi.trend === "up" ? "up" :
+                kpi.trend === "down" ? "down" :
+                kpi.trend === "flat" ? "neutral" :
+                undefined
+              }
+              source="betrieb"
+              basis={kpi.basis ?? undefined}
+            />
+          ))}
+        </div>
+      )}
+
+      {isDone && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            onClick={() => onNavigate(analysesHref)}
+            className="gap-2 sm:flex-none"
+          >
+            <AiIcon size={16} />
+            Vollständige Analyse ansehen
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onNavigate(`/app/overview?datasetId=${datasetId}`)}
+            className="gap-2"
+          >
+            Zur Startseite
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UploadPage() {
   const { datasetId, isLoading: datasetLoading } = useRequireDataset();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isFirstUploadDone, setIsFirstUploadDone] = useState(false);
+  const [overviewEnabled, setOverviewEnabled] = useState(false);
   const requestUrl = useRequestUploadUrl();
   const registerFile = useRegisterFile();
   const deleteFile = useDeleteFile();
@@ -169,6 +312,14 @@ export function UploadPage() {
     },
   });
 
+  const { data: overviewData } = useGetDatasetOverview(datasetId ?? "", {
+    query: {
+      enabled: overviewEnabled && !!datasetId,
+      queryKey: getGetDatasetOverviewQueryKey(datasetId ?? ""),
+      refetchInterval: overviewEnabled ? 3000 : false,
+    },
+  });
+
   const createAnalysis = useCreateAnalysis({
     mutation: {
       onSuccess: (data) => {
@@ -202,6 +353,12 @@ export function UploadPage() {
 
     prevReadyIdsRef.current = currentReadyIds;
   }, [files, autoAnalysis]);
+
+  useEffect(() => {
+    if (!isFirstUploadDone || !datasetId || overviewEnabled) return;
+    const hasReady = files?.some((f) => f.status === "ready");
+    if (hasReady) setOverviewEnabled(true);
+  }, [files, isFirstUploadDone, datasetId, overviewEnabled]);
 
   if (datasetLoading || !datasetId) {
     return <div className="h-32 flex items-center justify-center text-muted-foreground">Laden…</div>;
@@ -276,25 +433,8 @@ export function UploadPage() {
 
       if (isFirstFile) {
         setIsFirstUploadDone(true);
-        const analysesHref = datasetId
-          ? `/app/analyses?datasetId=${datasetId}`
-          : "/app/analyses";
-        toast({
-          title: "🎉 Deine erste Datei ist da!",
-          description: "Die Analyse läuft bereits im Hintergrund.",
-          duration: 8000,
-          action: (
-            <ToastAction
-              altText="Zur Analyse"
-              onClick={() => navigate(analysesHref)}
-            >
-              Zur Analyse →
-            </ToastAction>
-          ),
-        });
         queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-        // Also auto-navigate after a brief pause so the farmer sees the analysis running
-        navigateTimerRef.current = setTimeout(() => navigate(analysesHref), 2000);
+        // Stay on page — FirstInsightsPanel will reveal KPIs once data is ready
       } else {
         toast({ title: "Datei hochgeladen", description: "Die Datei wird nun verarbeitet…" });
       }
@@ -330,7 +470,21 @@ export function UploadPage() {
         <p className="text-muted-foreground mt-1 text-sm md:text-base">Lade deine Herdenmanagement-Exporte (Excel, CSV, PDF) hier hoch.</p>
       </div>
 
-      {!hasFiles && (
+      {isFirstUploadDone && (
+        <Card>
+          <CardContent className="py-8 px-6">
+            <FirstInsightsPanel
+              datasetId={datasetId}
+              files={files as { id: string; status: string }[] | undefined}
+              analysesList={analysesList as { id: string; source?: string | null; templateRef?: string | null }[] | undefined}
+              overviewData={overviewData as { kpis: { key: string; label: string; value: number | null; unit?: string | null; trend?: string | null; basis?: string | null }[]; warningCount: number } | undefined}
+              onNavigate={navigate}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {!hasFiles && !isFirstUploadDone && (
         <Card className="border-dashed bg-secondary/10 upload-pulse-border">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
