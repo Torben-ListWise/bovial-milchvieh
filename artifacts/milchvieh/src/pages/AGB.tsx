@@ -9,7 +9,7 @@ export function AGBPage() {
       <header className="flex items-center justify-between px-6 py-4 border-b bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8" />
-          <span className="font-bold text-lg text-primary">Milchvieh Assistent</span>
+          <span className="font-bold text-lg text-primary">Bovial</span>
         </div>
         <Link href="/" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -28,7 +28,7 @@ export function AGBPage() {
           <p className="text-muted-foreground leading-relaxed">
             Diese Allgemeinen Geschäftsbedingungen (AGB) gelten für alle Verträge zwischen
             <strong className="text-foreground"> Torben Richelsen, Bovial, Hörpeler Weg 14a, 21272 Egestorf</strong>
-            {" "}(nachfolgend „Anbieter") und den Nutzern des Dienstes „Milchvieh Assistent"
+            {" "}(nachfolgend „Anbieter") und den Nutzern des Dienstes „Bovial"
             (nachfolgend „Dienst"), der unter <strong className="text-foreground">www.bovial.com</strong> erreichbar ist.
           </p>
           <p className="text-muted-foreground leading-relaxed">
@@ -60,7 +60,7 @@ export function AGBPage() {
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-foreground">§ 3 Leistungsbeschreibung</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Der Dienst „Milchvieh Assistent" ermöglicht Nutzern, landwirtschaftliche Betriebsdaten
+            Der Dienst „Bovial" ermöglicht Nutzern, landwirtschaftliche Betriebsdaten
             (z. B. Tabellendateien aus LKV-Auswertungen, Milchleistungsdaten, Herdendaten) hochzuladen
             und mittels KI-gestützter Analyse (Anthropic Claude) auszuwerten. Die Ergebnisse werden
             als KI-generierte Textantworten und Visualisierungen bereitgestellt.
@@ -78,19 +78,24 @@ export function AGBPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr>
-                    <td className="px-4 py-3 text-foreground">Kostenlos (Free)</td>
-                    <td className="px-4 py-3 text-muted-foreground">10 Analysen</td>
-                    <td className="px-4 py-3 text-muted-foreground">0,00 €</td>
+                    <td className="px-4 py-3 text-foreground">Basis</td>
+                    <td className="px-4 py-3 text-muted-foreground">Einfache Auswertungen &amp; Wissensfragen</td>
+                    <td className="px-4 py-3 text-muted-foreground">1,99 €</td>
                   </tr>
                   <tr>
-                    <td className="px-4 py-3 text-foreground">Starter</td>
-                    <td className="px-4 py-3 text-muted-foreground">50 Analysen</td>
+                    <td className="px-4 py-3 text-foreground">Professional</td>
+                    <td className="px-4 py-3 text-muted-foreground">Umfangreiche Auswertungen, alle Vorlagen</td>
                     <td className="px-4 py-3 text-muted-foreground">19,00 €</td>
                   </tr>
                   <tr>
-                    <td className="px-4 py-3 text-foreground">Pro</td>
-                    <td className="px-4 py-3 text-muted-foreground">Unbegrenzt, bis zu 3 Team-Einladungen inklusive</td>
+                    <td className="px-4 py-3 text-foreground">Premium</td>
+                    <td className="px-4 py-3 text-muted-foreground">Tiefenanalysen, Daten-Upload, 3 Team-Einladungen</td>
                     <td className="px-4 py-3 text-muted-foreground">49,00 €</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 text-foreground">Premium Max</td>
+                    <td className="px-4 py-3 text-muted-foreground">Unbegrenzte Analysen, Prioritäts-Support</td>
+                    <td className="px-4 py-3 text-muted-foreground">99,00 €</td>
                   </tr>
                 </tbody>
               </table>

@@ -312,17 +312,13 @@ function PricingCard({
         </div>
         <div className="flex items-end gap-1">
           <span className="text-4xl font-bold">{price}</span>
-          {price !== "Kostenlos" && (
-            <span className={`text-sm pb-1.5 ${highlighted ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-              /Monat
-            </span>
-          )}
+          <span className={`text-sm pb-1.5 ${highlighted ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+            /Monat
+          </span>
         </div>
-        {price !== "Kostenlos" && (
-          <div className={`text-xs mt-1 ${highlighted ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-            zzgl. 19 % MwSt.
-          </div>
-        )}
+        <div className={`text-xs mt-1 ${highlighted ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+          inkl. 19 % MwSt.
+        </div>
         <p className={`mt-3 text-sm ${highlighted ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
           {subtitle}
         </p>
@@ -404,8 +400,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
       price: "1,99 €",
       subtitle: "Einstieg in die KI-gestützte Betriebsanalyse",
       features: [
-        "15 Credits / Monat",
-        "Einfache Auswertungen (1 Credit)",
+        "Einfache Auswertungen & Wissensfragen",
         "Wissensdatenbank & Referenzwerte",
         "Community-Support",
       ],
@@ -417,8 +412,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
       price: "19 €",
       subtitle: "Für aktive Betriebe und Herdenmanager",
       features: [
-        "60 Credits / Monat",
-        "Komplexe Analysen (3 Credits)",
+        "Umfangreiche Auswertungen & Analysen",
         "Alle Vorlagen & Auswertungen",
         "Unbegrenzte Wissensfragen",
         "E-Mail-Support",
@@ -433,14 +427,28 @@ export function LandingPage({ basePath }: LandingPageProps) {
       price: "49 €",
       subtitle: "Für Betriebsleiter mit eigenem Datenzugang",
       features: [
-        "200 Credits / Monat",
-        "Kalkulator & Investitionsprüfung (5 Credits)",
+        "Tiefenanalysen & KI-Investitionsprüfung",
         "Daten-Upload (Excel, CSV, PDF)",
         "3 Team-Einladungen",
         "Prioritäts-Support (24 h)",
       ],
       cta: "Premium wählen",
       ctaHref: `${basePath}/app/upgrade`,
+    },
+    {
+      name: "Premium Max",
+      price: "99 €",
+      subtitle: "Maximale Leistung für Berater & große Betriebe",
+      features: [
+        "Unbegrenzte Analysen ohne Kontingent",
+        "Daten-Upload (Excel, CSV, PDF)",
+        "3 Team-Einladungen",
+        "Prioritäts-Support",
+        "Ideal für Landwirtschaftsberater",
+      ],
+      cta: "Premium Max wählen",
+      ctaHref: `${basePath}/app/upgrade`,
+      badge: "Unbegrenzt",
     },
   ];
 
@@ -490,7 +498,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
       <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8" />
-          <span className="font-bold text-lg text-primary">Milchvieh Assistent</span>
+          <span className="font-bold text-lg text-primary">Bovial</span>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
           <a href="#features" className="hover:text-foreground transition-colors">Funktionen</a>
@@ -513,7 +521,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
             href={`${basePath}/sign-up`}
             className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-all glow-sm"
           >
-            Kostenlos starten
+            Jetzt starten
           </a>
         </div>
       </header>
@@ -545,7 +553,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
                 href={`${basePath}/sign-up`}
                 className="inline-flex items-center gap-2 text-base font-semibold bg-primary text-primary-foreground px-8 py-4 rounded-xl shadow-lg hover:bg-primary/90 hover:-translate-y-0.5 transition-all w-full sm:w-auto justify-center glow-md"
               >
-                Kostenlos starten
+                Jetzt starten
                 <ArrowRight className="w-5 h-5" />
               </a>
               <button
@@ -758,16 +766,16 @@ export function LandingPage({ basePath }: LandingPageProps) {
                 Einfache, transparente Preise
               </h2>
               <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-                Fang kostenlos an — upgrade, wenn du mehr brauchst. Jederzeit kündbar.
+                Transparente Monatstarife — upgrade oder kündige jederzeit ohne Vertragsbindung.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
               {pricingPlans.map((plan) => (
                 <PricingCard key={plan.name} {...plan} />
               ))}
             </div>
             <p className="text-center text-xs text-muted-foreground mt-8">
-              Alle Preise verstehen sich zzgl. der gesetzlichen Mehrwertsteuer (19 %). Es gibt keine versteckten Kosten und keine Mindestlaufzeit.{" "}
+              Alle Preise verstehen sich inkl. der gesetzlichen Mehrwertsteuer (19 %). Es gibt keine versteckten Kosten und keine Mindestlaufzeit.{" "}
               <a href={`${basePath}/agb`} className="underline hover:text-foreground transition-colors">
                 Zu den AGB
               </a>
@@ -785,9 +793,9 @@ export function LandingPage({ basePath }: LandingPageProps) {
                     "Du bekommst eine Warnung, bevor das Kontingent aufgebraucht ist. Danach kannst du jederzeit upgraden oder auf den nächsten Monat warten — deine Daten bleiben erhalten.",
                 },
                 {
-                  question: "Kann ich von Free auf Starter wechseln?",
+                  question: "Kann ich meinen Tarif jederzeit wechseln?",
                   answer:
-                    "Ja, jederzeit. Das Upgrade greift sofort, und dein bestehendes Kontingent wird anteilig berechnet.",
+                    "Ja, jederzeit. Ein Upgrade greift sofort, und dein bestehendes Kontingent wird anteilig berechnet.",
                 },
                 {
                   question: "Gibt es einen Jahrestarif mit Rabatt?",
@@ -881,14 +889,14 @@ export function LandingPage({ basePath }: LandingPageProps) {
               Bereit, deine Betriebsdaten zu verstehen?
             </h2>
             <p className="text-lg text-muted-foreground">
-              Kostenlos starten, keine Kreditkarte nötig. Deine ersten drei Analysen sind gratis.
+              Starte jetzt und verstehe deine Betriebsdaten — monatlich, ohne Vertragsbindung.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
                 href={`${basePath}/sign-up`}
                 className="inline-flex items-center gap-2 text-base font-semibold bg-primary text-primary-foreground px-10 py-4 rounded-xl shadow-lg hover:bg-primary/90 hover:-translate-y-0.5 transition-all"
               >
-                Jetzt kostenlos starten
+                Jetzt starten
                 <ArrowRight className="w-5 h-5" />
               </a>
               <button
@@ -902,7 +910,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground pt-4">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-primary" />
-                Keine Kreditkarte
+                Monatlich kündbar
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-primary" />
@@ -924,7 +932,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
             <div className="flex items-center gap-3">
               <img src={`${basePath}/logo.svg`} alt="Logo" className="w-7 h-7" />
               <div>
-                <div className="font-bold text-foreground">Milchvieh Assistent</div>
+                <div className="font-bold text-foreground">Bovial</div>
                 <div className="text-xs text-muted-foreground">
                   KI-Analyse für Landwirte · Made in Germany 🇩🇪
                 </div>
@@ -943,7 +951,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
             </div>
           </div>
           <div className="mt-6 pt-6 border-t border-border text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Milchvieh Assistent. Alle Rechte vorbehalten.
+            © {new Date().getFullYear()} Bovial. Alle Rechte vorbehalten.
           </div>
         </div>
       </footer>

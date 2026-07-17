@@ -301,7 +301,7 @@ function BillingSection() {
               <p className="text-muted-foreground text-xs mt-0.5">
                 Bitte aktualisiere deine Zahlungsmethode bis zum{" "}
                 {new Date(status.gracePeriodEndsAt!).toLocaleDateString("de-DE")},
-                sonst wird dein Konto auf Free downgegradet.
+                sonst wird dein Konto auf den Basis-Tarif downgegradet.
               </p>
               <Button size="sm" variant="destructive" className="mt-2 h-7 text-xs" onClick={handlePortal} disabled={portalLoading}>
                 {portalLoading && <Loader2 className="w-3 h-3 animate-spin mr-1" />}

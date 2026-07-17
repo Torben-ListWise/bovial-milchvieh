@@ -59,7 +59,7 @@ export function CheckoutConfirmationBox({
               <tr>
                 <td className="px-4 py-2.5 text-muted-foreground font-medium w-2/5">Produkt</td>
                 <td className="px-4 py-2.5 text-foreground font-semibold">
-                  Milchvieh Assistent — {plan.name}
+                  Bovial — {plan.name}
                 </td>
               </tr>
               <tr>

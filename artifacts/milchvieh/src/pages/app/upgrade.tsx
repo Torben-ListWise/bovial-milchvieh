@@ -13,28 +13,28 @@ const PLANS: (PlanDetails & { key: string })[] = [
     name: "Basis",
     pricePerMonth: 1.99,
     analysesPerMonth: 15,
-    description: "Einstieg — 15 Credits/Monat für einfache Auswertungen und Wissensfragen.",
+    description: "Einstieg — einfache Auswertungen und Wissensfragen.",
   },
   {
     key: "starter",
     name: "Professional",
     pricePerMonth: 19.0,
     analysesPerMonth: 60,
-    description: "Für aktive Betriebe — 60 Credits/Monat, alle Vorlagen, Folgefragen inklusive.",
+    description: "Für aktive Betriebe — alle Vorlagen, umfangreiche Auswertungen, Folgefragen inklusive.",
   },
   {
     key: "pro",
     name: "Premium",
     pricePerMonth: 49.0,
     analysesPerMonth: 200,
-    description: "Für Betriebsleiter — 200 Credits/Monat, Daten-Upload, KI-Tiefenanalysen, 3 Team-Einladungen.",
+    description: "Für Betriebsleiter — Tiefenanalysen, Daten-Upload, KI-Investitionsprüfung, 3 Team-Einladungen.",
   },
   {
     key: "premium_max",
     name: "Premium Max",
     pricePerMonth: 99.0,
     analysesPerMonth: "unbegrenzt",
-    description: "Maximale Leistung — unbegrenzte Credits, Prioritäts-Support, ideal für Berater.",
+    description: "Maximale Leistung — unbegrenzte Analysen, Prioritäts-Support, ideal für Berater.",
   },
 ];
 
@@ -125,12 +125,7 @@ export function UpgradePage() {
                 </span>
               </div>
               <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>
-              <p className="text-xs text-muted-foreground">
-                {typeof plan.analysesPerMonth === "number"
-                  ? `${plan.analysesPerMonth} Credits / Monat`
-                  : "Unbegrenzte Credits / Monat"}
-              </p>
-              <p className="text-[10px] text-muted-foreground/70 mt-1">zzgl. 19 % MwSt.</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1">inkl. 19 % MwSt.</p>
             </button>
           ))}
         </div>

@@ -143,7 +143,7 @@ function GuestBanner() {
           href={`${basePath}/sign-up`}
           className="inline-flex items-center gap-1 text-sm font-semibold bg-white text-primary px-3 py-1.5 rounded-lg hover:bg-white/90 transition-colors whitespace-nowrap"
         >
-          Kostenlos starten
+          Jetzt registrieren
           <ArrowRight className="w-3.5 h-3.5" />
         </a>
       </div>
@@ -340,7 +340,7 @@ export function GuestAnalysisPage({ analysisId }: GuestAnalysisPageProps) {
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card shrink-0">
         <a href={`${basePath}/`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-6 h-6" />
-          <span className="font-bold text-sm text-primary">Milchvieh Assistent</span>
+          <span className="font-bold text-sm text-primary">Bovial</span>
         </a>
         {analysis && (
           <>

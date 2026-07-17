@@ -367,7 +367,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8 shrink-0" />
           {!navCollapsed && (
             <span className="font-bold text-primary truncate ml-1 flex-1 text-sm">
-              Milchvieh Assistent
+              Bovial
             </span>
           )}
           <button
@@ -483,7 +483,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
         <div className="h-14 flex items-center border-b border-white/[0.06] shrink-0 px-4 gap-3">
           <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8 shrink-0" />
           <span className="font-bold text-primary truncate flex-1 text-sm">
-            Milchvieh Assistent
+            Bovial
           </span>
           <button
             onClick={() => setMobileDrawerOpen(false)}
