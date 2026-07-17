@@ -126,4 +126,4 @@ overrides:
   rollup>@rollup/rollup-win32-x64-msvc: '-'
 
 patchedDependencies:
-  react-native: patches/react-native.patch
+  react-native@0.81.5: patches/react-native.patch

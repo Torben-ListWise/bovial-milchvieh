@@ -24,25 +24,34 @@ workflows:
         script: |
           pnpm install --frozen-lockfile
 
-      - name: Diagnose react-native patch
+      - name: Patch react-native spm.rb (all copies)
         script: |
-          echo "=== Git commit ==="
-          git rev-parse HEAD
-          git log -1 --oneline
-          echo "=== Patch file present? ==="
-          ls -la patches/react-native.patch
-          sha256sum patches/react-native.patch
-          echo "=== patchedDependencies entry ==="
-          grep -A2 "patchedDependencies" pnpm-workspace.yaml
-          echo "=== Resolved react-native dirs in store ==="
+          echo "=== react-native copies in pnpm store ==="
           ls node_modules/.pnpm | grep "^react-native@0.81.5" || echo "NONE FOUND"
-          echo "=== Which react-native does bovial-mobile resolve to? ==="
-          cd artifacts/bovial-mobile
-          node -e "console.log(require.resolve('react-native/package.json'))"
-          echo "=== Does the resolved spm.rb contain our patch? ==="
-          RN_PKG=$(node -e "console.log(require.resolve('react-native/package.json'))")
+          echo "=== Patching all spm.rb copies ==="
+          for SPM_RB in node_modules/.pnpm/react-native@0.81.5*/node_modules/react-native/scripts/cocoapods/spm.rb; do
+            [ -f "$SPM_RB" ] || continue
+            echo "Checking: $SPM_RB"
+            if grep -q "package_product_dependencies.nil?" "$SPM_RB"; then
+              echo "  Already patched, skipping."
+            else
+              ruby -e '
+                path = ARGV[0]
+                content = File.read(path)
+                guard = "    if target.nil? || !target.respond_to?(:package_product_dependencies) || target.package_product_dependencies.nil?\n      return\n    end\n"
+                content.gsub!(
+                  "  def add_spm_to_target(project, target, url, requirement, products)\n    pkg_class",
+                  "  def add_spm_to_target(project, target, url, requirement, products)\n" + guard + "    pkg_class"
+                )
+                File.write(path, content)
+                puts "  Patched: #{path}"
+              ' "$SPM_RB"
+            fi
+          done
+          echo "=== Verifying patch in resolved copy ==="
+          RN_PKG=$(cd artifacts/bovial-mobile && node --print "require.resolve(\"react-native/package.json\")")
           RN_DIR=$(dirname "$RN_PKG")
-          grep -n "package_product_dependencies.nil\|target.nil?" "$RN_DIR/scripts/cocoapods/spm.rb" || echo "PATCH NOT FOUND IN RESOLVED FILE"
+          grep -n "package_product_dependencies.nil?" "$RN_DIR/scripts/cocoapods/spm.rb" && echo "PATCH CONFIRMED" || echo "WARNING: patch not found in resolved copy"
 
       - name: Expo prebuild (iOS)
         script: |
