@@ -4021,6 +4021,17 @@ export function AnalysesPage() {
           value={question}
           onChange={(e) => setQuestion(e.target.value.slice(0, 4_000))}
           maxLength={4_000}
+          onPaste={(e) => {
+            const items = Array.from(e.clipboardData?.items ?? []);
+            const imageItem = items.find((it) => it.type.startsWith("image/"));
+            if (imageItem) {
+              const file = imageItem.getAsFile();
+              if (file) {
+                e.preventDefault();
+                handleImageSelect(file);
+              }
+            }
+          }}
           placeholder={
             activeAnalysisId
               ? "Folgefrage stellen…"
