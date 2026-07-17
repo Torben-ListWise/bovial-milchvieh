@@ -215,8 +215,12 @@ function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Header row */}
       <div className="flex items-center gap-3 p-4">
-        {/* Date + topic badge */}
-        <div className="flex-1 min-w-0 space-y-1">
+        {/* Date + topic badge — click anywhere here to expand */}
+        <button
+          type="button"
+          className="flex-1 min-w-0 space-y-1 text-left"
+          onClick={() => { setExpanded((v) => !v); setEditing(false); }}
+        >
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <Calendar className="w-3 h-3" />
@@ -232,7 +236,7 @@ function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap
           <p className="font-semibold text-sm text-foreground truncate">
             {edition.title}
           </p>
-        </div>
+        </button>
 
         {/* Action buttons */}
         <div className="flex items-center gap-1 shrink-0">
@@ -417,11 +421,11 @@ function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap
                   {edition.socialBody}
                 </div>
               </div>
-              {edition.sources.length > 0 && (
+              {(edition.sources ?? []).length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Quellen</p>
                   <ul className="space-y-1">
-                    {edition.sources.map((s, i) => (
+                    {(edition.sources ?? []).map((s, i) => (
                       <li key={i} className="text-xs">
                         <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                           {s.name}
@@ -566,7 +570,9 @@ export function NewsEditorPage() {
   async function handleApprove(id: string) {
     const resp = await apiFetch(`/operator/newsletter/${id}/approve`, { method: "POST" });
     if (!resp.ok) {
-      toast({ variant: "destructive", title: "Freigabe fehlgeschlagen" });
+      let detail = "";
+      try { detail = (await resp.json() as { error?: string }).error ?? ""; } catch { /* ignore */ }
+      toast({ variant: "destructive", title: "Freigabe fehlgeschlagen", description: detail || `Status ${resp.status}` });
       return;
     }
     toast({ title: "Ausgabe freigegeben" });
@@ -576,7 +582,9 @@ export function NewsEditorPage() {
   async function handleReject(id: string) {
     const resp = await apiFetch(`/operator/newsletter/${id}/reject`, { method: "POST" });
     if (!resp.ok) {
-      toast({ variant: "destructive", title: "Verwerfen fehlgeschlagen" });
+      let detail = "";
+      try { detail = (await resp.json() as { error?: string }).error ?? ""; } catch { /* ignore */ }
+      toast({ variant: "destructive", title: "Verwerfen fehlgeschlagen", description: detail || `Status ${resp.status}` });
       return;
     }
     toast({ title: "Ausgabe verworfen" });
