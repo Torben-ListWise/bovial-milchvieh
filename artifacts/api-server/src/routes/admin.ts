@@ -607,18 +607,18 @@ router.post(
   requireOperator,
   async (req: Request, res: Response) => {
     const { email, plan } = req.body as { email?: string; plan?: string };
-
     if (!email || typeof email !== "string") {
       res.status(400).json({ error: "E-Mail-Adresse erforderlich" });
       return;
     }
-    const validPlans = ["free", "starter", "pro", "beta"];
-    if (!plan || !validPlans.includes(plan)) {
-      res.status(400).json({ error: `Ungültiger Plan. Erlaubt: ${validPlans.join(", ")}` });
+    const VALID_PLANS = ["free", "starter", "beta", "pro"] as const;
+    type ValidPlan = (typeof VALID_PLANS)[number];
+    if (!plan || !VALID_PLANS.includes(plan as ValidPlan)) {
+      res.status(400).json({ error: `Plan muss einer der folgenden Werte sein: ${VALID_PLANS.join(", ")}` });
       return;
     }
-
     const normalizedEmail = email.trim().toLowerCase();
+    const validPlan = plan as ValidPlan;
     const [targetUser] = await db
       .select()
       .from(usersTable)
@@ -632,9 +632,15 @@ router.post(
 
     await db.execute(sql`
       INSERT INTO subscriptions (user_id, plan, status, updated_at)
+<<<<<<< HEAD
       VALUES (${targetUser.id}, ${plan}, 'active', NOW())
       ON CONFLICT (user_id)
       DO UPDATE SET plan = ${plan}, status = 'active', updated_at = NOW()
+=======
+      VALUES (${targetUser.id}, ${validPlan}, 'active', NOW())
+      ON CONFLICT (user_id)
+      DO UPDATE SET plan = ${validPlan}, status = 'active', updated_at = NOW()
+>>>>>>> 0ac6fa0 (Add POST /api/admin/plan/assign endpoint for operator plan management)
     `);
 
     await db.insert(activityLogTable).values({
@@ -644,7 +650,7 @@ router.post(
       datasetRef: targetUser.id.slice(0, 8),
     } as any);
 
-    res.json({ ok: true, userId: targetUser.id, email: targetUser.email, plan });
+    res.json({ ok: true, userId: targetUser.id, email: targetUser.email, plan: validPlan });
   },
 );
 
