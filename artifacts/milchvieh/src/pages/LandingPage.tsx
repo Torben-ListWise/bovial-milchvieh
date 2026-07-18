@@ -495,17 +495,17 @@ export function LandingPage({ basePath }: LandingPageProps) {
       <DemoModal open={demoOpen} onClose={() => setDemoOpen(false)} />
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8" />
-          <span className="font-bold text-lg text-primary">Bovial</span>
+      <header className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <img src={`${basePath}/logo.svg`} alt="Logo" className="w-8 h-8 shrink-0" />
+          <span className="font-bold text-lg text-primary hidden sm:block">Bovial</span>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
           <a href="#features" className="hover:text-foreground transition-colors">Funktionen</a>
           <a href="#pricing" className="hover:text-foreground transition-colors">Preise</a>
           <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
         </nav>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={toggle}
             aria-label={isDark ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
@@ -519,7 +519,7 @@ export function LandingPage({ basePath }: LandingPageProps) {
           </a>
           <a
             href={`${basePath}/sign-up`}
-            className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-all glow-sm"
+            className="text-sm font-semibold bg-primary text-primary-foreground px-3 sm:px-4 py-2 rounded-lg hover:bg-primary/90 transition-all glow-sm whitespace-nowrap"
           >
             Jetzt starten
           </a>
