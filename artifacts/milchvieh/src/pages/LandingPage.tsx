@@ -281,6 +281,7 @@ function PricingCard({
   ctaHref,
   highlighted,
   badge,
+  trialNote,
 }: {
   name: string;
   price: string;
@@ -290,6 +291,7 @@ function PricingCard({
   ctaHref: string;
   highlighted?: boolean;
   badge?: string;
+  trialNote?: string;
 }) {
   return (
     <div
@@ -346,6 +348,11 @@ function PricingCard({
         {cta}
         <ArrowRight className="w-4 h-4" />
       </a>
+      {trialNote && (
+        <p className={`mt-2.5 text-center text-[11px] ${highlighted ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+          {trialNote}
+        </p>
+      )}
     </div>
   );
 }
@@ -417,10 +424,11 @@ export function LandingPage({ basePath }: LandingPageProps) {
         "Unbegrenzte Wissensfragen",
         "E-Mail-Support",
       ],
-      cta: "Professional wählen",
-      ctaHref: `${basePath}/app/upgrade`,
+      cta: "14 Tage kostenlos testen",
+      ctaHref: `${basePath}/app/upgrade?trial=1`,
       highlighted: true,
       badge: "Empfohlen",
+      trialNote: "Danach 19 €/Monat · jederzeit kündbar",
     },
     {
       name: "Premium",

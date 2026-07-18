@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckoutConfirmationBox, type PlanDetails } from "@/components/CheckoutConfirmationBox";
-import { ArrowLeft, Sparkles } from "lucide-react";
-import { Link } from "wouter";
+import { ArrowLeft, Sparkles, CalendarClock, ShieldCheck } from "lucide-react";
+import { Link, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@clerk/react";
 
@@ -40,11 +40,27 @@ const PLANS: (PlanDetails & { key: string })[] = [
 
 import { PageLayout } from "@/components/PageLayout";
 
+function trialEndDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  return d.toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export function UpgradePage() {
   const { toast } = useToast();
   const { getToken } = useAuth();
+  const search = useSearch();
+  const isTrial = new URLSearchParams(search).get("trial") === "1";
+
   const [selectedPlan, setSelectedPlan] = useState<(PlanDetails & { key: string }) | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isTrial) {
+      const professional = PLANS.find((p) => p.key === "starter") ?? null;
+      setSelectedPlan(professional);
+    }
+  }, [isTrial]);
 
   async function handleConfirm() {
     if (!selectedPlan) return;
@@ -53,6 +69,7 @@ export function UpgradePage() {
       const token = await getToken();
       const origin = window.location.origin;
       const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const withTrial = isTrial && selectedPlan.key === "starter";
 
       const response = await fetch(`${API_BASE}/api/checkout/create-session`, {
         method: "POST",
@@ -64,6 +81,7 @@ export function UpgradePage() {
           planKey: selectedPlan.key,
           successUrl: `${origin}${base}/app/settings?upgraded=1`,
           cancelUrl: `${origin}${base}/app/upgrade`,
+          withTrial,
         }),
       });
 
@@ -101,13 +119,41 @@ export function UpgradePage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
-            Tarif upgraden
+            {isTrial ? "14 Tage kostenlos testen" : "Tarif upgraden"}
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Wähle einen Tarif und bestätige die Bestellbedingungen.
+            {isTrial
+              ? "Professional-Funktionsumfang — heute 0 €, danach monatlich kündbar."
+              : "Wähle einen Tarif und bestätige die Bestellbedingungen."}
           </p>
         </div>
       </div>
+
+      {isTrial && selectedPlan?.key === "starter" && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+            <CalendarClock className="w-4 h-4 shrink-0" />
+            Transparenzhinweis (§ 312 BGB)
+          </div>
+          <div className="text-sm text-foreground space-y-1.5">
+            <p>
+              <span className="font-semibold">Heute zu zahlen: 0 €</span>
+            </p>
+            <p>
+              Danach automatisch <span className="font-semibold">19 €/Monat (inkl. 19 % MwSt.)</span> ab dem{" "}
+              <span className="font-semibold">{trialEndDate()}</span>, sofern nicht vorher gekündigt.
+            </p>
+            <p className="text-muted-foreground text-xs">
+              Deine Zahlungsdaten werden bei Stripe gespeichert, damit der automatische Übergang funktioniert.
+              Du kannst jederzeit ohne Angabe von Gründen kündigen — über den Kündigungsbutton in den Einstellungen.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+            Keine Abbuchung während des Testzeitraums — Erinnerung 3 Tage vor Ende
+          </div>
+        </div>
+      )}
 
       {!selectedPlan ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -131,13 +177,15 @@ export function UpgradePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <button
-            onClick={() => setSelectedPlan(null)}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Anderen Tarif wählen
-          </button>
+          {!isTrial && (
+            <button
+              onClick={() => setSelectedPlan(null)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Anderen Tarif wählen
+            </button>
+          )}
           <CheckoutConfirmationBox
             plan={selectedPlan}
             onConfirm={handleConfirm}

@@ -47,11 +47,11 @@ function baseHtml(title: string, body: string, userId?: string): string {
     '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">' +
     "<tr>" +
     '<td style="background:' + BRAND_GREEN + ';padding:24px 32px;">' +
-    '<p style="margin:0;color:#ffffff;font-size:22px;font-weight:bold;">&#127807; Milchvieh Assistent</p>' +
+    '<p style="margin:0;color:#ffffff;font-size:22px;font-weight:bold;">&#127807; Bovial</p>' +
     "</td></tr>" +
     '<tr><td style="padding:32px;">' + body + "</td></tr>" +
     '<tr><td style="background:#f9f9f9;padding:16px 32px;border-top:1px solid #e0e0e0;">' +
-    '<p style="margin:0 0 4px;color:#999;font-size:12px;">Milchvieh Datenanalyse-Assistent</p>' +
+    '<p style="margin:0 0 4px;color:#999;font-size:12px;">Bovial — KI-gestützte Betriebsanalyse</p>' +
     footerExtra +
     '<p style="margin:0;color:#bbb;font-size:11px;">Diese E-Mail wurde automatisch generiert. Bitte nicht direkt antworten.</p>' +
     "</td></tr>" +
@@ -249,6 +249,47 @@ export async function sendMonthlyDigest(
     to,
     subject: "Deine Zusammenfassung f\u00fcr " + stats.month,
     html: baseHtml("Monats-Digest", body, userId),
+  });
+}
+
+export async function sendTrialEnding(
+  to: string,
+  name: string | null,
+  userId: string,
+  trialEnd: Date,
+  portalUrl: string,
+): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  const greeting = name ? "Hallo " + name + "," : "Guten Tag,";
+  const endDate = trialEnd.toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const appUrl = getAppUrl();
+
+  const body =
+    h1("Dein Testzugang endet in 3 Tagen") +
+    p(greeting) +
+    p("Dein kostenloser 14-Tage-Testzeitraum l&#228;uft am <strong>" + endDate + "</strong> ab. Danach wird dein Professional-Abo automatisch zu <strong>19&nbsp;&#8364;/Monat (inkl. 19&nbsp;% MwSt.)</strong> verl&#228;ngert.") +
+    infoBox(
+      "<strong>Testende:</strong> " + endDate + "<br>" +
+      "<strong>Danach:</strong> 19&nbsp;&#8364;/Monat inkl. MwSt. (Professional-Plan)<br>" +
+      "<strong>Kreditkarte:</strong> wird erst nach Ablauf belastet"
+    ) +
+    p("M&#246;chtest du nicht verl&#228;ngern? Jetzt noch rechtzeitig k&#252;ndigen &mdash; schnell und ohne Formulare:") +
+    ctaButton("Abo jetzt k&#252;ndigen", portalUrl) +
+    p("Wenn du das Abo beh&#228;ltst, passiert nichts weiter. Dein Professional-Zugang bleibt ohne Unterbrechung aktiv.") +
+    ctaButton("Zur App", appUrl + "/app");
+
+  await resend.emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: "Dein Bovial-Testzeitraum endet in 3 Tagen",
+    html: baseHtml("Testende-Erinnerung", body, userId),
   });
 }
 

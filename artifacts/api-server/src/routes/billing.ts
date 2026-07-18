@@ -5,7 +5,7 @@ import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { getStripeClient, isStripeConfigured, planFromPriceId, BASIS_PRICE_ID, STARTER_PRICE_ID, PRO_PRICE_ID, PREMIUM_MAX_PRICE_ID, WEBHOOK_SECRET } from "../lib/stripe";
 import { getQuotaStatus, PLAN_LIMITS } from "../lib/quota";
-import { sendPlanActivated, sendPaymentFailed, fireEmail } from "../lib/emailService";
+import { sendPlanActivated, sendPaymentFailed, sendTrialEnding, fireEmail } from "../lib/emailService";
 import type Stripe from "stripe";
 
 const router: IRouter = Router();
@@ -49,10 +49,11 @@ router.get("/billing/status", requireAuth, async (req: Request, res: Response) =
 router.post("/billing/checkout", requireAuth, async (req: Request, res: Response) => {
   if (!isStripeConfigured()) { notConfigured(res); return; }
 
-  const { plan, successUrl, cancelUrl } = req.body as {
+  const { plan, successUrl, cancelUrl, withTrial } = req.body as {
     plan?: string;
     successUrl?: string;
     cancelUrl?: string;
+    withTrial?: boolean;
   };
 
   const priceIdMap: Record<string, string> = {
@@ -93,6 +94,8 @@ router.post("/billing/checkout", requireAuth, async (req: Request, res: Response
       ? `https://${process.env.REPLIT_DEV_DOMAIN}`
       : "http://localhost:3000";
 
+    const trialDays = withTrial && plan === "starter" ? 14 : undefined;
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
@@ -102,6 +105,7 @@ router.post("/billing/checkout", requireAuth, async (req: Request, res: Response
       success_url: successUrl ?? `${baseUrl}/app/settings?billing=success`,
       cancel_url: cancelUrl ?? `${baseUrl}/app/settings?billing=cancel`,
       metadata: { userId },
+      ...(trialDays ? { subscription_data: { trial_period_days: trialDays } } : {}),
     });
 
     res.json({ url: session.url });
@@ -305,6 +309,35 @@ async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         WHERE user_id = ${userId}
       `);
       logger.info({ userId }, "Zahlung erfolgreich — Grace Period zurückgesetzt");
+      break;
+    }
+
+    case "customer.subscription.trial_will_end": {
+      const subscription = event.data.object as Stripe.Subscription;
+      const userId = await userIdFromCustomer(subscription.customer as string);
+      if (!userId) break;
+
+      const trialEnd = new Date(subscription.trial_end! * 1000);
+      const [userRow] = await db
+        .select({ email: usersTable.email, name: usersTable.name })
+        .from(usersTable)
+        .where(sql`${usersTable.id} = ${userId}`)
+        .limit(1);
+      if (userRow?.email) {
+        const stripe = getStripeClient();
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : "https://bovial.de";
+        const portalSession = await stripe.billingPortal.sessions.create({
+          customer: subscription.customer as string,
+          return_url: `${baseUrl}/app/settings`,
+        }).catch(() => null);
+        fireEmail(
+          sendTrialEnding(userRow.email, userRow.name, userId, trialEnd, portalSession?.url ?? `${baseUrl}/app/settings`),
+          `trial-ending:${userId}`,
+        );
+      }
+      logger.info({ userId, trialEnd }, "Trial endet bald — Reminder-E-Mail verschickt");
       break;
     }
 

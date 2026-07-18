@@ -2,7 +2,7 @@ import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGe
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock, Sun, Moon, Monitor, Thermometer } from "lucide-react";
+import { Download, Trash2, ShieldCheck, Tractor, Loader2, Sparkles, CreditCard, Zap, Crown, AlertTriangle, CheckCircle2, TrendingUp, Users, Copy, X, Mail, Clock, Sun, Moon, Monitor, Thermometer, XCircle } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -203,7 +203,7 @@ function BillingSection() {
 
   // Plans are resolved server-side — frontend just sends "starter" or "pro"
 
-  // Show success/cancel toast from Stripe redirect
+  // Show success/cancel toast from Stripe redirect; auto-open portal on ?action=cancel
   useEffect(() => {
     const params = new URLSearchParams(search);
     if (params.get("billing") === "success") {
@@ -212,6 +212,10 @@ function BillingSection() {
     } else if (params.get("billing") === "cancel") {
       toast({ variant: "destructive", title: "Zahlung abgebrochen" });
       window.history.replaceState(null, "", window.location.pathname);
+    } else if (params.get("action") === "cancel") {
+      window.history.replaceState(null, "", window.location.pathname);
+      // Auto-trigger Stripe Customer Portal for cancellation
+      handlePortal();
     }
   }, []);
 
@@ -330,10 +334,24 @@ function BillingSection() {
             </div>
           </div>
           {status.stripeCustomerId && (
-            <Button variant="outline" size="sm" onClick={handlePortal} disabled={portalLoading} className="gap-1.5 text-xs">
-              {portalLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-              Abo verwalten
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Button variant="outline" size="sm" onClick={handlePortal} disabled={portalLoading} className="gap-1.5 text-xs">
+                {portalLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                Abo verwalten
+              </Button>
+              {status.plan !== "basis" && status.plan !== "free" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePortal}
+                  disabled={portalLoading}
+                  className="gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                >
+                  {portalLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                  Abo kündigen
+                </Button>
+              )}
+            </div>
           )}
         </div>
 

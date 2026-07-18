@@ -33,6 +33,7 @@ const CreateCheckoutSessionBody = z.object({
   planKey: z.enum(["basis", "starter", "pro", "premium_max"]),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
+  withTrial: z.boolean().optional(),
 });
 
 router.post(
@@ -52,7 +53,7 @@ router.post(
       return;
     }
 
-    const { planKey, successUrl, cancelUrl } = parsed.data;
+    const { planKey, successUrl, cancelUrl, withTrial } = parsed.data;
     const plan = STRIPE_PLANS[planKey];
 
     if (!plan.priceId) {
@@ -61,6 +62,8 @@ router.post(
       });
       return;
     }
+
+    const trialDays = withTrial && planKey === "starter" ? 14 : undefined;
 
     try {
       const session = await stripe.checkout.sessions.create({
@@ -74,6 +77,7 @@ router.post(
           planKey,
         },
         locale: "de",
+        ...(trialDays ? { subscription_data: { trial_period_days: trialDays } } : {}),
       });
 
       res.json({ url: session.url });

@@ -32,6 +32,7 @@ import {
   Newspaper,
   Sparkles,
   BarChart3,
+  XCircle,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -447,6 +448,20 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
               </div>
             )}
           </div>
+          {viewMode === 'customer' && !isGuestMode && (
+            <Link href="/app/settings?action=cancel">
+              <button
+                title={navCollapsed ? "Abo kündigen" : undefined}
+                className={cn(
+                  "mt-1 w-full flex items-center py-2 text-sm font-medium text-destructive/70 hover:text-destructive rounded-md hover:bg-destructive/5 transition-colors",
+                  navCollapsed ? "justify-center px-2" : "px-3"
+                )}
+              >
+                <XCircle className={cn("w-4 h-4 shrink-0", !navCollapsed && "mr-3")} />
+                {!navCollapsed && "Abo kündigen"}
+              </button>
+            </Link>
+          )}
           <button 
             onClick={() => signOut({ redirectUrl: basePath || "/" })}
             title={navCollapsed ? "Abmelden" : undefined}
@@ -597,6 +612,14 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
               </p>
             </div>
           </div>
+          {viewMode === 'customer' && !isGuestMode && (
+            <Link href="/app/settings?action=cancel">
+              <button className="mt-2 w-full flex items-center gap-3 px-3 min-h-[44px] text-sm font-medium text-destructive/70 hover:text-destructive rounded-lg hover:bg-destructive/5 transition-colors">
+                <XCircle className="w-4 h-4 shrink-0" />
+                Abo kündigen
+              </button>
+            </Link>
+          )}
           <button 
             onClick={() => signOut({ redirectUrl: basePath || "/" })}
             className="mt-2 w-full flex items-center gap-3 px-3 min-h-[44px] text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary transition-colors"
