@@ -2,10 +2,12 @@ import { useAuth } from "@clerk/expo";
 import {
   useGetAnalysis,
   useAskQuestion,
+  useListAnalyses,
+  useCreateAnalysis,
   customFetch,
 } from "@workspace/api-client-react";
 import type { Chart } from "@workspace/api-client-react";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import EventSource from "react-native-sse";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -91,24 +93,86 @@ export default function ChatScreen() {
   const esRef = useRef<EventSource | null>(null);
   const streamingStarted = useRef(false);
   const diarySheetRef = useRef<BottomSheetModal>(null);
+  const analysisPickerRef = useRef<BottomSheetModal>(null);
 
   const streamingTextRef = useRef("");
   const rafPendingRef = useRef(false);
   const lastFollowUpsRef = useRef<string[]>([]);
 
+  const router = useRouter();
   const { data: analysis, refetch } = useGetAnalysis(analysisId ?? "");
   const askQuestion = useAskQuestion();
+  const createAnalysis = useCreateAnalysis();
+  const { data: analysesList } = useListAnalyses(analysis?.datasetId ?? "", {
+    query: { enabled: !!analysis?.datasetId },
+  });
+
+  async function handleNewAnalysis() {
+    if (!analysis?.datasetId) return;
+    try {
+      const created = await createAnalysis.mutateAsync({
+        datasetId: analysis.datasetId,
+        data: { question: "Wie ist der aktuelle Stand meines Betriebs?" },
+      });
+      analysisPickerRef.current?.dismiss();
+      router.push(`/chat/${created.id}?new=1` as any);
+    } catch (e) {
+      console.error("New analysis error", e);
+    }
+  }
 
   useEffect(() => {
-    if (analysis?.title) {
-      navigation.setOptions({ title: analysis.title });
-    }
     if (analysis?.datasetId) {
       AsyncStorage.setItem(
         LAST_ANALYSIS_KEY(analysis.datasetId),
         analysisId
       ).catch(() => {});
     }
+
+    const title = analysis?.title ?? "Analyse";
+    const datasetId = analysis?.datasetId;
+
+    navigation.setOptions({
+      headerTitle: () => (
+        <Pressable
+          onPress={() => analysisPickerRef.current?.present()}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 14,
+            paddingVertical: 7,
+            backgroundColor: "rgba(120,120,128,0.12)",
+            borderRadius: 20,
+            maxWidth: 220,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 14, fontWeight: "600", flex: 1 }}
+          >
+            {title}
+          </Text>
+          <Ionicons name="chevron-down" size={13} color="#888" />
+        </Pressable>
+      ),
+      headerRight: () => (
+        <Pressable
+          onPress={handleNewAnalysis}
+          style={{
+            marginRight: 12,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: "rgba(120,120,128,0.12)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="add" size={22} color="#888" />
+        </Pressable>
+      ),
+    });
   }, [analysis?.title, analysis?.datasetId]);
 
   useEffect(() => {
@@ -737,6 +801,94 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      {/* ── Analyses picker sheet ─────────────────────────────────────── */}
+      <BottomSheetModal
+        ref={analysisPickerRef}
+        snapPoints={["55%", "80%"]}
+        backgroundStyle={{ backgroundColor: colors.card }}
+        handleIndicatorStyle={{ backgroundColor: colors.border }}
+        enableDynamicSizing={false}
+      >
+        <BottomSheetView style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>Analysen</Text>
+            <Pressable
+              onPress={handleNewAnalysis}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                backgroundColor: colors.primary,
+                borderRadius: 16,
+              }}
+            >
+              {createAnalysis.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Neue Analyse</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
+            {(analysesList ?? []).length === 0 && (
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: "center", marginTop: 24 }}>
+                Noch keine Analysen
+              </Text>
+            )}
+            {(analysesList ?? []).map((a) => (
+              <Pressable
+                key={a.id}
+                onPress={() => {
+                  analysisPickerRef.current?.dismiss();
+                  if (a.id !== analysisId) {
+                    router.push(`/chat/${a.id}` as any);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  backgroundColor:
+                    a.id === analysisId
+                      ? colors.primary + "1A"
+                      : pressed
+                      ? colors.secondary
+                      : "transparent",
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                })}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: a.id === analysisId ? "600" : "400",
+                      color: a.id === analysisId ? colors.primary : colors.foreground,
+                    }}
+                  >
+                    {a.title}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>
+                    {new Date(a.updatedAt ?? a.createdAt).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}
+                  </Text>
+                </View>
+                {a.id === analysisId && (
+                  <Ionicons name="checkmark" size={18} color={colors.primary} style={{ marginLeft: 8 }} />
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </BottomSheetView>
+      </BottomSheetModal>
+
+      {/* ── Diary sheet ───────────────────────────────────────────────── */}
       <BottomSheetModal
         ref={diarySheetRef}
         snapPoints={["60%", "85%"]}

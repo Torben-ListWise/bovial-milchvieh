@@ -205,7 +205,9 @@ function NewDataBadge() {
   );
 }
 
-function AnalysisHistoryPanel({
+// ── Claude-style analysis switcher pill ──────────────────────────────────────
+
+function AnalysisSwitcherPill({
   analyses,
   activeAnalysisId,
   latestFileUploadAt,
@@ -222,87 +224,112 @@ function AnalysisHistoryPanel({
   onDeleteAnalysis: (id: string) => void;
   onUpdateAnalysis: (id: string, patch: { pinned?: boolean }) => void;
 }) {
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem("sidebar-projects-open") === "false"; } catch { return false; }
-  });
+  const [open, setOpen] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
 
-  function toggleCollapsed() {
-    const next = !collapsed;
-    setCollapsed(next);
-    try { localStorage.setItem("sidebar-projects-open", String(!next)); } catch {}
-  }
+  const activeAnalysis = analyses.find((a) => a.id === activeAnalysisId);
+  const pillTitle = activeAnalysis?.title ?? "Analyse auswählen";
 
-  // Close menu when clicking outside
   useEffect(() => {
-    if (!openMenuId) return;
-    function handler() { setOpenMenuId(null); }
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      const target = e.target as Element;
+      if (target.closest?.("[data-analysis-switcher]")) return;
+      setOpen(false);
+      setOpenMenuId(null);
+      setMenuRect(null);
+    }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [openMenuId]);
+  }, [open]);
+
+  function handlePillClick() {
+    if (barRef.current) {
+      setDropdownRect(barRef.current.getBoundingClientRect());
+    }
+    setOpen((v) => !v);
+  }
 
   return (
-    <div className="px-3 pt-3 pb-1 border-b border-border/60 shrink-0">
-      <div className="flex items-center justify-between mb-1.5">
-        <button
-          onClick={toggleCollapsed}
-          className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+    <div
+      data-analysis-switcher=""
+      ref={barRef}
+      className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/60 bg-background/50"
+    >
+      {/* Selector pill */}
+      <button
+        onClick={handlePillClick}
+        className="flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 rounded-full bg-secondary hover:bg-accent border border-border/60 transition-colors text-left"
+      >
+        <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{pillTitle}</span>
+        <ChevronDown className={cn("w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")} />
+      </button>
+
+      {/* New analysis button */}
+      <button
+        onClick={onNew}
+        title="Neue Analyse starten"
+        className="flex items-center justify-center w-8 h-8 rounded-full bg-secondary hover:bg-accent border border-border/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+
+      {/* Dropdown rendered via portal so it escapes overflow:hidden ancestors */}
+      {open && dropdownRect && createPortal(
+        <div
+          data-analysis-switcher=""
+          style={{
+            position: "fixed",
+            top: dropdownRect.bottom + 4,
+            left: dropdownRect.left,
+            width: Math.max(dropdownRect.width + 44, 280),
+            maxHeight: 340,
+            zIndex: 9998,
+          }}
+          className="bg-popover border border-border rounded-2xl shadow-2xl overflow-y-auto"
         >
-          <ChevronDown className={cn("w-3 h-3 transition-transform duration-150", collapsed && "-rotate-90")} />
-          Projekte
-        </button>
-        <button
-          onClick={onNew}
-          title="Neues Projekt"
-          className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      {!collapsed && (
-        <div className="flex flex-col gap-0.5 max-h-44 overflow-y-auto">
           {analyses.length === 0 && (
-            <p className="text-xs text-muted-foreground/50 px-2 py-1">Noch keine Projekte</p>
+            <p className="text-xs text-muted-foreground/60 px-4 py-3">Noch keine Analysen vorhanden</p>
           )}
           {analyses.map((a) => {
-            const analysisTime = new Date(a.updatedAt ?? a.createdAt).getTime();
-            const isStale = latestFileUploadAt > 0 && analysisTime < latestFileUploadAt;
-            const isConfirmingDelete = confirmDeleteId === a.id;
-
+            const isStale = latestFileUploadAt > 0 && new Date(a.updatedAt ?? a.createdAt).getTime() < latestFileUploadAt;
+            const isConfirming = confirmDeleteId === a.id;
             return (
-              <div key={a.id} className="relative group">
-                {isConfirmingDelete ? (
-                  <div className="flex items-center gap-1 text-[11px] rounded-md px-2 py-1.5 bg-destructive/10 border border-destructive/20">
+              <div key={a.id} className="relative border-b border-border/30 last:border-0">
+                {isConfirming ? (
+                  <div className="flex items-center gap-1 text-[11px] px-4 py-3 bg-destructive/10">
                     <span className="flex-1 text-destructive">Wirklich löschen?</span>
                     <button
-                      onClick={() => { onDeleteAnalysis(a.id); setConfirmDeleteId(null); }}
-                      className="text-destructive font-medium hover:underline"
+                      onClick={() => { onDeleteAnalysis(a.id); setConfirmDeleteId(null); setOpen(false); }}
+                      className="text-destructive font-medium hover:underline px-1"
                     >Ja</button>
                     <button
                       onClick={() => setConfirmDeleteId(null)}
-                      className="text-muted-foreground hover:underline ml-1"
+                      className="text-muted-foreground hover:underline px-1"
                     >Nein</button>
                   </div>
                 ) : (
                   <button
-                    onClick={() => { setOpenMenuId(null); onSelect(a.id); }}
+                    onClick={() => { onSelect(a.id); setOpen(false); }}
                     className={cn(
-                      "flex items-center gap-1.5 text-xs rounded-md px-2 py-1.5 text-left w-full transition-colors",
+                      "flex items-center gap-2 text-sm px-4 py-2.5 text-left w-full transition-colors",
                       activeAnalysisId === a.id
                         ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        : "text-foreground hover:bg-muted",
                     )}
                   >
-                    {a.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary/70 fill-primary/60" />}
-                    <span className="flex-1 truncate min-w-0 pr-8">{a.title}</span>
+                    {a.pinned && <Pin className="w-3 h-3 shrink-0 text-primary/70 fill-primary/60" />}
+                    <span className="flex-1 truncate min-w-0 pr-6">{a.title}</span>
                     {isStale && <NewDataBadge />}
                     <AnalysisSourceBadge source={a.source} />
                   </button>
                 )}
-                {!isConfirmingDelete && (
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                {!isConfirming && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     <button
                       onMouseDown={(e) => {
                         e.stopPropagation();
@@ -321,6 +348,7 @@ function AnalysisHistoryPanel({
                     </button>
                     {openMenuId === a.id && menuRect && createPortal(
                       <div
+                        data-analysis-switcher=""
                         style={{
                           position: "fixed",
                           top: menuRect.bottom + 2,
@@ -352,7 +380,8 @@ function AnalysisHistoryPanel({
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -3611,7 +3640,7 @@ export function AnalysesPage() {
 
   const sidebarPanels = (
     <>
-      <AnalysisHistoryPanel
+      <AnalysisSwitcherPill
         analyses={analysesListItems}
         activeAnalysisId={activeAnalysisId}
         latestFileUploadAt={latestFileTime}
