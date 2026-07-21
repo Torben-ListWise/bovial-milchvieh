@@ -853,4 +853,26 @@ router.get(
   },
 );
 
+// POST /api/admin/cron/run-health-alerts — Amtliche Tierseuchen-Warnungen fetchen
+router.post(
+  "/admin/cron/run-health-alerts",
+  async (req: Request, res: Response) => {
+    const cronSecret = process.env["CRON_SECRET"];
+    if (!cronSecret) {
+      res.status(503).json({ error: "CRON_SECRET ist nicht konfiguriert." });
+      return;
+    }
+    const provided =
+      (req.headers["x-cron-secret"] as string | undefined) ??
+      (req.headers["authorization"] as string | undefined)?.replace("Bearer ", "");
+    if (provided !== cronSecret) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const { runHealthAlertFetch } = await import("../lib/healthAlertScheduler");
+    const result = await runHealthAlertFetch().catch(() => ({ fetched: -1, inserted: -1, skipped: -1 }));
+    res.json({ ok: true, ...result });
+  },
+);
+
 export default router;

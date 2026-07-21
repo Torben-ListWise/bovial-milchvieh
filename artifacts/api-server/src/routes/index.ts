@@ -28,6 +28,7 @@ import semenPlanningRouter from "./semen-planning";
 import diaryRouter from "./diary";
 import contextFactsRouter from "./context-facts";
 import referenceAnalysesRouter from "./reference-analyses";
+import healthAlertsRouter from "./health-alerts";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use(semenPlanningRouter);
 router.use(diaryRouter);
 router.use(contextFactsRouter);
 router.use(referenceAnalysesRouter);
+router.use(healthAlertsRouter);
 
 export default router;

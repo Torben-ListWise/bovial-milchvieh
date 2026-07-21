@@ -18,6 +18,7 @@ import {
   apiUsageLogTable,
   semenPlanningTable,
   farmDiaryEntriesTable,
+  animalHealthAlertsTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -753,6 +754,14 @@ ohne konkretes Ereignis, oder Hypothesen. Im Zweifel: nicht aufrufen.`,
       },
       required: ["description", "category"],
     },
+  },
+  {
+    name: "get_active_health_alerts",
+    description:
+      "Gibt die aktuell gültigen amtlichen Tierseuchen- und Gesundheitswarnungen zurück (FLI, LAVES). " +
+      "Aufrufen wenn der Nutzer nach aktuellen Tierseuchenlagen, amtlichen Warnungen, Seuchengeschehen oder " +
+      "regionalen Gesundheitsrisiken für den Betrieb fragt. Jede Warnung enthält Thema, Quelle und Link.",
+    input_schema: { type: "object", properties: {} },
   },
 ];
 
@@ -1870,6 +1879,45 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         return outputs;
       }
 
+      case "get_active_health_alerts": {
+        const approvedAlerts = await db
+          .select({
+            topic: animalHealthAlertsTable.topic,
+            title: animalHealthAlertsTable.title,
+            summary: animalHealthAlertsTable.summary,
+            sourceKey: animalHealthAlertsTable.sourceKey,
+            sourceUrl: animalHealthAlertsTable.sourceUrl,
+            officialDate: animalHealthAlertsTable.officialDate,
+            updatedAt: animalHealthAlertsTable.updatedAt,
+          })
+          .from(animalHealthAlertsTable)
+          .where(eq(animalHealthAlertsTable.status, "approved"))
+          .orderBy(desc(animalHealthAlertsTable.updatedAt))
+          .limit(30);
+
+        // Dedup: latest per topic
+        const byTopic = new Map<string, typeof approvedAlerts[0]>();
+        for (const row of approvedAlerts) {
+          if (!byTopic.has(row.topic)) byTopic.set(row.topic, row);
+        }
+        const activeAlerts = Array.from(byTopic.values());
+
+        if (activeAlerts.length === 0) {
+          return { alerts: [], message: "Aktuell liegen keine amtlichen Warnungen vor." };
+        }
+        return {
+          alerts: activeAlerts.map((a) => ({
+            topic: a.topic,
+            title: a.title,
+            summary: a.summary,
+            source: a.sourceKey === "fli" ? "FLI (bundesweit)" : a.sourceKey === "laves_nds" ? "LAVES Niedersachsen" : a.sourceKey,
+            sourceUrl: a.sourceUrl,
+            officialDate: a.officialDate,
+          })),
+          note: "Dies sind amtlich bestätigte Meldungen. Für Details die Originalquelle aufrufen.",
+        };
+      }
+
       case "search_knowledge": {
         searchKnowledgeCalled = true;
         const query = input.query as string;
@@ -2749,6 +2797,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         return "Hitzestress-Rechner wird angezeigt…";
       case "show_fresh_cow_calculator":
         return "Frischmelker-ROI-Rechner wird angezeigt…";
+      case "get_active_health_alerts":
+        return "Amtliche Gesundheitswarnungen werden abgerufen…";
       case "emit_chart":
         return "Diagramm wird erstellt…";
       case "ask_farmer":

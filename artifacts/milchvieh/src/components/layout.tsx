@@ -33,6 +33,7 @@ import {
   Sparkles,
   BarChart3,
   XCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -261,6 +262,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Nachrichten", href: "/app/nachrichten-editor", icon: Newspaper, preserveDataset: false },
     { name: "Referenzanalysen", href: "/app/reference-analyses", icon: Sparkles, preserveDataset: false },
     { name: "Credit-Dashboard", href: "/app/credit-dashboard", icon: BarChart3, preserveDataset: false },
+    { name: "Gesundheitswarnungen", href: "/app/health-alerts", icon: ShieldAlert, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;

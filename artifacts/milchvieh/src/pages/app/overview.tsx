@@ -21,6 +21,7 @@ import {
   useEditActiveContextFact,
   useDeleteContextFact,
   useUpdateMe,
+  getAuthToken,
   type AnalysisTemplate,
   type ContextFact,
 } from "@workspace/api-client-react";
@@ -38,8 +39,8 @@ function filterTemplatesByFocusAreas(
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil, CheckCircle2, XCircle, PowerOff, Info, ExternalLink, BookOpen } from "lucide-react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil, CheckCircle2, XCircle, PowerOff, Info, ExternalLink, BookOpen, ShieldAlert } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { AiIcon } from "@/components/AiIcon";
@@ -1287,6 +1288,89 @@ function ActiveContextFactRow({ fact, datasetId, isOwner }: { fact: ContextFact;
   );
 }
 
+// ── Amtliche Tierseuchen-Warnungen ───────────────────────────────────────────
+
+const API_BASE_OV =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+
+interface HealthAlertItem {
+  id: string;
+  topic: string;
+  title: string;
+  summary: string;
+  sourceKey: string;
+  sourceUrl: string;
+  officialDate: string | null;
+  updatedAt: string;
+}
+
+function HealthAlertsSection() {
+  const { data: alerts } = useQuery<HealthAlertItem[]>({
+    queryKey: ["health-alerts-public"],
+    queryFn: async () => {
+      const token = await getAuthToken();
+      const resp = await fetch(`${API_BASE_OV}/api/health-alerts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!alerts || alerts.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="w-4 h-4 text-amber-500" />
+        <h3 className="text-sm font-semibold text-foreground">
+          Amtliche Tiergesundheitswarnungen
+        </h3>
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+          Amtliche Quelle
+        </span>
+      </div>
+      {alerts.map((alert) => (
+        <div
+          key={alert.id}
+          className="border border-amber-200 rounded-lg p-3 bg-amber-50/40 space-y-1"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-900 leading-snug">
+                {alert.title}
+              </p>
+              <p className="text-xs text-amber-800/70 mt-0.5 leading-relaxed">
+                {alert.summary}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 pt-0.5">
+            <span className="text-[10px] text-amber-700/60">
+              {alert.sourceKey === "fli"
+                ? "FLI (bundesweit)"
+                : alert.sourceKey === "laves_nds"
+                ? "LAVES Niedersachsen"
+                : alert.sourceKey}
+              {alert.officialDate ? ` · ${alert.officialDate.split("-").reverse().join(".")}` : ""}
+            </span>
+            <a
+              href={alert.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[10px] text-amber-700 hover:underline"
+            >
+              <ExternalLink className="w-2.5 h-2.5" />
+              Quelle
+            </a>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ContextFactsSection({
   datasetId,
   hostId,
@@ -1552,6 +1636,8 @@ export function DatasetOverview() {
 
       <StartChipsSection datasetId={datasetId} />
       <SchnellauswertungenSection datasetId={datasetId} />
+
+      <HealthAlertsSection />
 
       <ContextFactsSection datasetId={datasetId} hostId={hostId} isOwner={!hostId} />
 
