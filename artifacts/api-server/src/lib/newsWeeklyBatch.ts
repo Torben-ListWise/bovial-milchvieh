@@ -20,6 +20,7 @@ import { logger } from "./logger";
 import { getModelForTask } from "./agent";
 import { validateUrl } from "./scraper";
 import { embedQuery } from "./embeddings";
+import { sendNewsletterEdition, fireEmail } from "./emailService";
 import * as cheerio from "cheerio";
 
 // ---------------------------------------------------------------------------
@@ -197,32 +198,52 @@ async function searchWebForTopic(
   return results;
 }
 
+export interface KnowledgeSource {
+  index: number;
+  title: string;
+  url: string | null;
+}
+
+interface KnowledgeContextResult {
+  context: string;
+  sources: KnowledgeSource[];
+}
+
 /**
  * Query the knowledge library for chunks relevant to a given topic.
- * Uses vector similarity search; falls back to empty string on error.
+ * Returns both formatted context text and structured source references.
+ * Uses vector similarity search; falls back to empty result on error.
  */
-async function fetchKnowledgeContext(topic: string): Promise<string> {
+async function fetchKnowledgeContext(topic: string): Promise<KnowledgeContextResult> {
   try {
     const queryVec = await embedQuery(topic);
     const vecStr = `[${queryVec.join(",")}]`;
     const rows = await db.execute(
       sql`
-        SELECT kc.chunk_text, kd.title
+        SELECT kc.chunk_text, kd.title, kd.source_url
         FROM knowledge_chunks kc
         JOIN knowledge_documents kd ON kd.id = kc.doc_id
         WHERE kd.status = 'ready'
         ORDER BY kc.embedding <=> ${vecStr}::vector
         LIMIT 4
       `,
-    ) as { rows: { chunk_text: string; title: string }[] };
+    ) as { rows: { chunk_text: string; title: string; source_url: string | null }[] };
 
-    if (!rows.rows || rows.rows.length === 0) return "";
+    if (!rows.rows || rows.rows.length === 0) return { context: "", sources: [] };
 
-    return rows.rows
-      .map((r) => `[${r.title}]: ${r.chunk_text.slice(0, 600)}`)
+    const sources: KnowledgeSource[] = rows.rows.map((r, i) => ({
+      index: i,
+      title: r.title,
+      url: r.source_url ?? null,
+    }));
+
+    const context = rows.rows
+      .map((r, i) => `[Quelle ${i}: ${r.title}]: ${r.chunk_text.slice(0, 600)}`)
       .join("\n\n");
+
+    return { context, sources };
   } catch {
-    return "";
+    return { context: "", sources: [] };
   }
 }
 
@@ -234,9 +255,13 @@ interface GeneratedEdition {
   title: string;
   appBody: string;
   socialBody: string;
+  /** Unified, ordered list: knowledge sources first (matching kpiTiles indices 0..K-1), web sources after */
   sources: { name: string; url: string }[];
   ctaType: "route" | "chat_prompt";
   ctaTarget: string;
+  kpiTiles: { value: string; label: string; sourceIndex: number }[];
+  causeEffect: string[] | null;
+  checklist: string[];
 }
 
 const TOPIC_CTA_MAP: Record<string, { type: "route" | "chat_prompt"; target: string }> = {
@@ -268,7 +293,7 @@ async function generateEdition(
   const client = getAnthropicClient();
 
   // Fetch configured source URLs, run web search, and query knowledge library — all in parallel
-  const [urlContentsRaw, webSearchResults, knowledgeContext] = await Promise.all([
+  const [urlContentsRaw, webSearchResults, knowledgeResult] = await Promise.all([
     (async () => {
       const results: { url: string; text: string }[] = [];
       for (const url of sourceUrls.slice(0, 2)) {
@@ -280,6 +305,8 @@ async function generateEdition(
     searchWebForTopic(topic, 2),
     fetchKnowledgeContext(topic),
   ]);
+
+  const { context: knowledgeContext, sources: knowledgeSources } = knowledgeResult;
 
   // Merge configured + web-search results, de-duplicate by URL, keep first 4
   const seen = new Set<string>();
@@ -303,7 +330,11 @@ async function generateEdition(
       : "(Keine externen Quellen verfügbar — bitte auf allgemeines Fachwissen zurückgreifen)";
 
   const knowledgeSection = knowledgeContext
-    ? `\nWissensbibliothek (betriebsrelevante Fachinformationen zum Thema, zur Anreicherung verwenden):\n${knowledgeContext}`
+    ? `\nWissensbibliothek (betriebsrelevante Fachinformationen zum Thema — NUR diese Quellen als Grundlage für kpiTiles verwenden):\n${knowledgeContext}`
+    : "";
+
+  const knowledgeSourcesJson = knowledgeSources.length > 0
+    ? `\nVerfügbare Wissensbibliothek-Quellen für kpiTiles (Indices 0–${knowledgeSources.length - 1}):\n${JSON.stringify(knowledgeSources.map((s) => ({ index: s.index, title: s.title })))}`
     : "";
 
   const ctaSuggestion =
@@ -313,12 +344,16 @@ async function generateEdition(
       target: `Zeige mir aktuelle Kennzahlen zum Thema ${topic} und gib Empfehlungen.`,
     } as const);
 
+  const kpiTilesInstruction = knowledgeContext
+    ? `"kpiTiles": [{"value": "Kennzahl mit Einheit", "label": "Bezeichnung", "sourceIndex": 0}] — maximal 4 Kacheln, NUR Zahlen aus der Wissensbibliothek (sourceIndex muss auf einen der verfügbaren Indices verweisen)`
+    : `"kpiTiles": [] — keine Wissensbibliothek verfügbar, daher LEER lassen`;
+
   const prompt = `Du bist Redakteur für einen deutschen Milchvieh-Informationsdienst. Erstelle eine eigenständige, fachlich fundierte Nachrichtenausgabe für Landwirte zum Thema: **${topic}**.
 
 Zieldatum der Ausgabe: ${scheduledDate}
 
 Verfügbare Quellinhalte (nur als Grundlage für eigene Formulierungen verwenden, kein wörtliches Zitieren über 15 Wörter):
-${sourceContext}${knowledgeSection}
+${sourceContext}${knowledgeSection}${knowledgeSourcesJson}
 
 Aufgabe: Erstelle EXAKT folgendes JSON-Objekt (kein weiterer Text darum):
 {
@@ -327,18 +362,22 @@ Aufgabe: Erstelle EXAKT folgendes JSON-Objekt (kein weiterer Text darum):
   "socialBody": "3–4 prägnante Sätze (ca. 120–180 Wörter), eigenständig formuliert, für Social Media. Kein Link, kein Hashtag. Quellenname darf nur als reiner Text genannt werden.",
   "sources": [{"name": "Institutionsname", "url": "vollständige URL"}],
   "ctaType": "${ctaSuggestion.type}",
-  "ctaTarget": ${JSON.stringify(ctaSuggestion.target)}
+  "ctaTarget": ${JSON.stringify(ctaSuggestion.target)},
+  ${kpiTilesInstruction},
+  "causeEffect": ["Ursache-Formulierung", "Wirkung-Formulierung", "Ergebnis-Formulierung"] — genau 3 Strings die eine Ursache-Wirkung-Kette beschreiben, oder null wenn nicht passend,
+  "checklist": ["Handlungsempfehlung 1", "Handlungsempfehlung 2"] — 2–4 konkrete Handlungsempfehlungen für Landwirte
 }
 
 Wichtig:
 - Strenge Copyright-Vorgaben: kein wörtliches Zitat über 15 Wörter, eigenständige Formulierung
 - Sprache: Deutsch, sachlich-freundlicher Tonfall für praktizierende Landwirte
 - Wenn keine externen Quellen nutzbar: Fachwissen direkt verwenden, sources: []
+- kpiTiles DARF NUR Zahlen enthalten, die direkt aus der Wissensbibliothek stammen. Wenn keine Wissensbibliothek vorhanden: kpiTiles: []
 - Antworte NUR mit dem JSON, kein Markdown-Codeblock`;
 
   const response = await client.messages.create({
     model: getModelForTask("newsletter_generation"),
-    max_tokens: 1200,
+    max_tokens: 1600,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -354,7 +393,11 @@ Wichtig:
     throw new Error(`Kein JSON in Antwort für Thema "${topic}": ${rawText.slice(0, 200)}`);
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as GeneratedEdition;
+  const parsed = JSON.parse(jsonMatch[0]) as GeneratedEdition & {
+    kpiTiles?: unknown;
+    causeEffect?: unknown;
+    checklist?: unknown;
+  };
 
   // Ensure required fields
   if (!parsed.title || !parsed.appBody || !parsed.socialBody) {
@@ -366,13 +409,55 @@ Wichtig:
     (s) => s.name && s.url && s.url.startsWith("http"),
   );
 
+  // Validate kpiTiles: only allow if knowledge context was present and sourceIndex is in range
+  const maxSourceIndex = knowledgeSources.length - 1;
+  const rawKpiTiles = Array.isArray(parsed.kpiTiles) ? parsed.kpiTiles : [];
+  const validKpiTiles = knowledgeContext
+    ? rawKpiTiles
+        .filter(
+          (t): t is { value: string; label: string; sourceIndex: number } =>
+            typeof t === "object" &&
+            t !== null &&
+            typeof (t as { value?: unknown }).value === "string" &&
+            typeof (t as { label?: unknown }).label === "string" &&
+            typeof (t as { sourceIndex?: unknown }).sourceIndex === "number" &&
+            (t as { sourceIndex: number }).sourceIndex >= 0 &&
+            (t as { sourceIndex: number }).sourceIndex <= maxSourceIndex,
+        )
+        .slice(0, 4)
+    : [];
+
+  const rawCauseEffect = Array.isArray(parsed.causeEffect) ? parsed.causeEffect : null;
+  const validCauseEffect =
+    rawCauseEffect && rawCauseEffect.length === 3 && rawCauseEffect.every((s) => typeof s === "string")
+      ? (rawCauseEffect as string[])
+      : null;
+
+  const rawChecklist = Array.isArray(parsed.checklist) ? parsed.checklist : [];
+  const validChecklist = rawChecklist
+    .filter((s): s is string => typeof s === "string")
+    .slice(0, 6);
+
+  // Build a unified, ordered source list.
+  // Knowledge sources occupy indices 0..K-1 (matching kpiTile.sourceIndex values).
+  // Web sources follow at indices K..M so they appear in the rendered source list
+  // but are not referenced by kpiTiles.
+  const knowledgeSourceEntries = knowledgeSources.map((k) => ({
+    name: k.title,
+    url: k.url ?? "",
+  }));
+  const unifiedSources = [...knowledgeSourceEntries, ...validSources];
+
   return {
     title: parsed.title,
     appBody: parsed.appBody,
     socialBody: parsed.socialBody,
-    sources: validSources,
+    sources: unifiedSources,
     ctaType: parsed.ctaType === "route" ? "route" : "chat_prompt",
     ctaTarget: parsed.ctaTarget ?? ctaSuggestion.target,
+    kpiTiles: validKpiTiles,
+    causeEffect: validCauseEffect,
+    checklist: validChecklist,
   };
 }
 
@@ -459,12 +544,68 @@ export async function runNewsWeeklyBatch(
         sources: edition.sources,
         ctaType: edition.ctaType,
         ctaTarget: edition.ctaTarget,
+        kpiTiles: edition.kpiTiles,
+        causeEffect: edition.causeEffect ?? undefined,
+        checklist: edition.checklist,
         status: "draft",
         batchRunAt,
       });
 
       result.generated++;
       logger.info({ date: dateStr, topic: topic.name }, "News-Batch: Ausgabe gespeichert");
+
+      // Send newsletter email to all subscribed users (fire-and-forget)
+      const savedRows = await pool.query<{ id: string }>(
+        `SELECT id FROM newsletter_editions WHERE scheduled_date = $1 LIMIT 1`,
+        [dateStr],
+      );
+      const savedEdition = savedRows.rows[0];
+      if (savedEdition) {
+        const subscribers = await pool.query<{ id: string; email: string }>(
+          `SELECT id, email FROM users WHERE email IS NOT NULL AND digest_opt_out = false`,
+        );
+        for (const sub of subscribers.rows) {
+          const editionRow = await pool.query<{
+            id: string; scheduled_date: string; topic: string; topic_color: string;
+            title: string; app_body: string; social_body: string; sources: unknown;
+            cta_type: string; cta_target: string; status: string; batch_run_at: string | null;
+            kpi_tiles: unknown; cause_effect: unknown; checklist: unknown;
+          }>(
+            `SELECT * FROM newsletter_editions WHERE id = $1`,
+            [savedEdition.id],
+          );
+          if (editionRow.rows[0]) {
+            const row = editionRow.rows[0];
+            const editionObj = {
+              id: row.id,
+              scheduledDate: row.scheduled_date,
+              topic: row.topic,
+              topicColor: row.topic_color,
+              title: row.title,
+              appBody: row.app_body,
+              socialBody: row.social_body,
+              sources: (row.sources ?? []) as { name: string; url: string }[],
+              ctaType: row.cta_type as "route" | "chat_prompt",
+              ctaTarget: row.cta_target,
+              status: row.status,
+              batchRunAt: row.batch_run_at ? new Date(row.batch_run_at) : null,
+              kpiTiles: (row.kpi_tiles ?? []) as { value: string; label: string; sourceIndex: number }[],
+              causeEffect: row.cause_effect as string[] | null,
+              checklist: (row.checklist ?? []) as string[],
+              topicId: null,
+              createdAt: new Date(),
+            };
+            fireEmail(
+              sendNewsletterEdition(sub.email, sub.id, editionObj),
+              `newsletter-edition-${savedEdition.id}-${sub.id}`,
+            );
+          }
+        }
+        logger.info(
+          { date: dateStr, subscriberCount: subscribers.rows.length },
+          "News-Batch: Newsletter-E-Mails abgeschickt",
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push(`${dateStr} (${topic.name}): ${msg}`);

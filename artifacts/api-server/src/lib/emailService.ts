@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import { createHmac } from "crypto";
 import { logger } from "./logger";
+import { getNewsletterTheme } from "@workspace/db";
+import type { NewsletterEdition } from "@workspace/db";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
 const EMAIL_FROM = process.env.EMAIL_FROM ?? "noreply@milchvieh.de";
@@ -290,6 +292,197 @@ export async function sendTrialEnding(
     to,
     subject: "Dein Bovial-Testzeitraum endet in 3 Tagen",
     html: baseHtml("Testende-Erinnerung", body, userId),
+  });
+}
+
+/**
+ * Build a table-based HTML email for a newsletter edition.
+ * Uses inline styles only — no <style> blocks (Resend/Gmail safe).
+ */
+export function newsletterEditionHtml(edition: NewsletterEdition, userId?: string): string {
+  const theme = getNewsletterTheme(edition.topic);
+  const appUrl = getAppUrl();
+
+  const kpiTiles = (edition.kpiTiles ?? []) as { value: string; label: string; sourceIndex: number }[];
+  const causeEffect = (edition.causeEffect ?? []) as string[];
+  const checklist = (edition.checklist ?? []) as string[];
+  const sources = (edition.sources ?? []) as { name: string; url: string }[];
+
+  const formattedDate = new Date(edition.scheduledDate).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  // ── KPI tiles (2-column table) ──────────────────────────────────────────────
+  let kpiSection = "";
+  if (kpiTiles.length > 0) {
+    function kpiCellHtml(tile: { value: string; label: string; sourceIndex: number }): string {
+      return (
+        '<td width="50%" style="padding:8px;">' +
+        '<table width="100%" cellpadding="0" cellspacing="0" style="background:' + theme.bg + ';border:1px solid ' + theme.color + '33;border-radius:6px;padding:14px;">' +
+        '<tr><td style="font-size:26px;font-weight:900;color:' + theme.color + ';line-height:1.1;">' + tile.value + '</td></tr>' +
+        '<tr><td style="font-size:12px;color:#555;padding-top:4px;">' + tile.label + '</td></tr>' +
+        '<tr><td style="font-size:11px;color:#999;padding-top:6px;">[' + (tile.sourceIndex + 1) + ']</td></tr>' +
+        '</table></td>'
+      );
+    }
+    const emptyCell = '<td width="50%" style="padding:8px;"></td>';
+    const rows: string[] = [];
+    for (let i = 0; i < kpiTiles.length; i += 2) {
+      const left = kpiCellHtml(kpiTiles[i]);
+      const right = i + 1 < kpiTiles.length ? kpiCellHtml(kpiTiles[i + 1]) : emptyCell;
+      rows.push("<tr>" + left + right + "</tr>");
+    }
+
+    kpiSection =
+      '<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">' +
+      rows.join("") +
+      "</table>";
+  }
+
+  // ── Cause → Effect chain ────────────────────────────────────────────────────
+  let causeEffectSection = "";
+  if (causeEffect.length === 3) {
+    const cells = causeEffect
+      .map((step, i) => {
+        const cell =
+          '<td style="padding:10px 12px;font-size:13px;font-weight:600;color:' + theme.color + ';background:' + theme.bg + ';border-radius:4px;text-align:center;">' +
+          step + "</td>";
+        if (i < causeEffect.length - 1) {
+          return cell + '<td style="padding:0 6px;font-size:18px;color:#aaa;text-align:center;">&rarr;</td>';
+        }
+        return cell;
+      })
+      .join("");
+    causeEffectSection =
+      '<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">' +
+      "<tr>" + cells + "</tr>" +
+      "</table>";
+  }
+
+  // ── Body paragraphs ─────────────────────────────────────────────────────────
+  const bodyHtml = edition.appBody
+    .split(/\n\n+/)
+    .map((para) =>
+      '<p style="margin:0 0 14px;font-size:15px;color:#333;line-height:1.65;">' +
+      para.replace(/\n/g, "<br>") +
+      "</p>",
+    )
+    .join("");
+
+  // ── Checklist ───────────────────────────────────────────────────────────────
+  let checklistSection = "";
+  if (checklist.length > 0) {
+    const items = checklist
+      .map(
+        (item) =>
+          '<tr><td style="padding:5px 0;font-size:14px;color:#333;">' +
+          '<span style="color:' + theme.color + ';font-weight:bold;margin-right:8px;">&#10003;</span>' +
+          item + "</td></tr>",
+      )
+      .join("");
+    checklistSection =
+      '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin:16px 0;">' +
+      '<tr><td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:' + theme.color + ';padding-bottom:10px;">Handlungsempfehlungen</td></tr>' +
+      items +
+      "</table>";
+  }
+
+  // ── Sources ─────────────────────────────────────────────────────────────────
+  let sourcesSection = "";
+  if (sources.length > 0) {
+    const items = sources
+      .map(
+        (s, i) =>
+          '<tr><td style="padding:3px 0;font-size:12px;color:#555;">' +
+          "[" + (i + 1) + "] " +
+          '<a href="' + s.url + '" style="color:#1565C0;">' + s.name + "</a>" +
+          "</td></tr>",
+      )
+      .join("");
+    sourcesSection =
+      '<p style="margin:20px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#999;">Quellen</p>' +
+      '<table width="100%" cellpadding="0" cellspacing="0">' +
+      items +
+      "</table>";
+  }
+
+  // ── CTA button ──────────────────────────────────────────────────────────────
+  const ctaLabel = edition.ctaType === "route" ? "Jetzt ansehen" : "Im Chat besprechen";
+  let ctaHref = appUrl + "/app/nachrichten?edition=" + edition.id;
+  if (edition.ctaType === "route" && edition.ctaTarget) {
+    ctaHref = appUrl + edition.ctaTarget;
+  }
+  const ctaSection = ctaButton(ctaLabel, ctaHref);
+
+  // ── Unsubscribe footer ──────────────────────────────────────────────────────
+  const footerExtra = userId
+    ? '<p style="margin:0 0 4px;font-size:12px;color:#888;">Newsletter abbestellen? <a href="' + unsubscribeUrl(userId) + '" style="color:#666;">Abmelden</a></p>'
+    : "";
+
+  const body =
+    // Colored header bar
+    '<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">' +
+    '<tr><td style="background:' + theme.bg + ';border-bottom:3px solid ' + theme.color + ';padding:16px 0;">' +
+    '<p style="margin:0;font-size:22px;">' + theme.emoji + ' <span style="font-weight:700;color:' + theme.color + ';">' + edition.topic + "</span></p>" +
+    '<p style="margin:6px 0 0;font-size:12px;color:#888;">' + formattedDate + "</p>" +
+    "</td></tr></table>" +
+    h1(edition.title) +
+    kpiSection +
+    causeEffectSection +
+    bodyHtml +
+    checklistSection +
+    sourcesSection +
+    ctaSection;
+
+  const fullBody = body;
+
+  const footerHtml =
+    '<p style="margin:0 0 4px;color:#999;font-size:12px;">Bovial — KI-gestützte Betriebsanalyse</p>' +
+    footerExtra +
+    '<p style="margin:0;color:#bbb;font-size:11px;">Diese E-Mail wurde automatisch generiert. Bitte nicht direkt antworten.</p>';
+
+  return (
+    '<!DOCTYPE html><html lang="de"><head>' +
+    '<meta charset="UTF-8" />' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' +
+    "<title>" + edition.title + "</title>" +
+    "</head>" +
+    '<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:24px 0;">' +
+    "<tr><td align=\"center\">" +
+    '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">' +
+    "<tr>" +
+    '<td style="background:' + BRAND_GREEN + ';padding:24px 32px;">' +
+    '<p style="margin:0;color:#ffffff;font-size:22px;font-weight:bold;">&#127807; Bovial</p>' +
+    "</td></tr>" +
+    '<tr><td style="padding:32px;">' + fullBody + "</td></tr>" +
+    '<tr><td style="background:#f9f9f9;padding:16px 32px;border-top:1px solid #e0e0e0;">' +
+    footerHtml +
+    "</td></tr>" +
+    "</table></td></tr></table>" +
+    "</body></html>"
+  );
+}
+
+/**
+ * Send a newsletter edition to a subscriber via Resend.
+ */
+export async function sendNewsletterEdition(
+  to: string,
+  userId: string,
+  edition: NewsletterEdition,
+): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  const html = newsletterEditionHtml(edition, userId);
+  await resend.emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: edition.topic + ": " + edition.title,
+    html,
   });
 }
 
