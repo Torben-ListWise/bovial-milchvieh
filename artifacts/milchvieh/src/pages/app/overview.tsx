@@ -40,7 +40,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil, CheckCircle2, XCircle, PowerOff, Info, ExternalLink, BookOpen, ShieldAlert } from "lucide-react";
+import { AlertTriangle, X, ArrowRight, ChevronRight, Loader2, Newspaper, ChevronDown, ChevronUp, Upload, FileText, ArrowLeftRight, FlaskConical, Pencil, CheckCircle2, XCircle, PowerOff, Info, ExternalLink, BookOpen, ShieldAlert, TrendingUp } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { AiIcon } from "@/components/AiIcon";
@@ -1289,6 +1289,81 @@ function ActiveContextFactRow({ fact, datasetId, isOwner }: { fact: ContextFact;
   );
 }
 
+// ── Betriebsübergreifende Erfolgsmuster ──────────────────────────────────────
+
+interface CrossFarmPatternItem {
+  id: string;
+  kpiName: string;
+  changeDescription: string | null;
+  avgImprovement: number | null;
+  sampleSize: number;
+  observationPeriodMonths: number | null;
+  patternStatement: string | null;
+  relevanceTags: string[] | null;
+}
+
+function CrossFarmPatternsCard() {
+  const { data: currentUser } = useGetCurrentUser();
+  const isOptedIn = (currentUser as any)?.patternSharingOptedIn ?? false;
+
+  const { data: patterns } = useQuery<CrossFarmPatternItem[]>({
+    queryKey: ["cross-farm-patterns"],
+    enabled: isOptedIn,
+    queryFn: async () => {
+      const token = await getAuthToken();
+      const res = await fetch(`${API_BASE}/api/cross-farm-patterns`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  if (!isOptedIn || !patterns || patterns.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Betriebsübergreifende Muster
+        </CardTitle>
+        <CardDescription>
+          Anonymisierte Erfolgsmuster aus mehreren opt-in-Betrieben — fachlich geprüft.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {patterns.slice(0, 3).map((p) => (
+          <div key={p.id} className="rounded-md border bg-secondary/20 p-3 space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {p.kpiName.replace(/_/g, " ")}
+              </span>
+              {p.avgImprovement != null && (
+                <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
+                  Ø {p.avgImprovement > 0 ? "+" : ""}{p.avgImprovement.toFixed(1)} pp
+                </span>
+              )}
+              {p.sampleSize > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  n={p.sampleSize} Betriebe
+                </span>
+              )}
+            </div>
+            {p.patternStatement && (
+              <p className="text-sm text-foreground leading-relaxed">{p.patternStatement}</p>
+            )}
+            <p className="text-xs text-muted-foreground italic">
+              *[Betriebsübergreifendes Muster]* · Statistische Beobachtung, keine nachgewiesene Kausalität
+            </p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Amtliche Tierseuchen-Warnungen ───────────────────────────────────────────
 
 const API_BASE_OV =
@@ -1641,6 +1716,7 @@ export function DatasetOverview() {
       <HealthAlertsSection />
 
       <WeatherConceptionCard datasetId={datasetId} />
+      <CrossFarmPatternsCard />
 
       <ContextFactsSection datasetId={datasetId} hostId={hostId} isOwner={!hostId} />
 

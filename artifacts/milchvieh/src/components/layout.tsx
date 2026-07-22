@@ -35,6 +35,7 @@ import {
   XCircle,
   ShieldAlert,
   Thermometer,
+  TrendingUp,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -265,6 +266,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Referenzanalysen", href: "/app/reference-analyses", icon: Sparkles, preserveDataset: false },
     { name: "Credit-Dashboard", href: "/app/credit-dashboard", icon: BarChart3, preserveDataset: false },
     { name: "Gesundheitswarnungen", href: "/app/health-alerts", icon: ShieldAlert, preserveDataset: false },
+    { name: "Betr.übergr. Muster", href: "/app/cross-farm-patterns", icon: TrendingUp, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;

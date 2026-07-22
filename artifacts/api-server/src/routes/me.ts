@@ -48,6 +48,33 @@ const UpdateMeBodySchema = z.object({
   markContextFactsIntroSeen: z.boolean().optional(),
 });
 
+router.post("/me/pattern-sharing-consent", requireAuth, async (req: Request, res: Response) => {
+  const parsed = z.object({ optIn: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Ungültige Eingabe" });
+    return;
+  }
+
+  const { optIn } = parsed.data;
+  const fields: Record<string, unknown> = {
+    patternSharingOptedIn: optIn,
+    patternSharingConsentedAt: optIn ? new Date() : null,
+  };
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(fields as any)
+    .where(eq(usersTable.id, req.userId!))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Nutzer nicht gefunden" });
+    return;
+  }
+
+  res.json(serializeUser(updated as any));
+});
+
 router.patch("/me", requireAuth, async (req: Request, res: Response) => {
   const parsed = UpdateMeBodySchema.safeParse(req.body);
   if (!parsed.success) {

@@ -1,4 +1,5 @@
-import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useExportMyData, useDeleteMyData, useGetCurrentUser, useUpdateMe, getGetCurrentUserQueryKey, getAuthToken } from "@workspace/api-client-react";
+import { CrossFarmConsentDialog } from "@/components/CrossFarmConsentDialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -915,6 +916,111 @@ function ThemeSection() {
 
 import { PageLayout } from "@/components/PageLayout";
 
+function PatternSharingSection() {
+  const { data: dbUser } = useGetCurrentUser();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const isOptedIn = (dbUser as any)?.patternSharingOptedIn ?? false;
+
+  const setOptIn = async (optIn: boolean) => {
+    setIsLoading(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch(`${API_BASE}/api/me/pattern-sharing-consent`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ optIn }),
+      });
+      if (!res.ok) throw new Error("Fehler");
+      await queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+      toast({
+        title: optIn ? "Aktiviert" : "Deaktiviert",
+        description: optIn
+          ? "Betriebsübergreifende Empfehlungen sind jetzt aktiviert."
+          : "Du hast die Einwilligung widerrufen.",
+      });
+    } catch {
+      toast({ variant: "destructive", title: "Fehler", description: "Speichern fehlgeschlagen." });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" />
+            Betriebsübergreifende Empfehlungen
+          </CardTitle>
+          <CardDescription>
+            Profitiere von anonymisierten Erfolgsmustern anderer opt-in-Betriebe — fachlich geprüft vor der Anzeige.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
+            <div>
+              <h3 className="font-medium text-foreground flex items-center gap-2">
+                {isOptedIn ? (
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-muted-foreground" />
+                )}
+                {isOptedIn ? "Aktiviert" : "Nicht aktiviert"}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {isOptedIn
+                  ? "Deine anonymisierten KPI-Zeitreihen fließen in die Muster-Erkennung ein. Du erhältst Empfehlungen aus dem Erfahrungspool."
+                  : "Aktiviere die Funktion, um Empfehlungen basierend auf geprüften Mustern anderer Betriebe zu erhalten."}
+              </p>
+              {isOptedIn && (dbUser as any)?.patternSharingConsentedAt && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Eingewilligt am{" "}
+                  {new Date((dbUser as any).patternSharingConsentedAt).toLocaleDateString("de-DE", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
+            <Button
+              variant={isOptedIn ? "outline" : "default"}
+              onClick={() => {
+                if (isOptedIn) {
+                  setOptIn(false);
+                } else {
+                  setConsentDialogOpen(true);
+                }
+              }}
+              disabled={isLoading}
+              className="shrink-0 gap-2"
+            >
+              {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isOptedIn ? "Widerrufen" : "Aktivieren"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <CrossFarmConsentDialog
+        open={consentDialogOpen}
+        onOpenChange={setConsentDialogOpen}
+        onConsent={() => {
+          setConsentDialogOpen(false);
+          setOptIn(true);
+        }}
+      />
+    </>
+  );
+}
+
 export function SettingsPage() {
   const { toast } = useToast();
   const { signOut } = useClerk();
@@ -999,6 +1105,8 @@ export function SettingsPage() {
       <BillingSection />
 
       <TeamSectionWrapper />
+
+      <PatternSharingSection />
 
       <Card>
         <CardHeader>

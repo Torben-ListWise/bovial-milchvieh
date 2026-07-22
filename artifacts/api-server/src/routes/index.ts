@@ -30,6 +30,7 @@ import contextFactsRouter from "./context-facts";
 import referenceAnalysesRouter from "./reference-analyses";
 import healthAlertsRouter from "./health-alerts";
 import weatherConceptionRouter from "./weather-conception";
+import crossFarmPatternsRouter from "./cross-farm-patterns";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(contextFactsRouter);
 router.use(referenceAnalysesRouter);
 router.use(healthAlertsRouter);
 router.use(weatherConceptionRouter);
+router.use(crossFarmPatternsRouter);
 
 export default router;

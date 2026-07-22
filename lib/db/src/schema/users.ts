@@ -16,6 +16,16 @@ export const usersTable = pgTable("users", {
   lng: doublePrecision("lng"),
   stallCoolingCorrection: integer("stall_cooling_correction").notNull().default(0),
   contextFactsIntroSeenAt: timestamp("context_facts_intro_seen_at", { withTimezone: true }),
+
+  /**
+   * Opt-in für betriebsübergreifende Erfolgsmuster-Empfehlungen.
+   * Standard: FALSE — der Nutzer muss explizit zustimmen (DSGVO-Einwilligung).
+   * ⚠️  Einwilligungstext noch nicht DSGVO-anwaltlich geprüft — vor Aktivierung prüfen.
+   */
+  patternSharingOptedIn: boolean("pattern_sharing_opted_in").notNull().default(false),
+
+  /** Zeitstempel der letzten Einwilligung (oder NULL wenn nicht aktiv) */
+  patternSharingConsentedAt: timestamp("pattern_sharing_consented_at", { withTimezone: true }),
 });
 
 export type User = typeof usersTable.$inferSelect;

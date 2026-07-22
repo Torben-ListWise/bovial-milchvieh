@@ -21,6 +21,7 @@ import {
   animalHealthAlertsTable,
   usersTable,
   weatherDailyCacheTable,
+  crossFarmPatternsTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -200,7 +201,7 @@ export interface Citation {
   label: string;
   value: string;
   basis?: string | null;
-  sourceType?: "betriebsdaten" | "pdf" | "wissen" | "web" | null;
+  sourceType?: "betriebsdaten" | "pdf" | "wissen" | "web" | "cross_farm" | null;
   shortLabel?: string | null;
 }
 export interface FarmerQuestion {
@@ -785,6 +786,25 @@ ohne konkretes Ereignis, oder Hypothesen. Im Zweifel: nicht aufrufen.`,
       },
     },
   },
+  {
+    name: "get_cross_farm_patterns",
+    description:
+      "Gibt betriebsübergreifende Erfolgsmuster zurück — anonymisierte, fachlich geprüfte statistische Beobachtungen aus mehreren opt-in-Betrieben. " +
+      "NUR aufrufen wenn: (a) der Nutzer nach Vergleichen mit anderen Betrieben fragt, (b) nach Praxiserfahrungen anderer fragt, " +
+      "oder (c) ein KPI-Befund eine Empfehlung nahelegt, die durch Muster anderer Betriebe gestützt werden könnte. " +
+      "NICHT aufrufen wenn der Nutzer nicht opt-in ist — dann nichts zurück. " +
+      "Jedes Muster mit dem patternStatement zitieren und *[Betriebsübergreifendes Muster]* am Ende des Absatzes setzen.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kpi_context: {
+          type: "string",
+          description:
+            "Optionaler KPI-Kontext z.B. 'konzeptionsrate', 'thi_score' — priorisiert relevante Muster.",
+        },
+      },
+    },
+  },
 ];
 
 /** Reduced toolset for simple single-KPI questions — no ask_farmer, no investment calc, no chart. */
@@ -991,6 +1011,7 @@ Jede inhaltliche Aussage, die nicht aus Betriebsdaten (get_kpis, get_timeseries,
 - *[Allgemeinwissen]* — weder Bibliothek noch Web lieferten relevante Treffer; Antwort stammt aus Modell-Trainingswissen
 - *[Betriebsinfo]* — der Satz oder Absatz wurde durch einen gespeicherten Betriebsfakt (aus dem Block „Bestätigte Betriebs-Fakten") beeinflusst. Setze diesen Marker direkt am Ende des betreffenden Satzes oder Absatzes, z.B.: „Da ihr selektiv trockenstellt *[Betriebsinfo]*, empfehlen wir…" oder „Auf Basis der hinterlegten Wartezeit von 50 Tagen *[Betriebsinfo]* ergibt sich…"
   Wann *[Betriebsinfo]* zu setzen ist: immer wenn ein Betriebsfakt die konkrete Empfehlung, den Schwellenwert oder die Interpretation maßgeblich verändert hätte, wäre er nicht bekannt. Nicht bei rein allgemeiner Erwähnung eines Fakts ohne Konsequenz für die Aussage.
+- *[Betriebsübergreifendes Muster]* — die Aussage basiert auf einem fachlich geprüften, anonymisierten Erfolgsmuster aus mehreren opt-in-Betrieben (get_cross_farm_patterns). Nur setzen wenn das Tool aufgerufen wurde und ein passendes Muster zurückgekommen ist. Beispiel: „Betriebe in ähnlicher Situation haben durch diese Maßnahme häufig +8 pp Konzeptionsrate erzielt *[Betriebsübergreifendes Muster]*."
 Wichtig: Labels für Betriebsdaten (get_kpis, get_timeseries etc.) werden NICHT gesetzt — dafür gibt es bereits die [N]-Fußnoten. Labels erscheinen als kursiver Zusatz am Ende des jeweiligen Satzes oder Absatzes, z.B.: \`*[Bibliothek]*\`, \`*[Betriebsinfo]*\`
 
 REFERENZANALYSEN — SPRACHE FÜR EINSTUFUNGSAUSSAGEN:
@@ -1899,6 +1920,55 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           });
 
         return outputs;
+      }
+
+      case "get_cross_farm_patterns": {
+        const [optInUser] = await db
+          .select({ patternSharingOptedIn: (usersTable as any).patternSharingOptedIn })
+          .from(usersTable)
+          .where(eq(usersTable.id, opts.userId))
+          .limit(1);
+
+        if (!optInUser?.patternSharingOptedIn) {
+          return {
+            patterns: [],
+            note: "Betriebsübergreifende Empfehlungen sind für diesen Nutzer nicht aktiviert.",
+          };
+        }
+
+        const patterns = await db
+          .select({
+            kpiName: crossFarmPatternsTable.kpiName,
+            changeDescription: crossFarmPatternsTable.changeDescription,
+            avgImprovement: crossFarmPatternsTable.avgImprovement,
+            sampleSize: crossFarmPatternsTable.sampleSize,
+            observationPeriodMonths: crossFarmPatternsTable.observationPeriodMonths,
+            patternStatement: crossFarmPatternsTable.patternStatement,
+            relevanceTags: crossFarmPatternsTable.relevanceTags,
+          })
+          .from(crossFarmPatternsTable)
+          .where(eq(crossFarmPatternsTable.status, "approved"))
+          .orderBy(desc(crossFarmPatternsTable.reviewedAt))
+          .limit(10);
+
+        if (patterns.length === 0) {
+          return {
+            patterns: [],
+            note: "Aktuell liegen keine freigegebenen betriebsübergreifenden Muster vor.",
+          };
+        }
+
+        return {
+          patterns: patterns.map((p) => ({
+            kpi: p.kpiName,
+            statement: p.patternStatement,
+            avgImprovement: p.avgImprovement,
+            sampleSize: p.sampleSize,
+            observationPeriodMonths: p.observationPeriodMonths,
+          })),
+          instruction:
+            "Zitiere patternStatement direkt und setze *[Betriebsübergreifendes Muster]* am Ende des Absatzes.",
+        };
       }
 
       case "get_active_health_alerts": {
@@ -2891,6 +2961,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         return "Hitzestress-Rechner wird angezeigt…";
       case "show_fresh_cow_calculator":
         return "Frischmelker-ROI-Rechner wird angezeigt…";
+      case "get_cross_farm_patterns":
+        return "Betriebsübergreifende Erfolgsmuster werden abgerufen…";
       case "get_active_health_alerts":
         return "Amtliche Gesundheitswarnungen werden abgerufen…";
       case "get_weather_conception_correlation":
