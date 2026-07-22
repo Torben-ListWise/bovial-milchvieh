@@ -486,6 +486,88 @@ export async function sendNewsletterEdition(
   });
 }
 
+/**
+ * Send an operator alert when a user triggers the frustration pattern
+ * (≥ 2 thumbs-down within 7 days).
+ */
+export async function sendFrustrationAlert(
+  operatorEmail: string,
+  userId: string,
+  thumbsDownCount: number,
+): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  const appUrl = getAppUrl();
+  const body =
+    h1("&#9888;&#65039; Nutzer-Frustrationssignal erkannt") +
+    p(`Ein Nutzer hat innerhalb der letzten 7 Tage <strong>${thumbsDownCount}&times;</strong> Daumen-runter gegeben.`) +
+    p(`<strong>User-ID:</strong> ${userId}`) +
+    p("Bitte pr&#252;fe die Beta-Transkripte, um die betroffenen Antworten zu identifizieren und die Wissensdatenbank oder Agenten-Instruktionen entsprechend anzupassen.") +
+    ctaButton("Beta-Dashboard &#246;ffnen", appUrl + "/app/admin/beta");
+
+  await resend.emails.send({
+    from: EMAIL_FROM,
+    to: operatorEmail,
+    subject: `[Bovial] Frustrationssignal: ${thumbsDownCount}\u00d7 Daumen-runter (${userId.slice(0, 8)}\u2026)`,
+    html: baseHtml("Frustrationssignal", body),
+  });
+}
+
+/**
+ * Send a weekly knowledge-gaps report to the operator.
+ * Lists the top missed search queries so the knowledge base can be extended.
+ */
+export async function sendKnowledgeGapsReport(
+  operatorEmail: string,
+  data: {
+    days: number;
+    totalMissed: number;
+    gaps: Array<{ query: string; count: number; topScore: number | null }>;
+  },
+): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  const { days, totalMissed, gaps } = data;
+
+  const escHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const tableRows = gaps
+    .map(
+      (g, i) =>
+        `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f9f9"}">` +
+        `<td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${g.count}&times;</td>` +
+        `<td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${escHtml(g.query)}</td>` +
+        `<td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#888;">${g.topScore != null ? Number(g.topScore).toFixed(3) : "&#8212;"}</td>` +
+        `</tr>`,
+    )
+    .join("");
+
+  const table =
+    `<table style="width:100%;border-collapse:collapse;font-size:13px;">` +
+    `<thead><tr style="background:#f0f0f0;">` +
+    `<th style="padding:8px 12px;text-align:left;border-bottom:2px solid #d0d0d0;">H&#228;ufigkeit</th>` +
+    `<th style="padding:8px 12px;text-align:left;border-bottom:2px solid #d0d0d0;">Suchanfrage</th>` +
+    `<th style="padding:8px 12px;text-align:left;border-bottom:2px solid #d0d0d0;">Bester Score</th>` +
+    `</tr></thead><tbody>${tableRows}</tbody></table>`;
+
+  const body =
+    h1("&#128218; W&#246;chentlicher Wissensm&#252;cken-Bericht") +
+    p(`Zeitraum: letzte <strong>${days} Tage</strong>. Gesamte verpasste Suchanfragen: <strong>${totalMissed}</strong>.`) +
+    p("Die folgenden Anfragen fanden keinen ausreichenden Treffer in der Wissensdatenbank:") +
+    table +
+    p("<em>Tipp: Lade relevante Dokumente unter Wissens-Bibliothek hoch, um h&#228;ufige L&#252;cken zu schlie&#223;en.</em>");
+
+  await resend.emails.send({
+    from: EMAIL_FROM,
+    to: operatorEmail,
+    subject: `[Bovial] Wissensm\u00fccken-Bericht \u2014 letzte ${days} Tage (${totalMissed} verpasste Anfragen)`,
+    html: baseHtml("Wissensm\u00fccken-Bericht", body),
+  });
+}
+
 export function isResendConfigured(): boolean {
   return !!RESEND_API_KEY;
 }

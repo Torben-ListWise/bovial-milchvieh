@@ -8,6 +8,7 @@ import {
   farmNotesTable,
   farmDiaryEntriesTable,
   contextFactsTable,
+  warningsTable,
   usersTable,
   datasetsTable,
   betaToolLogsTable,
@@ -335,6 +336,34 @@ export async function processQuestion(
         ? `\nBestätigte Betriebs-Fakten (dauerhafte Eigenschaften dieses Betriebs — beachte diese bei jeder Analyse):\n${contextFactLines.join("\n")}`
         : "";
 
+    // Active anomaly warnings for this dataset — injected so the agent can
+    // proactively reference them per Patch S. Capped at 10 open warnings.
+    // Strictly dataset-scoped — never leaks across datasets.
+    const WARNINGS_MAX_COUNT = 10;
+    const activeWarnings = await db
+      .select({
+        title: warningsTable.title,
+        detail: warningsTable.detail,
+        severity: warningsTable.severity,
+      })
+      .from(warningsTable)
+      .where(
+        and(
+          eq(warningsTable.datasetId, analysis.datasetId),
+          eq(warningsTable.status, "open"),
+        ),
+      )
+      .limit(WARNINGS_MAX_COUNT);
+    const warningsContext =
+      activeWarnings.length > 0
+        ? `\nAktive Anomalie-Warnungen für diesen Betrieb (berücksichtige diese proaktiv in deiner Antwort wenn sie thematisch relevant sind):\n${activeWarnings
+            .map(
+              (w) =>
+                `- [${w.severity === "critical" ? "Kritisch" : "Warnung"}] ${w.title}${w.detail ? ": " + w.detail : ""}`,
+            )
+            .join("\n")}`
+        : "";
+
     // Reset step tracking for this run
     const completedSteps: string[] = [];
     let lastProgressStep: string | null = null;
@@ -398,7 +427,7 @@ export async function processQuestion(
           datasetId: analysis.datasetId,
           conversation,
           sector,
-          systemExtra: [rulesContext, farmNotesContext, diaryContext, contextFactsContext].filter(Boolean).join("") || undefined,
+          systemExtra: [rulesContext, farmNotesContext, diaryContext, contextFactsContext, warningsContext].filter(Boolean).join("") || undefined,
           userId: analysis.userId ?? undefined,
           isBeta: isBetaUser,
           betaAnalysisId: analysis.id,

@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { sendFrustrationAlert, fireEmail } from "../lib/emailService";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -81,6 +82,35 @@ router.post(
       `);
 
       res.json({ ok: true, messageId, rating });
+
+      // Frustrations-Erkennung (fire-and-forget): Wenn ≥ 2 Daumen-runter
+      // innerhalb von 7 Tagen für diesen Nutzer → Betreiber-Alert per E-Mail.
+      if (rating === "down") {
+        (async () => {
+          try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const rows = await db.execute(sql`
+              SELECT COUNT(*)::int AS down_count
+              FROM message_feedback
+              WHERE user_id = ${userId}
+                AND rating = 'down'
+                AND updated_at >= ${sevenDaysAgo}
+            `);
+            const downCount = Number((rows.rows[0] as any)?.down_count ?? 0);
+            if (downCount >= 2) {
+              const operatorEmail = process.env["OPERATOR_EMAIL"];
+              if (operatorEmail) {
+                fireEmail(
+                  sendFrustrationAlert(operatorEmail, userId, downCount),
+                  `frustration:${userId}`,
+                );
+              }
+            }
+          } catch (alertErr) {
+            logger.warn({ alertErr, userId }, "Frustrations-Alert fehlgeschlagen");
+          }
+        })().catch(() => {});
+      }
     } catch (err) {
       logger.error({ err, messageId, userId }, "POST /messages/:id/feedback fehlgeschlagen");
       res.status(500).json({ error: "Interner Fehler" });

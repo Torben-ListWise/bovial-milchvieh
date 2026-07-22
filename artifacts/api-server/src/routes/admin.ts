@@ -875,4 +875,30 @@ router.post(
   },
 );
 
+// POST /api/admin/cron/run-knowledge-gaps — Wöchentlicher Wissenslücken-Bericht
+router.post(
+  "/admin/cron/run-knowledge-gaps",
+  async (req: Request, res: Response) => {
+    const cronSecret = process.env["CRON_SECRET"];
+    if (!cronSecret) {
+      res.status(503).json({ error: "CRON_SECRET ist nicht konfiguriert." });
+      return;
+    }
+    const provided =
+      (req.headers["x-cron-secret"] as string | undefined) ??
+      (req.headers["authorization"] as string | undefined)?.replace("Bearer ", "");
+    if (provided !== cronSecret) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const { runKnowledgeGapsReport } = await import("../lib/knowledgeGapsBatch");
+    const result = await runKnowledgeGapsReport().catch(() => ({
+      queriesAnalysed: -1,
+      uniqueGaps: -1,
+      emailSent: false,
+    }));
+    res.json({ ok: true, ...result });
+  },
+);
+
 export default router;
