@@ -25,6 +25,14 @@ import { ObjectStorageService } from "./objectStorage";
 
 const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function detectImageMimeType(buf: Buffer): "image/jpeg" | "image/png" | "image/webp" | "image/gif" {
+  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length >= 3 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return "image/gif";
+  if (buf.length >= 12 && buf.slice(0, 4).toString("ascii") === "RIFF" && buf.slice(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  return "image/jpeg";
+}
+
 const FALLBACK_CHIPS = [
   "Wie entwickelt sich das über die Zeit?",
   "Was sind meine besten und schwächsten Werte?",
@@ -181,12 +189,7 @@ export async function processQuestion(
         const file = await chatObjectStorage.getObjectEntityFile(opts.imageObjectPath);
         const [imageBuffer] = await file.download();
         const base64 = imageBuffer.toString("base64");
-        const ext = opts.imageObjectPath.split(".").pop()?.toLowerCase() ?? "";
-        const mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" =
-          ext === "png" ? "image/png"
-          : ext === "webp" ? "image/webp"
-          : ext === "gif" ? "image/gif"
-          : "image/jpeg";
+        const mediaType = detectImageMimeType(imageBuffer);
         // Find and replace the last user message with the image content block
         for (let i = conversation.length - 1; i >= 0; i--) {
           if (conversation[i].role === "user") {
