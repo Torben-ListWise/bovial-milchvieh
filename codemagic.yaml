@@ -2,8 +2,6 @@ workflows:
   ios-testflight:
     name: Bovial iOS → TestFlight
     max_build_duration: 60
-    integrations:
-      app_store_connect: Bovial
     environment:
       node: v20
       xcode: latest
@@ -65,7 +63,16 @@ workflows:
           cd artifacts/bovial-mobile/ios
           pod install
 
-      - name: Set up signing & build IPA
+      - name: Fetch signing files
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
+            --create
+          keychain add-certificates
+
+      - name: Build IPA
         script: |
           cd artifacts/bovial-mobile
           xcode-project use-profiles
