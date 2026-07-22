@@ -8,10 +8,11 @@ import { Users, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 const PLANS = [
-  { value: "beta",    label: "Beta",    color: "bg-purple-100 text-purple-800 border-purple-200" },
-  { value: "pro",     label: "Pro",     color: "bg-blue-100 text-blue-800 border-blue-200" },
-  { value: "starter", label: "Starter", color: "bg-green-100 text-green-800 border-green-200" },
-  { value: "free",    label: "Free",    color: "bg-gray-100 text-gray-700 border-gray-200" },
+  { value: "beta",        label: "Beta",        color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { value: "premium_max", label: "Premium Max", color: "bg-amber-100 text-amber-800 border-amber-200" },
+  { value: "pro",         label: "Premium",     color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { value: "starter",     label: "Professional",color: "bg-green-100 text-green-800 border-green-200" },
+  { value: "free",        label: "Basis",       color: "bg-gray-100 text-gray-700 border-gray-200" },
 ] as const;
 
 type PlanValue = (typeof PLANS)[number]["value"];

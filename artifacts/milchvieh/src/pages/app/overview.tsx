@@ -1633,13 +1633,6 @@ export function DatasetOverview() {
               {overview.warningCount} offene Warnungen
             </div>
           )}
-          <button
-            onClick={() => setLocation(hostId ? `/app/overview?hostId=${hostId}` : '/app/overview')}
-            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground bg-secondary hover:bg-secondary/80 hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-            Betrieb wechseln
-          </button>
         </div>
       </div>
 
@@ -1710,7 +1703,6 @@ export function DatasetOverview() {
 
       <SemenPlanningCard datasetId={datasetId} />
 
-      <StartChipsSection datasetId={datasetId} />
       <SchnellauswertungenSection datasetId={datasetId} />
 
       <HealthAlertsSection />

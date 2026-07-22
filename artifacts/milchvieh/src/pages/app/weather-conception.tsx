@@ -226,10 +226,17 @@ export function WeatherConceptionPage() {
           <div>
             <strong>Fehler:</strong> {error.message}
             {error.message.includes("Standort") && (
-              <p className="mt-1 text-xs">
-                Bitte Betriebsstandort (Breitengrad/Längengrad) in den Einstellungen
-                hinterlegen.
-              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs">
+                  Bitte Betriebsstandort (Breitengrad/Längengrad) in den Einstellungen hinterlegen.
+                </p>
+                <a
+                  href="/app/settings#standort"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium underline underline-offset-2"
+                >
+                  Zu den Einstellungen →
+                </a>
+              </div>
             )}
           </div>
         </div>

@@ -338,6 +338,10 @@ export function RulesPage() {
             Definiere, ab wann das System eine Warnung ausgeben soll. Die Regeln fließen
             automatisch in jede Analyse ein.
           </p>
+          <div className="mt-3 p-3 rounded-lg bg-muted/60 border border-border text-xs text-muted-foreground space-y-1 max-w-2xl">
+            <p><span className="font-medium text-foreground">Automatische Anomalieerkennung (KI-gesteuert):</span> Der Assistent prüft bei jeder Analyse eigenständig Plausibilität und Auffälligkeiten — ohne Konfiguration, immer aktiv.</p>
+            <p><span className="font-medium text-foreground">Manuelle Regeln (diese Seite):</span> Hier legst du eigene Schwellenwerte fest (z. B. „Zellzahl &gt; 200.000 → Warnung"). Diese ergänzen die KI-Erkennung und erscheinen als Warnungen im Dashboard.</p>
+          </div>
         </div>
         <Button className="gap-2" onClick={openCreate}>
           <Plus className="w-4 h-4" />

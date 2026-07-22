@@ -398,7 +398,7 @@ function BillingSection() {
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-600" />
                   <span className="font-semibold text-sm">Professional</span>
-                  <span className="ml-auto text-xs text-muted-foreground">19 €/Monat zzgl. USt.</span>
+                  <span className="ml-auto text-xs text-muted-foreground">19 €/Monat inkl. MwSt.</span>
                 </div>
                 <ul className="text-xs text-muted-foreground space-y-1">
                   <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> 60 Credits/Monat</li>
@@ -424,7 +424,7 @@ function BillingSection() {
               <div className="flex items-center gap-2">
                 <Crown className="w-4 h-4 text-primary" />
                 <span className="font-semibold text-sm">Premium</span>
-                <span className="ml-auto text-xs text-muted-foreground">49 €/Monat zzgl. USt.</span>
+                <span className="ml-auto text-xs text-muted-foreground">49 €/Monat inkl. MwSt.</span>
               </div>
               <ul className="text-xs text-muted-foreground space-y-1">
                 <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-primary shrink-0" /> 200 Credits/Monat</li>
@@ -592,7 +592,7 @@ function TeamSection({ billingPlan }: { billingPlan: string | null }) {
         </CardTitle>
         <CardDescription>
           Lade bis zu 3 Personen ein, deine Betriebsdaten als Gast (nur Lesen) einzusehen.
-          {!isPro && " Nur im Pro-Tarif verfügbar."}
+          {!isPro && " Nur im Premium-Tarif verfügbar."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -600,9 +600,9 @@ function TeamSection({ billingPlan }: { billingPlan: string | null }) {
           <div className="flex items-start gap-3 p-4 rounded-lg border border-primary/20 bg-primary/3">
             <Crown className="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <div className="text-sm">
-              <p className="font-medium">Pro-Tarif erforderlich</p>
+              <p className="font-medium">Premium-Tarif erforderlich</p>
               <p className="text-muted-foreground text-xs mt-1">
-                Team-Einladungen sind nur im Pro-Tarif verfügbar. Upgrade jetzt für unbegrenzte Analysen und 3 Team-Slots.
+                Team-Einladungen sind nur im Premium-Tarif verfügbar. Upgrade auf Premium für 3 Team-Slots und 200 Credits/Monat.
               </p>
               <Button asChild size="sm" className="mt-3 text-xs h-7">
                 <Link href="/app/upgrade">Jetzt upgraden</Link>
@@ -1027,6 +1027,13 @@ export function SettingsPage() {
   const exportData = useExportMyData();
   const deleteData = useDeleteMyData();
   const [isExporting, setIsExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"abo" | "betrieb" | "team" | "datenschutz">(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    if (hash === "#standort" || hash === "#betrieb" || hash === "#design") return "betrieb";
+    if (hash === "#team") return "team";
+    if (hash === "#datenschutz" || hash === "#dsgvo") return "datenschutz";
+    return "abo";
+  });
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -1061,106 +1068,145 @@ export function SettingsPage() {
     }
   };
 
+  const TABS = [
+    { id: "abo",        label: "Abo & Zahlung" },
+    { id: "betrieb",    label: "Betrieb & Standort" },
+    { id: "team",       label: "Team" },
+    { id: "datenschutz", label: "Datenschutz & Daten" },
+  ] as const;
+
   return (
     <PageLayout size="narrow">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Einstellungen & DSGVO</h1>
-        <p className="text-muted-foreground mt-1">Verwalte deine Daten und Privatsphäre.</p>
+        <h1 className="text-3xl font-bold text-foreground">Einstellungen</h1>
+        <p className="text-muted-foreground mt-1">Verwalte Tarif, Betrieb, Team und Datenschutz.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            Tarif &amp; Abonnement
-          </CardTitle>
-          <CardDescription>
-            Upgrade dein Konto für mehr Analysen und erweiterte Funktionen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
-            <div>
-              <h3 className="font-medium text-foreground">Verfügbare Tarife</h3>
-              <p className="text-sm text-muted-foreground">
-                Professional (29,00 € / Monat netto) oder Premium (79,00 € / Monat netto) — zzgl. 19 % MwSt.
-              </p>
-            </div>
-            <Button asChild className="gap-2 shrink-0">
-              <Link href="/app/upgrade">
-                <Sparkles className="w-4 h-4" />
-                Jetzt upgraden
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tab navigation */}
+      <div className="flex gap-1 p-1 bg-muted rounded-xl overflow-x-auto">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 min-w-max px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <FocusAreasSection />
-
-      <StallstandortSection />
-
-      <ThemeSection />
-
-      <BillingSection />
-
-      <TeamSectionWrapper />
-
-      <PatternSharingSection />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary" />
-            Deine Daten gehören dir
-          </CardTitle>
-          <CardDescription>
-            Gemäß der europäischen Datenschutz-Grundverordnung (DSGVO) hast du das Recht, alle über dich gespeicherten Daten jederzeit herunterzuladen oder dauerhaft zu löschen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
-            <div>
-              <h3 className="font-medium text-foreground">Datenexport</h3>
-              <p className="text-sm text-muted-foreground">Lade alle deine Betriebe, Analysen und Regeln als JSON-Datei herunter.</p>
-            </div>
-            <Button onClick={handleExport} disabled={isExporting} variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              {isExporting ? "Wird exportiert..." : "Daten exportieren"}
-            </Button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-            <div>
-              <h3 className="font-medium text-destructive">Konto löschen</h3>
-              <p className="text-sm text-muted-foreground">Löscht alle deine Daten unwiderruflich. Dies kann nicht rückgängig gemacht werden.</p>
-            </div>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="gap-2">
-                  <Trash2 className="w-4 h-4" />
-                  Daten löschen
+      {/* Abo & Zahlung */}
+      {activeTab === "abo" && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                Tarif &amp; Abonnement
+              </CardTitle>
+              <CardDescription>
+                Upgrade dein Konto für mehr Analysen und erweiterte Funktionen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
+                <div>
+                  <h3 className="font-medium text-foreground">Verfügbare Tarife</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Basis (kostenlos · 15 Credits/Monat) · Professional (19 €/Monat · 60 Credits) · Premium (49 €/Monat · 200 Credits) · Premium Max (99 €/Monat · unbegrenzt) — alle Preise inkl. MwSt.
+                  </p>
+                </div>
+                <Button asChild className="gap-2 shrink-0">
+                  <Link href="/app/upgrade">
+                    <Sparkles className="w-4 h-4" />
+                    Jetzt upgraden
+                  </Link>
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Bist du sicher?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Diese Aktion kann nicht rückgängig gemacht werden. Dadurch werden dein Konto und deine Daten (Betriebe, Analysen, Dateien) dauerhaft von unseren Servern entfernt.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Ja, alles löschen
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </div>
+            </CardContent>
+          </Card>
+          <BillingSection />
+        </>
+      )}
+
+      {/* Betrieb & Standort */}
+      {activeTab === "betrieb" && (
+        <>
+          <FocusAreasSection />
+          <div id="standort">
+            <StallstandortSection />
           </div>
-        </CardContent>
-      </Card>
+          <ThemeSection />
+        </>
+      )}
+
+      {/* Team */}
+      {activeTab === "team" && <TeamSectionWrapper />}
+
+      {/* Datenschutz & Daten */}
+      {activeTab === "datenschutz" && (
+        <>
+          <PatternSharingSection />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                Deine Daten gehören dir
+              </CardTitle>
+              <CardDescription>
+                Gemäß der europäischen Datenschutz-Grundverordnung (DSGVO) hast du das Recht, alle über dich gespeicherten Daten jederzeit herunterzuladen oder dauerhaft zu löschen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg bg-secondary/20">
+                <div>
+                  <h3 className="font-medium text-foreground">Datenexport</h3>
+                  <p className="text-sm text-muted-foreground">Lade alle deine Betriebe, Analysen und Regeln als JSON-Datei herunter.</p>
+                </div>
+                <Button onClick={handleExport} disabled={isExporting} variant="outline" className="gap-2">
+                  <Download className="w-4 h-4" />
+                  {isExporting ? "Wird exportiert..." : "Daten exportieren"}
+                </Button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                <div>
+                  <h3 className="font-medium text-destructive">Konto löschen</h3>
+                  <p className="text-sm text-muted-foreground">Löscht alle deine Daten unwiderruflich. Dies kann nicht rückgängig gemacht werden.</p>
+                </div>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="gap-2">
+                      <Trash2 className="w-4 h-4" />
+                      Daten löschen
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Bist du sicher?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Diese Aktion kann nicht rückgängig gemacht werden. Dadurch werden dein Konto und deine Daten (Betriebe, Analysen, Dateien) dauerhaft von unseren Servern entfernt.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Ja, alles löschen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </PageLayout>
   );
 }
