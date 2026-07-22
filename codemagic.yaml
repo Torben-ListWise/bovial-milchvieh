@@ -66,13 +66,11 @@ workflows:
       - name: Fetch signing files
         script: |
           keychain initialize
-          # --certificate-key is intentionally omitted: the CLI tool generates a fresh
-          # RSA key per build session and matches or creates an Apple distribution
-          # certificate via the App Store Connect API.
-          # To reuse a stable cert across builds, generate an RSA key once:
-          #   openssl genrsa -out cert_key.pem 2048
-          # and store the PEM content as CERTIFICATE_PRIVATE_KEY in the iOS group,
-          # then restore --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" here.
+          # codemagic-cli-tools auto-reads CERTIFICATE_PRIVATE_KEY from the
+          # environment as the default for --certificate-key. Since our stored
+          # value is not a valid RSA PEM key, we unset it so the tool generates
+          # a fresh key automatically (valid approach when --create is set).
+          unset CERTIFICATE_PRIVATE_KEY
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
