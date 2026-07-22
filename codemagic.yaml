@@ -66,16 +66,18 @@ workflows:
       - name: Fetch signing files
         script: |
           keychain initialize
-          # codemagic-cli-tools auto-reads CERTIFICATE_PRIVATE_KEY from the
-          # environment as the default for --certificate-key. Since our stored
-          # value is not a valid RSA PEM key, we unset it so the tool generates
-          # a fresh key automatically (valid approach when --create is set).
-          unset CERTIFICATE_PRIVATE_KEY
+          # codemagic-cli-tools reads CERTIFICATE_PRIVATE_KEY as a global
+          # default for --certificate-key at the Python/argparse level, so
+          # shell `unset` has no effect. Fix: generate a fresh RSA key into a
+          # temp file and pass it explicitly — an explicit flag overrides the
+          # env-var default regardless of its value.
+          openssl genrsa -out /tmp/cm_cert.key.pem 2048 2>/dev/null
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key "@file:/tmp/cm_cert.key.pem" \
             --create
           keychain add-certificates
 
