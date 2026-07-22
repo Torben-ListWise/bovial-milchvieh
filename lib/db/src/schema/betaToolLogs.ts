@@ -17,6 +17,7 @@ export const betaToolLogsTable = pgTable(
     userId: text("user_id").notNull(),
     toolName: text("tool_name").notNull(),
     keyParams: jsonb("key_params"),
+    toolOutput: jsonb("tool_output"),
     durationMs: integer("duration_ms"),
     escalationTrigger: text("escalation_trigger"),
     escalationReason: text("escalation_reason"),

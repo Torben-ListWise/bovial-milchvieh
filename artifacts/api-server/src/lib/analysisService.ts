@@ -489,6 +489,7 @@ export async function processQuestion(
           userId: analysis.userId!,
           toolName: entry.toolName,
           keyParams: entry.keyParams,
+          toolOutput: entry.toolOutput ?? null,
           durationMs: entry.durationMs,
           escalationTrigger: entry.escalationTrigger ?? null,
           escalationReason: entry.escalationReason ?? null,

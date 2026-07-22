@@ -212,6 +212,7 @@ export interface FarmerQuestion {
 export interface BetaToolEntry {
   toolName: string;
   keyParams: Record<string, unknown>;
+  toolOutput: unknown;
   durationMs: number;
   escalationTrigger?: string | null;
   escalationReason?: string | null;
@@ -3030,6 +3031,60 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     }
   }
 
+  /**
+   * Truncates a tool result to a safe size for JSONB storage.
+   * - run_sql: caps at 50 rows
+   * - search_* / read_document / search_dairycomp_manual: caps chunks at 3, text at 500 chars each
+   * - everything else: stored as-is (KPI results are typically small structs)
+   * Always caps the final JSON serialization at 64 KB to prevent runaway storage.
+   */
+  function truncateToolOutput(name: string, result: unknown): unknown {
+    try {
+      if (result === null || result === undefined) return null;
+
+      // run_sql: keep first 50 rows
+      if (name === "run_sql") {
+        const r = result as Record<string, unknown>;
+        if (Array.isArray(r?.rows)) {
+          return { ...r, rows: r.rows.slice(0, 50), _truncated: r.rows.length > 50 };
+        }
+        return result;
+      }
+
+      // Vector / document search: keep first 3 chunks, truncate text
+      if (
+        name === "search_knowledge" ||
+        name === "search_dairycomp_manual" ||
+        name === "search_farm_abbreviations" ||
+        name === "search_web" ||
+        name === "read_document"
+      ) {
+        const r = result as Record<string, unknown>;
+        const chunks = Array.isArray(r?.results)
+          ? r.results.slice(0, 3).map((c: unknown) => {
+              const ch = c as Record<string, unknown>;
+              return {
+                ...ch,
+                text: typeof ch.text === "string" ? ch.text.slice(0, 500) : ch.text,
+                chunk_text: typeof ch.chunk_text === "string" ? ch.chunk_text.slice(0, 500) : ch.chunk_text,
+                snippet: typeof ch.snippet === "string" ? ch.snippet.slice(0, 500) : ch.snippet,
+              };
+            })
+          : undefined;
+        return chunks !== undefined ? { ...r, results: chunks, _truncated: (r.results as unknown[])?.length > 3 } : result;
+      }
+
+      // General: enforce 64 KB ceiling on the serialized JSON
+      const serialized = JSON.stringify(result);
+      if (serialized.length > 65_536) {
+        return { _truncated: true, _originalBytes: serialized.length, preview: serialized.slice(0, 65_536) };
+      }
+      return result;
+    } catch {
+      return { _truncateError: true };
+    }
+  }
+
   // Per-invocation cache: avoids redundant DB queries when emit_chart reuses
   // the same metric/groupBy/interval that was already fetched in the same turn.
   const turnResultCache = new Map<string, unknown>();
@@ -3281,6 +3336,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           betaToolLog.push({
             toolName: tu.name,
             keyParams: summarizeBetaToolInput(tu.name, (tu.input ?? {}) as Record<string, unknown>, result),
+            toolOutput: truncateToolOutput(tu.name, result),
             durationMs: toolDurationMs,
             escalationTrigger: tu.name === "signal_escalation" ? (capturedEscalation?.type ?? null) : null,
             escalationReason: tu.name === "signal_escalation" ? (capturedEscalation?.reason ?? null) : null,
