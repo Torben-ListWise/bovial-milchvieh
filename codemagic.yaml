@@ -9,11 +9,13 @@ workflows:
       xcode: latest
       cocoapods: default
       groups:
-        - ios_credentials
+        - iOS
+        - Clerk
       vars:
         BUNDLE_ID: com.bovial.app
         APP_STORE_APP_ID: "6788433068"
         APPLE_TEAM_ID: W65GNXZJFL
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: $CLERK_PUBLISHABLE_KEY
     scripts:
       - name: Enable pnpm via corepack
         script: |
