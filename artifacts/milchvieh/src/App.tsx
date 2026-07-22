@@ -144,6 +144,7 @@ import { ReferenceAnalysesPage } from "@/pages/operator/reference-analyses";
 import { CreditDashboardPage } from "@/pages/operator/credit-dashboard";
 import { HealthAlertsOperatorPage } from "@/pages/operator/health-alerts";
 import { CrossFarmPatternsOperatorPage } from "@/pages/operator/cross-farm-patterns";
+import { UserManagementPage } from "@/pages/operator/user-management";
 import { WeatherConceptionPage } from "@/pages/app/weather-conception";
 
 const clerkPubKey = publishableKeyFromHost(
@@ -379,6 +380,7 @@ function AppPortal() {
         <Route path="/app/credit-dashboard" component={CreditDashboardPage} />
         <Route path="/app/health-alerts" component={HealthAlertsOperatorPage} />
         <Route path="/app/cross-farm-patterns" component={CrossFarmPatternsOperatorPage} />
+        <Route path="/app/user-management" component={UserManagementPage} />
         <Route path="/app/weather-correlation" component={WeatherConceptionPage} />
         <Route path="/app/upgrade" component={UpgradePage} />
         <Route path="/app/semen-planning">

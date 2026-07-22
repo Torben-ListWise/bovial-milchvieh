@@ -267,6 +267,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "Credit-Dashboard", href: "/app/credit-dashboard", icon: BarChart3, preserveDataset: false },
     { name: "Gesundheitswarnungen", href: "/app/health-alerts", icon: ShieldAlert, preserveDataset: false },
     { name: "Betr.übergr. Muster", href: "/app/cross-farm-patterns", icon: TrendingUp, preserveDataset: false },
+    { name: "Nutzerverwaltung", href: "/app/user-management", icon: Users, preserveDataset: false },
   ];
 
   const navItems = viewMode === 'operator' ? operatorNav : customerNav;
