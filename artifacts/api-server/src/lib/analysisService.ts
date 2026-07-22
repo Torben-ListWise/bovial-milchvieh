@@ -206,6 +206,11 @@ export async function processQuestion(
       } catch (err) {
         logger.warn({ err, imageObjectPath: opts.imageObjectPath }, "Chat-Bild konnte nicht geladen werden — sende nur Text");
       }
+      // Fire a progress event immediately after image download so the client
+      // gets visible feedback even when the agent responds with pure text (no
+      // tool calls). Without this, the SSE stream is silent until the model
+      // finishes generating — causing burst rendering on the frontend.
+      sse?.onProgress?.("Bild wird analysiert…");
     }
 
     // Load dataset sector for sector-specific agent context
