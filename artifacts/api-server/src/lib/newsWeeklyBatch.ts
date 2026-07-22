@@ -594,60 +594,10 @@ export async function runNewsWeeklyBatch(
       });
 
       result.generated++;
-      logger.info({ date: dateStr, topic: topic.name }, "News-Batch: Ausgabe gespeichert");
-
-      // Send newsletter email to all subscribed users (fire-and-forget)
-      const savedRows = await pool.query<{ id: string }>(
-        `SELECT id FROM newsletter_editions WHERE scheduled_date = $1 LIMIT 1`,
-        [dateStr],
+      logger.info(
+        { date: dateStr, topic: topic.name },
+        "News-Batch: Ausgabe als Entwurf gespeichert (E-Mail-Versand erfolgt erst nach expliziter Freigabe)",
       );
-      const savedEdition = savedRows.rows[0];
-      if (savedEdition) {
-        const subscribers = await pool.query<{ id: string; email: string }>(
-          `SELECT id, email FROM users WHERE email IS NOT NULL AND digest_opt_out = false`,
-        );
-        for (const sub of subscribers.rows) {
-          const editionRow = await pool.query<{
-            id: string; scheduled_date: string; topic: string; topic_color: string;
-            title: string; app_body: string; social_body: string; sources: unknown;
-            cta_type: string; cta_target: string; status: string; batch_run_at: string | null;
-            kpi_tiles: unknown; cause_effect: unknown; checklist: unknown;
-          }>(
-            `SELECT * FROM newsletter_editions WHERE id = $1`,
-            [savedEdition.id],
-          );
-          if (editionRow.rows[0]) {
-            const row = editionRow.rows[0];
-            const editionObj = {
-              id: row.id,
-              scheduledDate: row.scheduled_date,
-              topic: row.topic,
-              topicColor: row.topic_color,
-              title: row.title,
-              appBody: row.app_body,
-              socialBody: row.social_body,
-              sources: (row.sources ?? []) as { name: string; url: string }[],
-              ctaType: row.cta_type as "route" | "chat_prompt",
-              ctaTarget: row.cta_target,
-              status: row.status,
-              batchRunAt: row.batch_run_at ? new Date(row.batch_run_at) : null,
-              kpiTiles: (row.kpi_tiles ?? []) as { value: string; label: string; sourceIndex: number }[],
-              causeEffect: row.cause_effect as string[] | null,
-              checklist: (row.checklist ?? []) as string[],
-              topicId: null,
-              createdAt: new Date(),
-            };
-            fireEmail(
-              sendNewsletterEdition(sub.email, sub.id, editionObj),
-              `newsletter-edition-${savedEdition.id}-${sub.id}`,
-            );
-          }
-        }
-        logger.info(
-          { date: dateStr, subscriberCount: subscribers.rows.length },
-          "News-Batch: Newsletter-E-Mails abgeschickt",
-        );
-      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push(`${dateStr} (${topic.name}): ${msg}`);
