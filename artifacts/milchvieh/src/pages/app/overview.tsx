@@ -63,6 +63,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { useListFiles, getListFilesQueryKey } from "@workspace/api-client-react";
 import { DataTile } from "@/components/DataTile";
 import { DatasetList } from "@/pages/app/datasets";
+import { WeatherConceptionCard } from "@/pages/app/weather-conception";
 
 const THI_STATUS_MAP: Record<string, "normal" | "warning" | "critical"> = {
   normal: "normal",
@@ -1638,6 +1639,8 @@ export function DatasetOverview() {
       <SchnellauswertungenSection datasetId={datasetId} />
 
       <HealthAlertsSection />
+
+      <WeatherConceptionCard datasetId={datasetId} />
 
       <ContextFactsSection datasetId={datasetId} hostId={hostId} isOwner={!hostId} />
 

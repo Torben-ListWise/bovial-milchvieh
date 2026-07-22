@@ -29,6 +29,7 @@ import diaryRouter from "./diary";
 import contextFactsRouter from "./context-facts";
 import referenceAnalysesRouter from "./reference-analyses";
 import healthAlertsRouter from "./health-alerts";
+import weatherConceptionRouter from "./weather-conception";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(diaryRouter);
 router.use(contextFactsRouter);
 router.use(referenceAnalysesRouter);
 router.use(healthAlertsRouter);
+router.use(weatherConceptionRouter);
 
 export default router;

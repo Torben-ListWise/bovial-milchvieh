@@ -19,6 +19,8 @@ import {
   semenPlanningTable,
   farmDiaryEntriesTable,
   animalHealthAlertsTable,
+  usersTable,
+  weatherDailyCacheTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import {
@@ -762,6 +764,26 @@ ohne konkretes Ereignis, oder Hypothesen. Im Zweifel: nicht aufrufen.`,
       "Aufrufen wenn der Nutzer nach aktuellen Tierseuchenlagen, amtlichen Warnungen, Seuchengeschehen oder " +
       "regionalen Gesundheitsrisiken für den Betrieb fragt. Jede Warnung enthält Thema, Quelle und Link.",
     input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_weather_conception_correlation",
+    description:
+      "Berechnet die monatliche Korrelation zwischen DWD-Wetter/THI (Hitzestress) und der Konzeptionsrate. " +
+      "Aufrufen wenn der Nutzer nach dem Einfluss von Hitze, Sommer, Temperatur oder THI auf die Fruchtbarkeit oder Konzeptionsrate fragt. " +
+      "Ruft DWD-Wetterdaten für den Betriebsstandort ab (Bright Sky API, CC BY 4.0, kein Key). " +
+      "Gibt Zeitreihe zurück — danach IMMER emit_chart aufrufen: " +
+      "chartType='line', source='document', data=chart_data, xKey='monat', " +
+      "series=[{key:'konzeptionsrate',label:'Konzeptionsrate (%)',yAxisId:'left',unit:'%'},{key:'thi',label:'Ø THI (Max)',yAxisId:'right',unit:'THI'}].",
+    input_schema: {
+      type: "object",
+      properties: {
+        offset_days: {
+          type: "number",
+          description:
+            "Zeitversatz in Tagen (0 = Besamungstag, negativ = Tage davor, z.B. −56 = 8 Wochen vor Besamung, Default 0).",
+        },
+      },
+    },
   },
 ];
 
@@ -1918,6 +1940,78 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         };
       }
 
+      case "get_weather_conception_correlation": {
+        const offsetDays =
+          typeof input.offset_days === "number" ? input.offset_days : 0;
+
+        const [userLocation] = await db
+          .select({
+            lat: (usersTable as any).lat,
+            lng: (usersTable as any).lng,
+          })
+          .from(usersTable)
+          .where(eq(usersTable.id, opts.userId))
+          .limit(1);
+
+        if (!userLocation?.lat || !userLocation?.lng) {
+          return {
+            error: "Kein Betriebsstandort konfiguriert.",
+            hint: "Der Nutzer muss Breitengrad und Längengrad in den Einstellungen hinterlegen.",
+          };
+        }
+
+        const { computeWeatherConceptionCorrelation } = await import(
+          "./weatherConception"
+        );
+        const result = await computeWeatherConceptionCorrelation(
+          opts.datasetId,
+          userLocation.lat as number,
+          userLocation.lng as number,
+          offsetDays,
+        );
+
+        if (result.series.length === 0) {
+          return {
+            error:
+              "Keine auswertbaren BRED-Events vorhanden oder Daten zu dünn (min. 5 Besamungen/Monat).",
+            data_months: 0,
+          };
+        }
+
+        const chartData = result.series.map((p) => ({
+          monat: p.monthLabel,
+          konzeptionsrate: p.conception_rate,
+          thi: p.avg_thi,
+        }));
+
+        const r = result.pearson_r;
+        const interpretation =
+          r == null
+            ? "Nicht genügend gemeinsame Datenpunkte."
+            : Math.abs(r) >= 0.5
+            ? r < 0
+              ? `r = ${r.toFixed(2)} — starker negativer Zusammenhang: Hitzestress beeinträchtigt die Konzeptionsrate signifikant.`
+              : `r = ${r.toFixed(2)} — starker positiver Zusammenhang.`
+            : Math.abs(r) >= 0.3
+            ? `r = ${r.toFixed(2)} — mäßiger Zusammenhang erkennbar.`
+            : `r = ${r.toFixed(2)} — kein signifikanter Zusammenhang.`;
+
+        return {
+          series: result.series,
+          chart_data: chartData,
+          pearson_r: r,
+          offset_days: result.offset_days,
+          data_months: result.data_months,
+          station_note: result.station_note,
+          interpretation,
+          instruction:
+            "Rufe jetzt emit_chart auf: chartType='line', source='document', " +
+            "title='Hitzestress vs. Konzeptionsrate', data=chart_data, xKey='monat', " +
+            "series=[{key:'konzeptionsrate',label:'Konzeptionsrate (%)',yAxisId:'left',unit:'%'}," +
+            "{key:'thi',label:'Ø THI (Max)',yAxisId:'right',unit:'THI'}]",
+        };
+      }
+
       case "search_knowledge": {
         searchKnowledgeCalled = true;
         const query = input.query as string;
@@ -2799,6 +2893,8 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         return "Frischmelker-ROI-Rechner wird angezeigt…";
       case "get_active_health_alerts":
         return "Amtliche Gesundheitswarnungen werden abgerufen…";
+      case "get_weather_conception_correlation":
+        return "DWD-Wetterdaten und Konzeptionsraten werden korreliert…";
       case "emit_chart":
         return "Diagramm wird erstellt…";
       case "ask_farmer":
