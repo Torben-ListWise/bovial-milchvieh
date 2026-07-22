@@ -416,13 +416,18 @@ const TOOLS: Tool[] = [
   {
     name: "search_dairycomp_manual",
     description:
-      "Durchsucht das DairyComp-Handbuch semantisch. NUR aufrufen wenn der Nutzer eine Frage zur Bedienung, Konfiguration oder Funktionen der DairyComp-Software stellt. Nicht für allgemeine Betriebsanalysen oder Milchleistungsfragen verwenden.",
+      "Durchsucht das DairyComp-Handbuch und Befehlsglossar semantisch. Aufrufen wenn EINES zutrifft: " +
+      "(1) Nutzer fragt nach dem korrekten DC-Befehl oder der Syntax für eine Kennzahl — auch ohne das Wort 'DairyComp' (z.B. 'wie hole ich die pregrate aus DC', 'welcher Befehl für Konzeptionsrate', 'wie bekomme ich X aus DC', 'wie exportiere ich Y', 'wo sehe ich Z in DC'); " +
+      "(2) Nutzer nennt explizit DairyComp, DC305 oder einen bekannten DC-Befehlsnamen (BREDSUM, COWSUM, LIST, EVENTS, FRESH …); " +
+      "(3) Nutzer zeigt eine Zeichenfolge die wie ein DC-Befehl aussieht (Großbuchstaben + optionaler \\-Modifikator). " +
+      "NICHT aufrufen bei reinen Betriebsdatenauswertungen ohne DC-Syntax-Frage (dafür: get_kpis, run_sql). " +
+      "Kann im selben Turn mit get_kpis/run_sql kombiniert werden: dieses Tool für die DC-Syntax-Erklärung, get_kpis/run_sql für den aktuellen Datenwert.",
     input_schema: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "Suchanfrage zur DairyComp-Software, z.B. 'Wie stelle ich den Laktationsindex ein?' oder 'FRESH-Events auswerten'",
+          description: "Suchanfrage, z.B. 'pregnancy rate Befehl', 'BREDSUM Syntax', 'Konzeptionsrate aus DC exportieren', 'FRESH-Events auswerten'",
         },
         topK: {
           type: "number",
@@ -1063,13 +1068,14 @@ EREIGNISCODES (EC=N): 5=Besamung, 10=Bulle, 11=Trockenstellen, 12=Abort, 15=Abga
 BETRIEBSSPEZIFISCHE ABKÜRZUNGEN (ALTER3-Makros):
 Wenn betriebsspezifische DairyComp-Kürzel indexiert sind, wird der Assistent mit einem separaten Kontext-Block darüber informiert. Siehe dynamischen Block "BETRIEBSKÜRZEL" weiter unten im Kontext.
 
-DAIRYCOMP-HANDBUCH — SOFWARE-BEDIENUNGSFRAGEN:
+DAIRYCOMP-HANDBUCH — BEDIENUNGS- UND SYNTAX-FRAGEN:
 Rufe search_dairycomp_manual auf wenn EINES der folgenden Muster zutrifft:
-- Nutzer nennt explizit „DairyComp", „DC305", einen bekannten DC-Befehlsnamen (BREDSUM, COWSUM, LIST, SUM, EVENTS, ENTER …) oder einen \-Modifikator
-- Nutzer fragt „wie werte ich [Kennzahl] aus", „welchen Befehl", „welche Liste", „wie sehe ich [X] in DC", „wie stelle ich ein", „welcher Report", „wie drucke ich", „wie exportiere ich" — auch ohne das Wort DairyComp, wenn der Betrieb DairyComp verwendet (erkennbar am BETRIEBSKÜRZEL-Block im Kontext oder an bisherigen Gesprächshinweisen)
+- Nutzer nennt explizit „DairyComp", „DC305", „DC", einen bekannten DC-Befehlsnamen (BREDSUM, COWSUM, LIST, SUM, EVENTS, ENTER …) oder einen \-Modifikator
+- Nutzer fragt nach dem korrekten Befehl oder der Syntax für eine Kennzahl in DC: „wie hole ich [X] aus DC", „welcher Befehl für [Kennzahl]", „wie bekomme ich [X] aus DC", „wie sehe ich [X] in DC", „wie werte ich [X] aus", „welche Liste", „welcher Report", „wie drucke ich", „wie exportiere ich", „wo finde ich [X] in DC" — auch ohne explizites Wort „DairyComp", wenn aus dem Kontext (BETRIEBSKÜRZEL-Block, frühere Nachrichten) erkennbar ist, dass der Betrieb DairyComp nutzt
+- Nutzer fragt gleichzeitig nach dem aktuellen Zahlenwert UND der DC-Abfrage-Syntax → search_dairycomp_manual für die Syntax + get_kpis/run_sql für den Wert (beide im selben Turn aufrufen)
 - Nutzer zeigt eine Zeichenfolge die wie ein DC-Befehl aussieht: Großbuchstaben + optionaler \\-Modifikator (z.B. BREDSUM\\E, COWSUM\\V, LIST ID DIM …)
 
-Wenn eines dieser Muster zutrifft:
+Wenn der Nutzer ausschließlich nach DC-Syntax/Befehl fragt (kein aktueller Datenwert gewünscht):
 1. Überspringe get_schema, get_kpis, get_kpi_timeseries, get_event_stats und andere Betriebsdaten-Werkzeuge vollständig.
 2. Rufe SOFORT search_dairycomp_manual auf — dies ersetzt auch den search_knowledge-Pflichtschritt.
 3. Du darfst den Produktnamen „DairyComp" in deiner Antwort verwenden.

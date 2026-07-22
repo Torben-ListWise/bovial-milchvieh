@@ -516,7 +516,7 @@ router.get("/analyses/:analysisId/stream", requireAuth, (req: Request, res: Resp
   const heartbeat = setInterval(() => {
     if (!res.writableEnded) {
       res.write(": heartbeat\n\n");
-      flush();
+      flushSocket();
     }
   }, 10_000);
 
