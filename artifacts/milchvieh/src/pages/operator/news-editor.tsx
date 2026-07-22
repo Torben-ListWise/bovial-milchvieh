@@ -32,6 +32,12 @@ interface NewsSource {
   url: string;
 }
 
+interface KpiTile {
+  value: string;
+  label: string;
+  sourceIndex: number;
+}
+
 interface NewsletterEdition {
   id: string;
   scheduledDate: string;
@@ -46,6 +52,9 @@ interface NewsletterEdition {
   status: EditionStatus;
   batchRunAt: string | null;
   createdAt: string;
+  kpiTiles?: KpiTile[] | null;
+  causeEffect?: string[] | null;
+  checklist?: string[] | null;
 }
 
 interface NewsTopic {
@@ -126,9 +135,10 @@ interface EditionCardProps {
   onReject: (id: string) => Promise<void>;
   onSave: (id: string, patch: Partial<NewsletterEdition>) => Promise<void>;
   onSwap: (idA: string, idB: string) => Promise<void>;
+  onClearKpiTiles: (id: string) => Promise<void>;
 }
 
-function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap }: EditionCardProps) {
+function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap, onClearKpiTiles }: EditionCardProps) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -393,12 +403,79 @@ function EditionCard({ edition, allEditions, onApprove, onReject, onSave, onSwap
             </>
           ) : (
             <>
+              {/* KPI tiles */}
+              {(edition.kpiTiles ?? []).length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-muted-foreground">KPI-Kacheln</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-destructive hover:text-destructive gap-1"
+                      title="KPI-Daten zurücksetzen"
+                      onClick={async () => {
+                        setBusy(true);
+                        try { await onClearKpiTiles(edition.id); } finally { setBusy(false); }
+                      }}
+                      disabled={busy}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Zurücksetzen
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(edition.kpiTiles ?? []).map((tile, i) => (
+                      <div key={i} className="rounded-lg border border-border bg-muted/30 p-3 flex flex-col gap-0.5">
+                        <span className="text-lg font-extrabold text-foreground leading-none">{tile.value}</span>
+                        <span className="text-xs text-muted-foreground">{tile.label}</span>
+                        {tile.sourceIndex >= 0 && (
+                          <span className="text-xs text-muted-foreground/60 mt-auto">[{tile.sourceIndex + 1}]</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Cause → Effect chain */}
+              {(edition.causeEffect ?? []).length === 3 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Ursache-Wirkungs-Kette</p>
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 flex flex-wrap items-center gap-2 text-sm font-medium">
+                    {(edition.causeEffect ?? []).map((step, i) => (
+                      <span key={i} className="flex items-center gap-2">
+                        <span className="text-foreground">{step}</span>
+                        {i < (edition.causeEffect ?? []).length - 1 && (
+                          <span className="text-muted-foreground font-bold">→</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">App-Text</p>
                 <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-muted/30 rounded-lg p-3 max-h-48 overflow-y-auto">
                   {edition.appBody}
                 </div>
               </div>
+
+              {/* Checklist */}
+              {(edition.checklist ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Handlungsempfehlungen</p>
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                    {(edition.checklist ?? []).map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-sm text-foreground">
+                        <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-600" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-medium text-muted-foreground">Social-Text</p>
@@ -604,6 +681,19 @@ export function NewsEditorPage() {
     await loadEditions();
   }
 
+  async function handleClearKpiTiles(id: string) {
+    const resp = await apiFetch(`/operator/newsletter/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ kpiTiles: null, causeEffect: null, checklist: null }),
+    });
+    if (!resp.ok) {
+      toast({ variant: "destructive", title: "Strukturdaten konnten nicht zurückgesetzt werden" });
+      return;
+    }
+    toast({ title: "Strukturdaten zurückgesetzt" });
+    await loadEditions();
+  }
+
   async function handleSwap(idA: string, idB: string) {
     const resp = await apiFetch("/operator/newsletter/swap-dates", {
       method: "POST",
@@ -786,6 +876,7 @@ export function NewsEditorPage() {
                 onReject={handleReject}
                 onSave={handleSave}
                 onSwap={handleSwap}
+                onClearKpiTiles={handleClearKpiTiles}
               />
             ))}
           </div>
