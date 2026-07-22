@@ -66,9 +66,15 @@ workflows:
       - name: Fetch signing files
         script: |
           keychain initialize
+          # Normalize the certificate private key: convert literal \n to real newlines
+          # (handles both already-correct keys and keys stored as single-line with \n)
+          printf '%s' "$CERTIFICATE_PRIVATE_KEY" | sed 's/\\n/\n/g' > /tmp/cert_key.pem
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key "@file:/tmp/cert_key.pem" \
             --create
           keychain add-certificates
 
