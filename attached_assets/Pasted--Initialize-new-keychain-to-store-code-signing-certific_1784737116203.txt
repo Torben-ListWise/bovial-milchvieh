@@ -1,0 +1,16 @@
+
+Initialize new keychain to store code signing certificates at /Users/builder/Library/codemagic-cli-tools/keychains/22-07-26_p9pprdod.keychain-db
+Create keychain /Users/builder/Library/codemagic-cli-tools/keychains/22-07-26_p9pprdod.keychain-db
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/22-07-26_p9pprdod.keychain-db timeout to "no timeout"
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/22-07-26_p9pprdod.keychain-db to system default keychain
+Unlock keychain /Users/builder/Library/codemagic-cli-tools/keychains/22-07-26_p9pprdod.keychain-db
+usage: app-store-connect fetch-signing-files [-h] [--log-api-calls] [--api-unauthorized-retries UNAUTHORIZED_REQUEST_RETRIES] [--api-server-error-retries SERVER_ERROR_RETRIES] [--disable-jwt-cache] [--json] [--issuer-id ISSUER_ID] [--key-id KEY_IDENTIFIER] [--private-key PRIVATE_KEY] [--certificates-dir CERTIFICATES_DIRECTORY] [--profiles-dir PROFILES_DIRECTORY] [--platform {IOS,MAC_OS,UNIVERSAL,SERVICES}] [--certificate-key CERTIFICATE_KEY] [--certificate-key-password CERTIFICATE_KEY_PASSWORD] [--p12-password P12_CONTAINER_PASSWORD] [--type {IOS_APP_ADHOC,IOS_APP_DEVELOPMENT,IOS_APP_INHOUSE,IOS_APP_STORE,MAC_APP_DEVELOPMENT,MAC_APP_DIRECT,MAC_APP_STORE,MAC_CATALYST_APP_DEVELOPMENT,MAC_CATALYST_APP_DIRECT,MAC_CATALYST_APP_STORE,TVOS_APP_ADHOC,TVOS_APP_DEVELOPMENT,TVOS_APP_INHOUSE,TVOS_APP_STORE}] [--strict-match-identifier] [--create] [--delete-stale-profiles] [--log-stream {stderr,stdout}] [--no-color] [--version] [-s] [-v] bundle_id_identifier
+app-store-connect fetch-signing-files: error: argument --certificate-key: Provided value in file "/tmp/cert_key.pem" is not valid. Provided value "********" is not valid
+Add certificates to keychain /Users/builder/Library/codemagic-cli-tools/keychains/22-07-26_p9pprdod.keychain-db
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Certificates/*.p12
+Searching for files matching /Users/builder/Library/MobileDevice/Certificates/*.p12
+Did not find any certificates from specified locations
+
+
+Build failed :|
+Step 7 script `Fetch signing files` exited with status code 1
