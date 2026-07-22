@@ -510,7 +510,9 @@ export const AskQuestionParams = zod.object({
 
 
 export const AskQuestionBody = zod.object({
-  "question": zod.string().min(1)
+  "question": zod.string().min(1),
+  // field added manually — update if codegen is re-run
+  "imageObjectPath": zod.string().optional(),
 })
 
 export const AskQuestionResponse = zod.object({
