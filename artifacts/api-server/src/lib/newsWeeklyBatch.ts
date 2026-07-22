@@ -22,6 +22,9 @@ import { validateUrl } from "./scraper";
 import { embedQuery } from "./embeddings";
 import { sendNewsletterEdition, fireEmail } from "./emailService";
 import * as cheerio from "cheerio";
+import { filterKpiTiles } from "./newsKpiUtils";
+
+export { filterKpiTiles } from "./newsKpiUtils";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -412,20 +415,22 @@ Wichtig:
   // Validate kpiTiles: only allow if knowledge context was present and sourceIndex is in range
   const maxSourceIndex = knowledgeSources.length - 1;
   const rawKpiTiles = Array.isArray(parsed.kpiTiles) ? parsed.kpiTiles : [];
-  const validKpiTiles = knowledgeContext
-    ? rawKpiTiles
-        .filter(
-          (t): t is { value: string; label: string; sourceIndex: number } =>
-            typeof t === "object" &&
-            t !== null &&
-            typeof (t as { value?: unknown }).value === "string" &&
-            typeof (t as { label?: unknown }).label === "string" &&
-            typeof (t as { sourceIndex?: unknown }).sourceIndex === "number" &&
-            (t as { sourceIndex: number }).sourceIndex >= 0 &&
-            (t as { sourceIndex: number }).sourceIndex <= maxSourceIndex,
-        )
-        .slice(0, 4)
-    : [];
+  const validKpiTiles = filterKpiTiles(rawKpiTiles, knowledgeContext, maxSourceIndex);
+
+  // Log a warning when the knowledge library was available but the LLM returned no usable tiles
+  if (knowledgeContext) {
+    if (rawKpiTiles.length > 0 && validKpiTiles.length === 0) {
+      logger.warn(
+        { topic, rawKpiTiles },
+        "News-Batch: LLM kpiTiles alle ungültig (sourceIndex out of range oder falscher Typ)",
+      );
+    } else if (rawKpiTiles.length === 0) {
+      logger.warn(
+        { topic },
+        "News-Batch: LLM hat trotz vorhandener Wissensbibliothek keine kpiTiles zurückgegeben",
+      );
+    }
+  }
 
   const rawCauseEffect = Array.isArray(parsed.causeEffect) ? parsed.causeEffect : null;
   const validCauseEffect =
@@ -474,15 +479,20 @@ export interface BatchRunResult {
 
 /**
  * Run the weekly batch. Pass `offsetDays = 0` to start from today (for testing).
+ *
+ * `force = true` re-generates editions that already exist in the date range,
+ * EXCEPT those that already have kpiTiles populated from a knowledge source —
+ * those are always preserved to prevent overwriting valid data with empty arrays.
  */
 export async function runNewsWeeklyBatch(
   offsetDays = 1,
+  force = false,
 ): Promise<BatchRunResult> {
   const dates = nextWeekDates(offsetDays);
   const dateStrs = dates.map(toDateStr);
   const batchRunAt = new Date();
 
-  logger.info({ dates: dateStrs }, "News-Batch: starte Generierung");
+  logger.info({ dates: dateStrs, force }, "News-Batch: starte Generierung");
 
   // Load all active topics ordered by sort_order
   const topics = await db
@@ -495,12 +505,21 @@ export async function runNewsWeeklyBatch(
     return { generated: 0, skipped: 0, errors: ["Keine aktiven Themen konfiguriert"], dates: dateStrs };
   }
 
-  // Check for existing drafts in the date range (idempotency)
-  const existingRows = await pool.query<{ scheduled_date: string }>(
-    `SELECT scheduled_date::text FROM newsletter_editions WHERE scheduled_date >= $1 AND scheduled_date <= $2`,
+  // Check for existing drafts in the date range (idempotency).
+  // When force=true we also fetch kpi_tiles so we can protect editions that
+  // already have knowledge-sourced KPI tiles from being overwritten.
+  const existingRows = await pool.query<{ scheduled_date: string; kpi_tiles: unknown }>(
+    `SELECT scheduled_date::text, kpi_tiles FROM newsletter_editions WHERE scheduled_date >= $1 AND scheduled_date <= $2`,
     [dateStrs[0], dateStrs[6]],
   );
-  const existingDates = new Set(existingRows.rows.map((r) => r.scheduled_date));
+
+  // Map date → whether the existing edition has non-empty kpiTiles
+  const existingEditions = new Map<string, { hasKpiTiles: boolean }>();
+  for (const row of existingRows.rows) {
+    const tiles = row.kpi_tiles;
+    const hasKpiTiles = Array.isArray(tiles) && tiles.length > 0;
+    existingEditions.set(row.scheduled_date, { hasKpiTiles });
+  }
 
   // Determine the "next topic index" for the first date based on the latest existing edition
   const latestRow = await pool.query<{ topic: string }>(
@@ -516,10 +535,33 @@ export async function runNewsWeeklyBatch(
   const result: BatchRunResult = { generated: 0, skipped: 0, errors: [], dates: dateStrs };
 
   for (const dateStr of dateStrs) {
-    if (existingDates.has(dateStr)) {
-      result.skipped++;
-      topicCursor = (topicCursor + 1) % topics.length;
-      continue;
+    const existing = existingEditions.get(dateStr);
+    if (existing) {
+      if (!force) {
+        // Normal run: always skip existing editions (original idempotency)
+        result.skipped++;
+        topicCursor = (topicCursor + 1) % topics.length;
+        continue;
+      }
+      // Force run: skip editions that already have knowledge-sourced kpiTiles
+      if (existing.hasKpiTiles) {
+        logger.info(
+          { date: dateStr },
+          "News-Batch: Ausgabe bereits mit kpiTiles vorhanden — wird nicht überschrieben (force-run)",
+        );
+        result.skipped++;
+        topicCursor = (topicCursor + 1) % topics.length;
+        continue;
+      }
+      // Force run: edition exists but has no kpiTiles — safe to regenerate
+      logger.info(
+        { date: dateStr },
+        "News-Batch: force-run überschreibt Ausgabe ohne kpiTiles",
+      );
+      await pool.query(
+        `DELETE FROM newsletter_editions WHERE scheduled_date = $1`,
+        [dateStr],
+      );
     }
 
     const topic = topics[topicCursor % topics.length];
