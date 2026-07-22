@@ -66,15 +66,18 @@ workflows:
       - name: Fetch signing files
         script: |
           keychain initialize
-          # Normalize the certificate private key: convert literal \n to real newlines
-          # (handles both already-correct keys and keys stored as single-line with \n)
-          printf '%s' "$CERTIFICATE_PRIVATE_KEY" | sed 's/\\n/\n/g' > /tmp/cert_key.pem
+          # --certificate-key is intentionally omitted: the CLI tool generates a fresh
+          # RSA key per build session and matches or creates an Apple distribution
+          # certificate via the App Store Connect API.
+          # To reuse a stable cert across builds, generate an RSA key once:
+          #   openssl genrsa -out cert_key.pem 2048
+          # and store the PEM content as CERTIFICATE_PRIVATE_KEY in the iOS group,
+          # then restore --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" here.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key "@file:/tmp/cert_key.pem" \
             --create
           keychain add-certificates
 
