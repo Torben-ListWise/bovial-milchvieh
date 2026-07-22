@@ -391,7 +391,11 @@ export const CreateAnalysisParams = zod.object({
 
 export const CreateAnalysisBody = zod.object({
   "title": zod.string().optional(),
-  "question": zod.string().optional()
+  "question": zod.string().optional(),
+  // fields below added manually — update if codegen is re-run
+  "imageObjectPath": zod.string().optional(),
+  "depthLevel": zod.string().optional(),
+  "contextFileIds": zod.array(zod.string()).optional(),
 })
 
 

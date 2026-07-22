@@ -355,6 +355,7 @@ router.post(
       const id = analysis.id;
       setTimeout(() => {
         const w = getOrBufferWriter(id);
+        const imageObjectPath = parsed.data.imageObjectPath;
         processQuestion(analysis, question, {
           onTextDelta: (delta) => w.sendDelta(delta),
           onSourceSearched: (sources) => w.sendSources(sources),
@@ -362,7 +363,7 @@ router.post(
           onChart: (chart) => w.sendChart(chart),
           onTurnReset: () => w.sendTurnReset(),
           onDone: () => w.sendDone(),
-        })
+        }, imageObjectPath ? { imageObjectPath } : undefined)
           .then(({ message, credits, complexity, toolsCalled, inputTokens, outputTokens }) => {
             if (!message.error && credits > 0) {
               const apiCostMillicents = Math.round(inputTokens * 0.276 + outputTokens * 1.38);

@@ -3427,8 +3427,11 @@ export function AnalysesPage() {
           question: text,
           depthLevel: pendingDepthLevel,
           ...(pendingContextFileIds.length > 0 ? { contextFileIds: pendingContextFileIds } : {}),
+          ...(pendingImage?.objectPath ? { imageObjectPath: pendingImage.objectPath } : {}),
         },
       });
+      if (pendingImage?.preview) URL.revokeObjectURL(pendingImage.preview);
+      setPendingImage(null);
       // After creation, apply selected depth level if any
       setPendingContextFileIds([]);
       setFilePickerOpen(false);
