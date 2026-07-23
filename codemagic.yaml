@@ -91,58 +91,42 @@ workflows:
           cd artifacts/bovial-mobile/ios
           pod install
 
-      - name: Patch EXConstants getAppConfig.js (pnpm monorepo fix)
+      - name: Inspect ExpoConstants scripts (diagnostic)
         script: |
-          # getAppConfig.js runs from inside Pods/ExpoConstants/scripts/ (or scripts/build/)
-          # and calls require('@expo/config'). In a pnpm monorepo Node.js cannot resolve
-          # this via the normal walk-up. Fix: use require.resolve({ paths: [projectNodeModules] })
-          # so Node looks directly in bovial-mobile/node_modules (explicit pnpm symlinks).
-          #
-          # The patched JS content is stored as base64 to avoid YAML heredoc issues
-          # (content at column 0 would terminate the YAML block scalar).
           PODS_EXCONSTANTS="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants"
           echo "=== ExpoConstants scripts tree ==="
-          find "$PODS_EXCONSTANTS/scripts" -type f 2>/dev/null || echo "⚠️  No scripts dir found under $PODS_EXCONSTANTS"
-          # Dynamically find the built getAppConfig.js (may be scripts/build/ or scripts/)
-          SCRIPT=$(find "$PODS_EXCONSTANTS/scripts" -name "getAppConfig.js" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          if [ -z "$SCRIPT" ]; then
-            echo "⚠️  getAppConfig.js not found anywhere under $PODS_EXCONSTANTS/scripts — skipping patch (module resolution may fail at build time)"
-            exit 0
-          fi
-          echo "✅ Found getAppConfig.js at: $SCRIPT"
-          echo "=== Original getAppConfig.js ==="
-          cat "$SCRIPT"
-          # Decode and write the patched content (single-line python3 -c — avoids col-0 YAML issue)
-          python3 -c "import base64,sys; sys.stdout.buffer.write(base64.b64decode('InVzZSBzdHJpY3QiOwp2YXIgX19pbXBvcnREZWZhdWx0ID0gKHRoaXMgJiYgdGhpcy5fX2ltcG9ydERlZmF1bHQpIHx8IGZ1bmN0aW9uIChtb2QpIHsKICAgIHJldHVybiAobW9kICYmIG1vZC5fX2VzTW9kdWxlKSA/IG1vZCA6IHsgImRlZmF1bHQiOiBtb2QgfTsKfTsKT2JqZWN0LmRlZmluZVByb3BlcnR5KGV4cG9ydHMsICJfX2VzTW9kdWxlIiwgeyB2YWx1ZTogdHJ1ZSB9KTsKY29uc3QgZnNfMSA9IF9faW1wb3J0RGVmYXVsdChyZXF1aXJlKCJmcyIpKTsKY29uc3QgcGF0aF8xID0gX19pbXBvcnREZWZhdWx0KHJlcXVpcmUoInBhdGgiKSk7CmNvbnN0IHBvc3NpYmxlUHJvamVjdFJvb3QgPSBwcm9jZXNzLmFyZ3ZbMl07CmNvbnN0IGRlc3RpbmF0aW9uRGlyID0gcHJvY2Vzcy5hcmd2WzNdOwpsZXQgcHJvamVjdFJvb3Q7CmlmIChmc18xLmRlZmF1bHQuZXhpc3RzU3luYyhwYXRoXzEuZGVmYXVsdC5qb2luKHBvc3NpYmxlUHJvamVjdFJvb3QsICdwYWNrYWdlLmpzb24nKSkpIHsKICAgIHByb2plY3RSb290ID0gcG9zc2libGVQcm9qZWN0Um9vdDsKfQplbHNlIGlmIChmc18xLmRlZmF1bHQuZXhpc3RzU3luYyhwYXRoXzEuZGVmYXVsdC5qb2luKHBvc3NpYmxlUHJvamVjdFJvb3QsICcuLicsICdwYWNrYWdlLmpzb24nKSkpIHsKICAgIHByb2plY3RSb290ID0gcGF0aF8xLmRlZmF1bHQucmVzb2x2ZShwb3NzaWJsZVByb2plY3RSb290LCAnLi4nKTsKfQplbHNlIHsKICAgIHRocm93IG5ldyBFcnJvcihgVW5hYmxlIHRvIGxvY2F0ZSBwcm9qZWN0IChubyBwYWNrYWdlLmpzb24gZm91bmQpIGF0IHBhdGg6ICR7cG9zc2libGVQcm9qZWN0Um9vdH1gKTsKfQovLyBwbnBtIG1vbm9yZXBvIGZpeDogcmVzb2x2ZSBAZXhwby8qIG1vZHVsZXMgZXhwbGljaXRseSBmcm9tIHRoZSBwcm9qZWN0J3MKLy8gbm9kZV9tb2R1bGVzIGRpcmVjdG9yeSwgYnlwYXNzaW5nIE5vZGUuanMgbW9kdWxlIHdhbGstdXAgbGltaXRhdGlvbnMuCmNvbnN0IHByb2plY3ROb2RlTW9kdWxlcyA9IHBhdGhfMS5kZWZhdWx0LmpvaW4ocHJvamVjdFJvb3QsICdub2RlX21vZHVsZXMnKTsKY29uc3QgcmVzb2x2ZU9wdHMgPSB7IHBhdGhzOiBbcHJvamVjdE5vZGVNb2R1bGVzXSB9Owpjb25zdCBleHBvRW52UGF0aCA9IHJlcXVpcmUucmVzb2x2ZSgnQGV4cG8vZW52JywgcmVzb2x2ZU9wdHMpOwpjb25zdCBleHBvQ29uZmlnUGF0aCA9IHJlcXVpcmUucmVzb2x2ZSgnQGV4cG8vY29uZmlnJywgcmVzb2x2ZU9wdHMpOwpyZXF1aXJlKGV4cG9FbnZQYXRoKS5sb2FkKHByb2plY3RSb290KTsKcHJvY2Vzcy5jaGRpcihwcm9qZWN0Um9vdCk7CmNvbnN0IHsgZ2V0Q29uZmlnIH0gPSByZXF1aXJlKGV4cG9Db25maWdQYXRoKTsKY29uc3QgeyBleHAgfSA9IGdldENvbmZpZyhwcm9qZWN0Um9vdCwgewogICAgaXNQdWJsaWNDb25maWc6IHRydWUsCiAgICBza2lwU0RLVmVyc2lvblJlcXVpcmVtZW50OiB0cnVlLAp9KTsKZnNfMS5kZWZhdWx0LndyaXRlRmlsZVN5bmMocGF0aF8xLmRlZmF1bHQuam9pbihkZXN0aW5hdGlvbkRpciwgJ2FwcC5jb25maWcnKSwgSlNPTi5zdHJpbmdpZnkoZXhwKSk7Cg=='))" > "$SCRIPT"
-          echo "=== Patched getAppConfig.js written ==="
-          cat "$SCRIPT"
-          echo "=== Dry-run test (projectRoot=${CM_BUILD_DIR}/artifacts/bovial-mobile) ==="
-          mkdir -p /tmp/test_app_config
-          node "$SCRIPT" "${CM_BUILD_DIR}/artifacts/bovial-mobile" /tmp/test_app_config 2>&1 \
-            && echo "✅ getAppConfig.js dry-run OK" \
-            && echo "app.config content:" && cat /tmp/test_app_config/app.config | head -3 \
-            || { echo "❌ getAppConfig.js dry-run FAILED (see error above)"; exit 1; }
+          find "$PODS_EXCONSTANTS/scripts" -type f 2>/dev/null || echo "no scripts dir found"
+          echo "=== get-app-config-ios.sh first 30 lines ==="
+          head -30 "$PODS_EXCONSTANTS/scripts/get-app-config-ios.sh" 2>/dev/null || echo "not found"
 
-      - name: Patch get-app-config-ios.sh (BUNDLE_FORMAT fallback)
+      - name: Patch get-app-config-ios.sh (NODE_PATH + BUNDLE_FORMAT)
         script: |
-          # In Xcode 26+, the BUNDLE_FORMAT build setting is not always propagated
-          # to pod script phases. The get-app-config-ios.sh script exits 1 if
-          # BUNDLE_FORMAT is unset or unrecognised. This patch adds a safe fallback
-          # to "shallow" (the value used by all modern Xcode/CocoaPods builds) so
-          # the script never fails on a missing build setting.
           SH="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants/scripts/get-app-config-ios.sh"
           if [ ! -f "$SH" ]; then
-            echo "⚠️  get-app-config-ios.sh not found at: $SH — skipping"
+            echo "⚠️  get-app-config-ios.sh not found — skipping"
           else
-            # Idempotency: skip if already patched
-            if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
-              echo "✅ get-app-config-ios.sh already patched — skipping"
+            # Patch 1: inject NODE_PATH export after the shebang so that when
+            # get-app-config-ios.sh calls `node getAppConfig.js`, Node.js finds
+            # @expo/config and @expo/env via NODE_PATH rather than the walk-up
+            # algorithm (which fails in pnpm monorepos).
+            # SRCROOT is a standard Xcode build setting = bovial-mobile/ios,
+            # so ${SRCROOT}/../node_modules = bovial-mobile/node_modules.
+            if grep -q "NODE_PATH_PATCHED" "$SH"; then
+              echo "✅ NODE_PATH already patched — skipping"
             else
-              # Insert fallback right before the if [ "$BUNDLE_FORMAT" == ... ] block
-              sed -i '' 's/^if \[ "\$BUNDLE_FORMAT" == "shallow" \]/# BUNDLE_FORMAT_PATCHED\nBUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\nif [ "$BUNDLE_FORMAT" == "shallow" ]/' "$SH"
-              echo "✅ get-app-config-ios.sh patched with BUNDLE_FORMAT fallback"
-              grep -n "BUNDLE_FORMAT" "$SH"
+              python3 -c "import sys; f=open(sys.argv[1],'r'); lines=f.readlines(); f.close(); idx=1 if lines and lines[0].startswith('#!') else 0; lines.insert(idx,'# NODE_PATH_PATCHED\nexport NODE_PATH=\"\${SRCROOT}/../node_modules\"\n'); open(sys.argv[1],'w').writelines(lines)" "$SH"
+              echo "✅ NODE_PATH injected into get-app-config-ios.sh"
             fi
+            # Patch 2: BUNDLE_FORMAT fallback so the script never fails when
+            # Xcode 16+ does not propagate BUNDLE_FORMAT to pod script phases.
+            if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
+              echo "✅ BUNDLE_FORMAT already patched — skipping"
+            else
+              sed -i '' 's/^if \[ "\$BUNDLE_FORMAT" == "shallow" \]/# BUNDLE_FORMAT_PATCHED\nBUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\nif [ "$BUNDLE_FORMAT" == "shallow" ]/' "$SH"
+              echo "✅ BUNDLE_FORMAT fallback patched"
+            fi
+            echo "=== Patched get-app-config-ios.sh (first 25 lines) ==="
+            head -25 "$SH"
           fi
 
       - name: Fetch signing files
