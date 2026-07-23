@@ -58,6 +58,15 @@ workflows:
           cd artifacts/bovial-mobile
           npx expo prebuild --platform ios --clean --no-install
 
+      - name: Create .xcode.env (node path for Xcode script phases)
+        script: |
+          # expo prebuild --clean wipes ios/ — so we create .xcode.env AFTER
+          # prebuild but BEFORE pod install. with-node.sh reads this file to
+          # locate the node binary inside Xcode's sandboxed script-phase PATH
+          # (which does NOT include /opt/homebrew/bin on Apple Silicon macs).
+          echo "export NODE_BINARY=$(which node)" > artifacts/bovial-mobile/ios/.xcode.env
+          echo "Wrote NODE_BINARY=$(which node) to ios/.xcode.env"
+
       - name: Install CocoaPods
         script: |
           cd artifacts/bovial-mobile/ios
