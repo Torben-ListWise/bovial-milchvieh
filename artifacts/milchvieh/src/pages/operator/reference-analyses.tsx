@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthToken } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -117,6 +117,29 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
     if (file && file.type.startsWith("image/")) setImageFile(file);
   }, []);
 
+  const handlePaste = useCallback((e: React.ClipboardEvent | ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          const named = new File([file], `Screenshot-${Date.now()}.png`, { type: file.type });
+          setImageFile(named);
+        }
+        break;
+      }
+    }
+  }, []);
+
+  // Global paste listener so Ctrl+V works anywhere on the page
+  useEffect(() => {
+    const handler = (e: ClipboardEvent) => handlePaste(e);
+    document.addEventListener("paste", handler);
+    return () => document.removeEventListener("paste", handler);
+  }, [handlePaste]);
+
   const canSubmit = rawText.trim().length > 0 || imageFile !== null;
 
   return (
@@ -149,7 +172,7 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
         {imageFile ? (
           <p className="text-xs text-primary font-medium">{imageFile.name}</p>
         ) : (
-          <p className="text-xs text-muted-foreground">Screenshot hierher ziehen oder klicken</p>
+          <p className="text-xs text-muted-foreground">Screenshot hierher ziehen, klicken oder einfügen (Strg+V)</p>
         )}
         {imageFile && (
           <button
