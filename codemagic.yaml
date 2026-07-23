@@ -103,22 +103,7 @@ workflows:
             echo "✅ Already patched — skipping"
           else
             _PATCH=$(mktemp /tmp/patch_XXXXXX.py)
-            cat > "$_PATCH" << 'PYEOF'
-import sys
-with open(sys.argv[1], 'r') as f:
-    content = f.read()
-old = 'if [ "$BUNDLE_FORMAT" == "shallow" ]'
-new_text = (
-    '# BUNDLE_FORMAT_PATCHED: default to shallow when unset (Xcode 16 may not set it)\n'
-    'BUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\n'
-) + old
-if old not in content:
-    print('WARNING: expected pattern not found - script may have changed')
-else:
-    with open(sys.argv[1], 'w') as f:
-        f.write(content.replace(old, new_text, 1))
-    print('Patched successfully')
-PYEOF
+            echo 'aW1wb3J0IHN5cwp3aXRoIG9wZW4oc3lzLmFyZ3ZbMV0sICdyJykgYXMgZjoKICAgIGNvbnRlbnQgPSBmLnJlYWQoKQpvbGQgPSAnaWYgWyAiJEJVTkRMRV9GT1JNQVQiID09ICJzaGFsbG93IiBdJwpuZXdfdGV4dCA9ICgKICAgICcjIEJVTkRMRV9GT1JNQVRfUEFUQ0hFRDogZGVmYXVsdCB0byBzaGFsbG93IHdoZW4gdW5zZXQgKFhjb2RlIDE2IG1heSBub3Qgc2V0IGl0KVxuJwogICAgJ0JVTkRMRV9GT1JNQVQ9IiR7QlVORExFX0ZPUk1BVDotc2hhbGxvd30iXG4nCikgKyBvbGQKaWYgb2xkIG5vdCBpbiBjb250ZW50OgogICAgcHJpbnQoJ1dBUk5JTkc6IGV4cGVjdGVkIHBhdHRlcm4gbm90IGZvdW5kIC0gc2NyaXB0IG1heSBoYXZlIGNoYW5nZWQnKQplbHNlOgogICAgd2l0aCBvcGVuKHN5cy5hcmd2WzFdLCAndycpIGFzIGY6CiAgICAgICAgZi53cml0ZShjb250ZW50LnJlcGxhY2Uob2xkLCBuZXdfdGV4dCwgMSkpCiAgICBwcmludCgnUGF0Y2hlZCBzdWNjZXNzZnVsbHknKQo=' | base64 -d > "$_PATCH"
             python3 "$_PATCH" "$SH"
             rm -f "$_PATCH"
             echo "✅ BUNDLE_FORMAT fallback injected"
