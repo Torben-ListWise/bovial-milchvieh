@@ -47,3 +47,18 @@ Mehrfach hat eine erste "✅ Fertig"-Antwort sich bei genauerer Nachfrage als fa
 
 ## Größter offener Risikofaktor
 Null Beta-Tester bisher. Alle Preis-, Feature- und Positionierungsentscheidungen sind bislang unvalidiert.
+
+## Geplante Infrastruktur-Migration (nach UG-Notartermin)
+Ziel: Produktions-App von Replit-Hosting auf Hetzner (EU-Anbieter, DSGVO-Datenresidenz) migrieren. Replit bleibt Entwicklungsumgebung (Code-Bearbeitung, Agent-Tasks), Deployment läuft künftig über Hetzner statt Replit Deployments — analog zum bestehenden Muster bei bovial-mobile (Replit bearbeitet Code → pusht nach GitHub → Codemagic baut/deployed), nur mit Hetzner statt Codemagic als Zielsystem.
+
+STATUS: Wartet bewusst auf Abschluss des UG-Notartermins, damit der Hetzner-Vertrag direkt auf die Firma statt privat abgeschlossen wird (vermeidet spätere Vertragsumschreibung).
+
+Nötige Schritte nach Notartermin:
+1. Hetzner-Server bestellen (Firmenkonto, sobald UG im Handelsregister)
+2. Laufzeitumgebung einrichten (Node.js, PostgreSQL + pgvector-Erweiterung)
+3. Deployment-Automatisierung: automatischer Pull/Build bei jedem GitHub-Push
+4. Datenbank-Migration von Replit-Postgres zu Hetzner-Postgres
+5. Secrets/Umgebungsvariablen (Anthropic-API-Key, Stripe, Clerk, Resend) übertragen
+6. DNS-Umstellung bovial.com auf Hetzner-Server-IP, SSL-Zertifikat (Let's Encrypt)
+
+Grund für Timing: Migration jetzt (vor echten Nutzerdaten) ist risikoärmer als später, aber Vertragsabschluss vor UG-Eintragung würde zu doppelter Vertragsarbeit führen (Umschreibung auf Firma nötig). Daher bewusst kombiniert: Migration technisch vorbereiten/planen jederzeit möglich, Vertragsabschluss erst nach Notartermin.
