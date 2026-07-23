@@ -92,13 +92,12 @@ workflows:
       - name: Build IPA
         script: |
           cd artifacts/bovial-mobile
-          # EXPO_WORKSPACE_ROOT tells EXConstants's Node.js script phases where
-          # the pnpm monorepo root is so they can resolve node_modules at
-          # archive time. Without this, the EXConstants "Generate app.config"
-          # script fails with an uncaught Node error (exit 65) because it walks
-          # up from the Pods directory and cannot find @expo/config.
-          # CM_BUILD_DIR is the Codemagic-injected clone root (monorepo root).
-          export EXPO_WORKSPACE_ROOT="${CM_BUILD_DIR}"
+          # PROJECT_ROOT is read by expo-constants' get-app-config-ios.sh to
+          # locate the project's package.json at Xcode archive time.
+          # Default would be $PROJECT_DIR/../.. (ios/Pods/../.. = bovial-mobile),
+          # but we set it explicitly so it is never wrong regardless of how
+          # xcodebuild resolves PROJECT_DIR in an archive vs. build context.
+          export PROJECT_ROOT="${CM_BUILD_DIR}/artifacts/bovial-mobile"
           xcode-project use-profiles
           xcode-project build-ipa \
             --workspace ios/Bovial.xcworkspace \
