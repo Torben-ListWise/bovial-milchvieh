@@ -17,6 +17,7 @@ import {
   Sparkles,
   AlertTriangle,
   Terminal,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -225,6 +226,15 @@ function ReferenceAnalysisCard({
     onError: (err: Error) => toast({ title: "Fehler", description: err.message, variant: "destructive" }),
   });
 
+  const reextractMutation = useMutation({
+    mutationFn: () => apiFetch(`/api/admin/reference-analyses/${item.id}/reextract`, { method: "POST" }),
+    onSuccess: () => {
+      toast({ title: "Neu extrahiert", description: "Muster wurde mit dem aktuellen Prompt neu generiert." });
+      onUpdate();
+    },
+    onError: (err: Error) => toast({ title: "Neu-Extraktion fehlgeschlagen", description: err.message, variant: "destructive" }),
+  });
+
   const currentPattern = item.editedPattern ?? item.extractedPattern;
   const currentClass = item.editedClassification ?? item.extractedClassification;
 
@@ -363,27 +373,43 @@ function ReferenceAnalysisCard({
 
           {/* Action buttons */}
           {item.status === "pending_review" && (
-            <div className="flex gap-2 pt-1">
-              <Button
-                size="sm"
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={() => confirmMutation.mutate()}
-                disabled={confirmMutation.isPending || rejectMutation.isPending}
-              >
-                {confirmMutation.isPending
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <><CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />In Wissensbibliothek übernehmen</>
-                }
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-destructive border-destructive/30 hover:bg-destructive/5"
-                onClick={() => rejectMutation.mutate()}
-                disabled={confirmMutation.isPending || rejectMutation.isPending}
-              >
-                <XCircle className="w-3.5 h-3.5 mr-1.5" />Ablehnen
-              </Button>
+            <div className="space-y-2 pt-1">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => confirmMutation.mutate()}
+                  disabled={confirmMutation.isPending || rejectMutation.isPending || reextractMutation.isPending}
+                >
+                  {confirmMutation.isPending
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <><CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />In Wissensbibliothek übernehmen</>
+                  }
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                  onClick={() => rejectMutation.mutate()}
+                  disabled={confirmMutation.isPending || rejectMutation.isPending || reextractMutation.isPending}
+                >
+                  <XCircle className="w-3.5 h-3.5 mr-1.5" />Ablehnen
+                </Button>
+              </div>
+              {item.rawInput?.trim() && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => reextractMutation.mutate()}
+                  disabled={confirmMutation.isPending || rejectMutation.isPending || reextractMutation.isPending}
+                >
+                  {reextractMutation.isPending
+                    ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />KI extrahiert neu…</>
+                    : <><RefreshCw className="w-3 h-3 mr-1.5" />Mit aktuellem Prompt neu extrahieren</>
+                  }
+                </Button>
+              )}
             </div>
           )}
 

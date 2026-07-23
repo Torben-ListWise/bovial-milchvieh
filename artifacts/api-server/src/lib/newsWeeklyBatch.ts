@@ -18,6 +18,7 @@ import { asc, and, gte, lte, eq, sql } from "drizzle-orm";
 import { db, pool, newsTopicsTable, newsletterEditionsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { getModelForTask } from "./agent";
+import { SHARED_DOMAIN_RULES } from "./sharedDomainRules";
 import { validateUrl } from "./scraper";
 import { embedQuery } from "./embeddings";
 import { sendNewsletterEdition, fireEmail } from "./emailService";
@@ -381,6 +382,7 @@ Wichtig:
   const response = await client.messages.create({
     model: getModelForTask("newsletter_generation"),
     max_tokens: 1600,
+    system: SHARED_DOMAIN_RULES,
     messages: [{ role: "user", content: prompt }],
   });
 

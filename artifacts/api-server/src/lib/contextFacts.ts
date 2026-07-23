@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db, contextFactsTable } from "@workspace/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getModelForTask } from "./agent";
+import { SHARED_DERIVATION_PROHIBITION } from "./sharedDomainRules";
 import { embedTexts } from "./embeddings";
 import { logger } from "./logger";
 
@@ -26,6 +27,8 @@ NICHT extrahieren:
 - Einmalige Ereignisse, Zahlen/Messwerte, Fragen, Meinungen, Vermutungen, Zeiträume ("letzten Monat...")
 - Alles, was schon eine reine Wiederholung von Standarddaten ist (z. B. Milchleistungswerte)
 - Alles, das nicht eindeutig als feste/dauerhafte Eigenschaft formuliert ist
+
+${SHARED_DERIVATION_PROHIBITION}
 
 Antworte NUR mit kompaktem JSON (kein Markdown, kein Fließtext) in exakt diesem Format:
 {"facts": [{"category": "verfahren"|"ausruestung"|"wartezeiten"|"sonstiges", "text": "kurzer, klarer Fakt in einem Satz"}]}

@@ -3,6 +3,7 @@ import { db, reportsTable, datasetsTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { getModelForTask } from "./agent";
+import { SHARED_EPISTEMIC_CAUTION } from "./sharedDomainRules";
 
 export async function generateInsightsSummary(datasetId: string): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -46,6 +47,7 @@ export async function generateInsightsSummary(datasetId: string): Promise<void> 
     const msg = await client.messages.create({
       model: getModelForTask("insights_summary"),
       max_tokens: 350,
+      system: SHARED_EPISTEMIC_CAUTION,
       messages: [
         {
           role: "user",

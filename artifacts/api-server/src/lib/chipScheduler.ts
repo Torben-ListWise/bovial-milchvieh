@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
 import { db, questionLogTable, dailyChipSuggestionsTable } from "@workspace/db";
 import { logger } from "./logger";
+import { SHARED_TERMINOLOGY_RULES } from "./sharedDomainRules";
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -51,8 +52,11 @@ Beispiele:
 - "Warum ist meine Remontierungsrate so hoch?" → "Remontierungsrate"
 - "Warum ist meine Remontierungsrate so niedrig?" → "Remontierungsrate"
 - "Wie verbessere ich meine Konzeptionsrate?" → "Konzeptionsrate"
+- "Wie hoch ist meine Pregnancy Rate?" → "Pregnancy Rate"
 - "Was ist der Trend bei meiner Milchleistung?" → "Milchleistung"
 - "Warum steigt mein Zellzahlwert?" → "Zellzahl"
+
+${SHARED_TERMINOLOGY_RULES}
 
 Antworte NUR mit einer JSON-Liste im Format:
 [{"i":1,"cat":"Thema"},{"i":2,"cat":"Thema"},...]
@@ -121,7 +125,10 @@ async function generateChipTexts(
 
   const systemPrompt = `Du generierst kurze, prägnante Chip-Texte für eine Milchvieh-App.
 Jeder Chip-Text ist eine kurze Frage (max. 6 Wörter, Deutsch), die zu einem Oberthema passt.
-Beispiele: "Remontierungsrate analysieren", "Zellzahl-Trend prüfen", "Konzeptionsrate verbessern".
+Beispiele: "Remontierungsrate analysieren", "Zellzahl-Trend prüfen", "Konzeptionsrate verbessern", "Pregnancy Rate berechnen".
+
+${SHARED_TERMINOLOGY_RULES}
+
 Antworte NUR mit einem JSON-Array von Strings (gleiche Reihenfolge wie Eingabe):
 ["Chip1","Chip2","Chip3"]`;
 

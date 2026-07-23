@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireOperator } from "../lib/auth";
 import { getModelForTask } from "../lib/agent";
+import { SHARED_TERMINOLOGY_RULES, SHARED_DERIVATION_PROHIBITION } from "../lib/sharedDomainRules";
 import { chunkText, embedTexts } from "../lib/embeddings";
 import { logger } from "../lib/logger";
 import Anthropic from "@anthropic-ai/sdk";
@@ -33,9 +34,13 @@ const EXTRACTION_SYSTEM_PROMPT = `Du bist ein Milchwirtschafts-Experte und desti
 
 ABSOLUTES VERBOT: Die extrahierten Texte dürfen KEINE konkreten Zahlen, Prozentwerte, Schwellenwerte oder betriebsspezifischen Messwerte aus dem Eingabebeispiel enthalten. Das Muster muss universell anwendbar sein.
 
+${SHARED_TERMINOLOGY_RULES}
+
+${SHARED_DERIVATION_PROHIBITION}
+
 Deine Aufgabe:
 
-1. DAIRYCOMP-BEFEHL (optional): Falls im Text ein DairyComp 305-Befehl erkennbar ist (LIST, SUM, EVENTS, SORT, GRAPH, BREDSUM\\E o.ä.), extrahiere ihn exakt (extractedCommand) und erstelle 4–6 deutsche Klartext-Synonyme, die beschreiben was der Befehl ausgibt (extractedCommandSynonyms). Wenn kein Befehl erkennbar ist, setze beide Felder auf null.
+1. DAIRYCOMP-BEFEHL (optional): Falls im Text ein DairyComp 305-Befehl erkennbar ist (LIST, SUM, EVENTS, SORT, GRAPH, BREDSUM\\E o.ä.), extrahiere ihn exakt (extractedCommand) und erstelle 4–6 deutsche Klartext-Synonyme, die beschreiben was der Befehl ausgibt (extractedCommandSynonyms). Achte dabei auf die Terminologie-Trennregel: BREDSUM\\E gibt die Pregnancy Rate aus — die Spalte "Preg/Bred" darin ist die Konzeptionsrate. Synonyme müssen diese Unterscheidung korrekt widerspiegeln. Wenn kein Befehl erkennbar ist, setze beide Felder auf null.
 
 2. INTERPRETATIONSMUSTER (Pflicht): Schreibe ein generalisiertes Fachtext-Muster in 3–6 Sätzen. Struktur: "Auffällig [hohe/niedrige] [Kennzahl] im Bereich [Kontext] deutet meist auf [Ursache] hin. [Differentialdiagnose]. Stellschrauben: [generische Maßnahmen]." Keine Zahlen. Nicht betriebsspezifisch.
 
@@ -354,6 +359,61 @@ router.post(
     const [updated] = await db
       .update(referenceAnalysesTable)
       .set({ status: "confirmed", knowledgeDocId, updatedAt: new Date() } as any)
+      .where(eq(referenceAnalysesTable.id, id))
+      .returning();
+
+    res.json(updated);
+  },
+);
+
+// POST /api/admin/reference-analyses/:id/reextract
+// Re-runs AI extraction with the current (updated) prompt on the stored rawInput.
+// Only allowed on non-confirmed entries. Image-only submissions (empty rawInput)
+// cannot be re-extracted here — user must re-upload the screenshot.
+router.post(
+  "/admin/reference-analyses/:id/reextract",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const [ref] = await db
+      .select()
+      .from(referenceAnalysesTable)
+      .where(eq(referenceAnalysesTable.id, id))
+      .limit(1);
+
+    if (!ref) { res.status(404).json({ error: "Nicht gefunden" }); return; }
+    if (ref.status === "confirmed") {
+      res.status(409).json({ error: "Bereits bestätigt — Neu-Extraktion nicht möglich" });
+      return;
+    }
+    if (!ref.rawInput?.trim()) {
+      res.status(400).json({ error: "Kein gespeicherter Text — bitte Analyse erneut als Screenshot hochladen" });
+      return;
+    }
+
+    let extraction: Awaited<ReturnType<typeof runExtraction>>;
+    try {
+      extraction = await runExtraction(ref.rawInput);
+    } catch (err: unknown) {
+      logger.error({ err, id }, "Re-Extraktion fehlgeschlagen");
+      res.status(502).json({ error: "KI-Extraktion fehlgeschlagen — bitte erneut versuchen" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(referenceAnalysesTable)
+      .set({
+        extractedCommand: extraction.extractedCommand,
+        extractedCommandSynonyms: extraction.extractedCommandSynonyms,
+        extractedPattern: extraction.extractedPattern,
+        extractedClassification: extraction.extractedClassification,
+        extractedTopic: extraction.extractedTopic,
+        editedPattern: null,
+        editedClassification: null,
+        updatedAt: new Date(),
+      } as any)
       .where(eq(referenceAnalysesTable.id, id))
       .returning();
 

@@ -35,3 +35,4 @@
 - [Milchvieh DB project references](milchvieh-db-project-references.md) — api-server uses TS project references; after adding a new schema file run `cd lib/db && npx tsc --build` or new exports won't resolve
 - [Milchvieh operator alerts config](milchvieh-operator-alerts.md) — OPERATOR_EMAIL env var required for sendFrustrationAlert + sendKnowledgeGapsReport; without it both silently no-op (logged as warn)
 - [Milchvieh systemExtra pattern](milchvieh-systemextra-pattern.md) — all per-dataset context (rules, farmNotes, diary, contextFacts, warnings) assembled in processQuestion and passed as systemExtra array; add new blocks there, never inside runAgent itself
+- [Milchvieh shared domain rules](milchvieh-shared-domain-rules.md) — sharedDomainRules.ts is single source of truth for all universal LLM prompt blocks; every new prompt must import from it

@@ -1,0 +1,50 @@
+
+▸ Compiling ExpoHead_vers.c
+▸ Compiling ExpoAsset_vers.c
+▸ Compiling ExpoCrypto-dummy.m
+▸ Compiling ExpoImagePicker-dummy.m
+▸ Touching ExpoFont.framework (in target 'ExpoFont' from project 'Pods')
+▸ Compiling EXImageLoader_vers.c
+▸ Compiling ExpoHead-dummy.m
+▸ Touching ExpoCrypto.framework (in target 'ExpoCrypto' from project 'Pods')
+▸ Running script '[CP-User] Generate app.config for prebuilt Constants.manifest'
+
+⚠️  /Users/builder/clone/node_modules/.pnpm/expo-router@6.0.24_f79e5fed9be130285c40fd13c55c61b5/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeNavigation.mm:9:17: method definition for 'isRNSTabBarController:' not found [-Wincomplete-implementation]
+
+        throw error;
+        ^
+
+
+▸ Compiling ExpoAsset-dummy.m
+▸ Touching ExpoImagePicker.framework (in target 'ExpoImagePicker' from project 'Pods')
+▸ Compiling ClerkGoogleSignIn_vers.c
+▸ Compiling EXImageLoader-dummy.m
+▸ Compiling EXImageLoader.m
+▸ Touching ExpoBlur.framework (in target 'ExpoBlur' from project 'Pods')
+▸ Touching ExpoHead.framework (in target 'ExpoHead' from project 'Pods')
+▸ Touching ExpoAsset.framework (in target 'ExpoAsset' from project 'Pods')
+▸ Touching EXImageLoader.framework (in target 'EXImageLoader' from project 'Pods')
+▸ Compiling EXApplication_vers.c
+▸ Compiling ClerkGoogleSignIn-dummy.m
+    Run script build phase '[CP-User] [Hermes] Replace Hermes for the right configuration, if needed' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'hermes-engine' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNWorklets' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNReanimated' from project 'Pods')
+Failed to archive ios/Bovial.xcworkspace. The following build commands failed:
+
+PhaseScriptExecution [CP-User]\ Generate\ app.config\ for\ prebuilt\ Constants.manifest /Users/builder/Library/Developer/Xcode/DerivedData/Bovial-gyskgafptbizxvfmjceqvnrkjosd/Build/Intermediates.noindex/ArchiveIntermediates/Bovial/IntermediateBuildFilesPath/Pods.build/Release-iphoneos/EXConstants.build/Script-46EB2E0002A6B0.sh (in target 'EXConstants' from project 'Pods')
+	...
+	warning: Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNWorklets' from project 'Pods')
+	warning: Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNReanimated' from project 'Pods')
+	/Users/builder/clone/artifacts/bovial-mobile/ios/Pods/Pods.xcodeproj: warning: The iOS deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 9.0, but the range of supported deployment target versions is 12.0 to 26.4.99. (in target 'PromisesSwift-Promises_Privacy' from project 'Pods')
+	/Users/builder/clone/artifacts/bovial-mobile/ios/Pods/Pods.xcodeproj: warning: The iOS deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 9.0, but the range of supported deployment target versions is 12.0 to 26.4.99. (in target 'PromisesObjC-FBLPromises_Privacy' from project 'Pods')
+	/Users/builder/clone/artifacts/bovial-mobile/ios/Pods/Pods.xcodeproj: warning: The iOS deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 10.0, but the range of supported deployment target versions is 12.0 to 26.4.99. (in target 'GTMSessionFetcher-GTMSessionFetcher_Core_Privacy' from project 'Pods')
+	note: Run script build phase '[CP-User] Generate app.config for prebuilt Constants.manifest' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'EXConstants' from project 'Pods')
+
+
+Build failed :|
+Step 9 script `Build IPA` exited with status code 65
+
+
+Build failed :|
+Step 9 script `Build IPA` exited with status code 65
