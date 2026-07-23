@@ -12,11 +12,12 @@ import { getModelForTask } from "../lib/agent";
 import { SHARED_TERMINOLOGY_RULES, SHARED_DERIVATION_PROHIBITION } from "../lib/sharedDomainRules";
 import { chunkText, embedTexts } from "../lib/embeddings";
 import { logger } from "../lib/logger";
-import objectStorage from "../lib/objectStorage";
+import { ObjectStorageService } from "../lib/objectStorage";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
 const anthropic = new Anthropic();
+const objectStorage = new ObjectStorageService();
 
 // ── Predefined topic list ─────────────────────────────────────────────────────
 const VALID_TOPICS = [
@@ -404,13 +405,7 @@ router.get(
         : "image/jpeg";
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "private, max-age=86400");
-      if (file.stream) {
-        file.stream.pipe(res);
-      } else if (file.buffer) {
-        res.send(file.buffer);
-      } else {
-        res.status(500).json({ error: "Bild nicht lesbar" });
-      }
+      file.createReadStream().pipe(res);
     } catch (err: unknown) {
       logger.error({ err, id }, "Referenzanalyse-Bild konnte nicht geladen werden");
       res.status(404).json({ error: "Bild nicht verfügbar" });

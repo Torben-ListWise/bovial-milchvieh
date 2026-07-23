@@ -19,23 +19,38 @@ import {
   AlertTriangle,
   Terminal,
   RefreshCw,
+  ZoomIn,
+  X,
+  ShieldAlert,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+interface CommandFlag {
+  token: string;
+  status: "ok" | "uncertain" | "unknown";
+  suggestion?: string;
+  distance?: number;
+}
+
 interface ReferenceAnalysis {
   id: string;
   status: "pending_review" | "confirmed" | "rejected";
   rawInput: string;
   adminNote: string | null;
   uploadFilename: string | null;
+  imageObjectPath: string | null;
   extractedCommand: string | null;
   extractedCommandSynonyms: string[] | null;
   extractedPattern: string;
   extractedClassification: string;
   extractedTopic: string;
+  commandConfidence: "ok" | "uncertain" | null;
+  commandAlternative: string | null;
+  commandFlags: CommandFlag[] | null;
   editedPattern: string | null;
   editedClassification: string | null;
   editedCommand: string | null;
@@ -62,6 +77,76 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return res.json();
 }
 
+// ── Authenticated image loader ────────────────────────────────────────────────
+function useRefImageUrl(id: string, hasImage: boolean) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!hasImage) return;
+    setLoading(true);
+    setFailed(false);
+    let revoked = false;
+    let url: string | null = null;
+
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        const res = await fetch(`${API_BASE}/api/admin/reference-analyses/${id}/image`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) { setFailed(true); return; }
+        const blob = await res.blob();
+        if (revoked) { URL.revokeObjectURL(URL.createObjectURL(blob)); return; }
+        url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+      } catch {
+        setFailed(true);
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      revoked = true;
+      if (url) URL.revokeObjectURL(url);
+      setBlobUrl(null);
+    };
+  }, [id, hasImage]);
+
+  return { blobUrl, loading, failed };
+}
+
+// ── Image lightbox ────────────────────────────────────────────────────────────
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        className="absolute top-4 right-4 text-white/80 hover:text-white"
+        onClick={onClose}
+      >
+        <X className="w-6 h-6" />
+      </button>
+      <img
+        src={src}
+        alt="Screenshot"
+        className="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: ReferenceAnalysis["status"] }) {
   if (status === "confirmed")
@@ -69,6 +154,145 @@ function StatusBadge({ status }: { status: ReferenceAnalysis["status"] }) {
   if (status === "rejected")
     return <Badge className="bg-red-500/15 text-red-700 border-red-300/40 text-xs">✕ Abgelehnt</Badge>;
   return <Badge className="bg-amber-500/15 text-amber-700 border-amber-300/40 text-xs">⏳ Ausstehend</Badge>;
+}
+
+// ── Command confidence display ─────────────────────────────────────────────────
+function CommandConfidenceBlock({
+  command,
+  alternative,
+  flags,
+  confidence,
+}: {
+  command: string | null;
+  alternative: string | null;
+  flags: CommandFlag[] | null;
+  confidence: "ok" | "uncertain" | null;
+}) {
+  const isUncertain = confidence === "uncertain";
+  const hasDivergence = !!alternative && alternative !== command;
+  const uncertainTokens = flags?.filter((f) => f.status !== "ok") ?? [];
+
+  if (!isUncertain && !uncertainTokens.length && !hasDivergence) {
+    return (
+      <code className="text-xs font-mono text-foreground block">{command}</code>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Divergence warning — two passes gave different results */}
+      {hasDivergence && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-2.5 space-y-1.5">
+          <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            Erkennung unsicher — bitte besonders sorgfältig prüfen
+          </p>
+          <p className="text-xs text-red-600">
+            Zwei unabhängige Erkennungsversuche lieferten unterschiedliche Ergebnisse:
+          </p>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0">Versuch 1:</span>
+              <code className="text-xs font-mono bg-white/80 px-1.5 py-0.5 rounded border border-red-200">
+                {command ?? "–"}
+              </code>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0">Versuch 2:</span>
+              <code className="text-xs font-mono bg-white/80 px-1.5 py-0.5 rounded border border-red-200">
+                {alternative ?? "–"}
+              </code>
+            </div>
+          </div>
+          <p className="text-xs text-red-600">
+            Bitte Originalbild abgleichen und korrekten Befehl manuell eintragen.
+          </p>
+        </div>
+      )}
+
+      {/* Token-level warnings */}
+      {uncertainTokens.length > 0 && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 p-2.5 space-y-1.5">
+          <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {uncertainTokens.some((f) => f.status === "uncertain")
+              ? "Mögliche Buchstabenverwechslung erkannt"
+              : "Unbekannte Feldkürzel erkannt"}
+          </p>
+          {uncertainTokens.map((f, i) => (
+            <div key={i} className="text-xs text-amber-800">
+              {f.status === "uncertain" ? (
+                <>
+                  <code className="font-mono bg-amber-100 px-1 rounded">{f.token}</code>
+                  {" → vermutlich "}
+                  <code className="font-mono bg-white px-1 rounded border border-amber-300">{f.suggestion}</code>
+                  {f.distance !== undefined && (
+                    <span className="text-amber-600"> ({f.distance} Zeichen Abstand)</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <code className="font-mono bg-amber-100 px-1 rounded">{f.token}</code>
+                  {" — unbekanntes Feld, manuell prüfen"}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* The command itself, with token highlighting */}
+      <code className="text-xs font-mono text-foreground block">
+        {command ?? <span className="text-muted-foreground italic">Kein Befehl</span>}
+      </code>
+    </div>
+  );
+}
+
+// ── Reference image panel ─────────────────────────────────────────────────────
+function ReferenceImagePanel({ id, hasImage }: { id: string; hasImage: boolean }) {
+  const { blobUrl, loading, failed } = useRefImageUrl(id, hasImage);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  if (!hasImage) return null;
+
+  return (
+    <div className="rounded-lg border border-border/40 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-3 py-2 bg-secondary/30 border-b border-border/40">
+        <ImageIcon className="w-3 h-3 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground">Originalbild</span>
+        {blobUrl && (
+          <button
+            onClick={() => setLightboxOpen(true)}
+            className="ml-auto text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            <ZoomIn className="w-3 h-3" />Vergrößern
+          </button>
+        )}
+      </div>
+      <div className="p-2 bg-muted/30 min-h-[80px] flex items-center justify-center">
+        {loading && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />Bild wird geladen…
+          </span>
+        )}
+        {failed && (
+          <span className="text-xs text-muted-foreground italic">Bild nicht verfügbar</span>
+        )}
+        {blobUrl && (
+          <img
+            src={blobUrl}
+            alt="Screenshot"
+            className="max-h-48 w-full object-contain cursor-zoom-in rounded"
+            onClick={() => setLightboxOpen(true)}
+          />
+        )}
+      </div>
+      {lightboxOpen && blobUrl && (
+        <ImageLightbox src={blobUrl} onClose={() => setLightboxOpen(false)} />
+      )}
+    </div>
+  );
 }
 
 // ── Upload/Extraction form ────────────────────────────────────────────────────
@@ -133,7 +357,6 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
     }
   }, []);
 
-  // Global paste listener so Ctrl+V works anywhere on the page
   useEffect(() => {
     const handler = (e: ClipboardEvent) => handlePaste(e);
     document.addEventListener("paste", handler);
@@ -184,7 +407,6 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
         )}
       </div>
 
-      {/* Raw text paste area */}
       <Textarea
         placeholder="Oder: Analysetext / DairyComp-Befehlsausgabe hier einfügen (z.B. kopierter Reporttext oder Tabelleninhalt)…"
         value={rawText}
@@ -193,7 +415,6 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
         className="text-sm resize-none font-mono"
       />
 
-      {/* Admin note */}
       <Textarea
         placeholder={'Eigene Einschätzung (optional): z.B. "Das ist gut", "hier ist die Stellschraube", "auffällig wegen…"'}
         value={adminNote}
@@ -209,7 +430,7 @@ function UploadForm({ onCreated }: { onCreated: () => void }) {
         size="sm"
       >
         {mutation.isPending ? (
-          <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />KI extrahiert Muster…</>
+          <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />KI extrahiert Muster (2 Durchgänge)…</>
         ) : (
           <><Sparkles className="w-3.5 h-3.5 mr-2" />Muster extrahieren</>
         )}
@@ -251,7 +472,7 @@ function ReferenceAnalysisCard({
   });
 
   const saveMutation = useMutation({
-    mutationFn: (body: { editedPattern?: string; editedClassification?: string }) =>
+    mutationFn: (body: Record<string, unknown>) =>
       apiFetch(`/api/admin/reference-analyses/${item.id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => { toast({ title: "Gespeichert" }); onUpdate(); },
     onError: (err: Error) => toast({ title: "Fehler", description: err.message, variant: "destructive" }),
@@ -268,11 +489,19 @@ function ReferenceAnalysisCard({
 
   const currentPattern = item.editedPattern ?? item.extractedPattern;
   const currentClass = item.editedClassification ?? item.extractedClassification;
+  const currentCommand = item.editedCommand ?? item.extractedCommand;
+  const hasImage = !!item.imageObjectPath;
+  const isUncertain = item.commandConfidence === "uncertain";
+  const hasDivergence = !!item.commandAlternative && item.commandAlternative !== currentCommand;
 
   return (
     <div className={cn(
       "rounded-xl border bg-card transition-all",
-      item.status === "pending_review" ? "border-amber-300/40" : "border-border/50",
+      item.status === "pending_review"
+        ? isUncertain
+          ? "border-red-300/60"
+          : "border-amber-300/40"
+        : "border-border/50",
     )}>
       {/* Header */}
       <div
@@ -283,9 +512,22 @@ function ReferenceAnalysisCard({
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={item.status} />
             <span className="text-xs font-medium text-foreground truncate">{item.extractedTopic}</span>
-            {item.extractedCommand && (
-              <Badge variant="outline" className="text-xs font-mono gap-1">
-                <Terminal className="w-2.5 h-2.5" />{item.extractedCommand}
+            {currentCommand && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs font-mono gap-1",
+                  isUncertain && "border-red-300 text-red-700 bg-red-50",
+                )}
+              >
+                <Terminal className="w-2.5 h-2.5" />
+                {currentCommand}
+                {isUncertain && <AlertTriangle className="w-2.5 h-2.5 ml-0.5" />}
+              </Badge>
+            )}
+            {hasImage && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <ImageIcon className="w-2.5 h-2.5" />Bild
               </Badge>
             )}
           </div>
@@ -301,104 +543,41 @@ function ReferenceAnalysisCard({
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t border-border/40 pt-4">
 
-          {/* DairyComp command block — always shown for pending, or when any command data exists */}
-          {(item.extractedCommand !== null || item.editedCommand !== null || item.status === "pending_review") && (
-            <div className="rounded-lg bg-secondary/40 border border-border/40 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <Terminal className="w-3 h-3" />
-                  DairyComp-Befehl erkannt
-                </p>
-                {item.status === "pending_review" && !editingCommand && (
-                  <button
-                    onClick={() => setEditingCommand(true)}
-                    className="text-xs text-primary hover:underline flex items-center gap-1"
-                  >
-                    <Pencil className="w-3 h-3" />Bearbeiten
-                  </button>
-                )}
-              </div>
+          {/* Two-column layout when image is available: image left, command right */}
+          {hasImage ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ReferenceImagePanel id={item.id} hasImage={hasImage} />
 
-              {editingCommand ? (
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Befehlsname (z.B. <code className="font-mono">BREDSUM\E</code>)</p>
-                    <Input
-                      value={commandDraft}
-                      onChange={(e) => setCommandDraft(e.target.value)}
-                      placeholder="Befehlsname eingeben…"
-                      className="text-sm font-mono h-8"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Synonyme (eine Zeile pro Synonym)</p>
-                    <Textarea
-                      value={synonymsDraft}
-                      onChange={(e) => setSynonymsDraft(e.target.value)}
-                      placeholder="Synonym 1&#10;Synonym 2&#10;…"
-                      rows={4}
-                      className="text-sm resize-none"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs h-7"
-                      onClick={() => {
-                        const synonymsArray = synonymsDraft
-                          .split(/[\n,]/)
-                          .map((s) => s.trim())
-                          .filter(Boolean);
-                        saveMutation.mutate({
-                          editedCommand: commandDraft.trim() || null,
-                          editedCommandSynonyms: synonymsArray.length ? synonymsArray : null,
-                        } as any);
-                        setEditingCommand(false);
-                      }}
-                    >
-                      Speichern
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs h-7"
-                      onClick={() => {
-                        setCommandDraft(item.editedCommand ?? item.extractedCommand ?? "");
-                        setSynonymsDraft(
-                          (item.editedCommandSynonyms ?? item.extractedCommandSynonyms ?? []).join("\n"),
-                        );
-                        setEditingCommand(false);
-                      }}
-                    >
-                      Abbrechen
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {(item.editedCommand ?? item.extractedCommand) ? (
-                    <code className="text-xs font-mono text-foreground block">
-                      {item.editedCommand ?? item.extractedCommand}
-                    </code>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">Kein Befehl erkannt — manuell eintragen</p>
-                  )}
-                  {(() => {
-                    const syns = item.editedCommandSynonyms ?? item.extractedCommandSynonyms;
-                    return syns?.length ? (
-                      <p className="text-xs text-muted-foreground">
-                        Synonyme: {syns.join(" · ")}
-                      </p>
-                    ) : null;
-                  })()}
-                  <p className="text-xs text-amber-700 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />
-                    Wird nach Bestätigung automatisch dem DairyComp-Glossar hinzugefügt
-                  </p>
-                </>
+              {/* DairyComp command block */}
+              {(item.extractedCommand !== null || item.editedCommand !== null || item.status === "pending_review") && (
+                <CommandBlock
+                  item={item}
+                  currentCommand={currentCommand}
+                  commandDraft={commandDraft}
+                  setCommandDraft={setCommandDraft}
+                  synonymsDraft={synonymsDraft}
+                  setSynonymsDraft={setSynonymsDraft}
+                  editingCommand={editingCommand}
+                  setEditingCommand={setEditingCommand}
+                  saveMutation={saveMutation}
+                />
               )}
             </div>
+          ) : (
+            /* No image: command block full-width */
+            (item.extractedCommand !== null || item.editedCommand !== null || item.status === "pending_review") && (
+              <CommandBlock
+                item={item}
+                currentCommand={currentCommand}
+                commandDraft={commandDraft}
+                setCommandDraft={setCommandDraft}
+                synonymsDraft={synonymsDraft}
+                setSynonymsDraft={setSynonymsDraft}
+                editingCommand={editingCommand}
+                setEditingCommand={setEditingCommand}
+                saveMutation={saveMutation}
+              />
+            )
           )}
 
           {/* Interpretation pattern */}
@@ -486,6 +665,16 @@ function ReferenceAnalysisCard({
           {/* Action buttons */}
           {item.status === "pending_review" && (
             <div className="space-y-2 pt-1">
+              {/* Uncertainty warning above confirm button */}
+              {isUncertain && (
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 flex items-start gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    Die Befehlserkennung ist unsicher. Bitte prüfe den DairyComp-Befehl anhand des Originalbilds
+                    und korrigiere ihn ggf. manuell, bevor du bestätigst.
+                  </span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -537,6 +726,131 @@ function ReferenceAnalysisCard({
   );
 }
 
+// ── Extracted command block (shared between image/no-image layout) ─────────────
+function CommandBlock({
+  item,
+  currentCommand,
+  commandDraft,
+  setCommandDraft,
+  synonymsDraft,
+  setSynonymsDraft,
+  editingCommand,
+  setEditingCommand,
+  saveMutation,
+}: {
+  item: ReferenceAnalysis;
+  currentCommand: string | null;
+  commandDraft: string;
+  setCommandDraft: (v: string) => void;
+  synonymsDraft: string;
+  setSynonymsDraft: (v: string) => void;
+  editingCommand: boolean;
+  setEditingCommand: (v: boolean) => void;
+  saveMutation: ReturnType<typeof useMutation<any, Error, Record<string, unknown>>>;
+}) {
+  return (
+    <div className="rounded-lg bg-secondary/40 border border-border/40 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+          <Terminal className="w-3 h-3" />
+          DairyComp-Befehl erkannt
+        </p>
+        {item.status === "pending_review" && !editingCommand && (
+          <button
+            onClick={() => setEditingCommand(true)}
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            <Pencil className="w-3 h-3" />Bearbeiten
+          </button>
+        )}
+      </div>
+
+      {editingCommand ? (
+        <div className="space-y-2">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Befehlsname (z.B. <code className="font-mono">BREDSUM\E</code>)</p>
+            <Input
+              value={commandDraft}
+              onChange={(e) => setCommandDraft(e.target.value)}
+              placeholder="Befehlsname eingeben…"
+              className="text-sm font-mono h-8"
+            />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Synonyme (eine Zeile pro Synonym)</p>
+            <Textarea
+              value={synonymsDraft}
+              onChange={(e) => setSynonymsDraft(e.target.value)}
+              placeholder="Synonym 1&#10;Synonym 2&#10;…"
+              rows={4}
+              className="text-sm resize-none"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-7"
+              onClick={() => {
+                const synonymsArray = synonymsDraft
+                  .split(/[\n,]/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                saveMutation.mutate({
+                  editedCommand: commandDraft.trim() || null,
+                  editedCommandSynonyms: synonymsArray.length ? synonymsArray : null,
+                });
+                setEditingCommand(false);
+              }}
+            >
+              Speichern
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-xs h-7"
+              onClick={() => {
+                setCommandDraft(item.editedCommand ?? item.extractedCommand ?? "");
+                setSynonymsDraft(
+                  (item.editedCommandSynonyms ?? item.extractedCommandSynonyms ?? []).join("\n"),
+                );
+                setEditingCommand(false);
+              }}
+            >
+              Abbrechen
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {currentCommand ? (
+            <CommandConfidenceBlock
+              command={currentCommand}
+              alternative={item.commandAlternative}
+              flags={item.commandFlags}
+              confidence={item.commandConfidence}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground italic">Kein Befehl erkannt — manuell eintragen</p>
+          )}
+          {(() => {
+            const syns = item.editedCommandSynonyms ?? item.extractedCommandSynonyms;
+            return syns?.length ? (
+              <p className="text-xs text-muted-foreground">
+                Synonyme: {syns.join(" · ")}
+              </p>
+            ) : null;
+          })()}
+          <p className="text-xs text-amber-700 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            Wird nach Bestätigung automatisch dem DairyComp-Glossar hinzugefügt
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function ReferenceAnalysesPage() {
   const queryClient = useQueryClient();
@@ -555,7 +869,6 @@ export function ReferenceAnalysesPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-      {/* Page header */}
       <div>
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
@@ -580,7 +893,6 @@ export function ReferenceAnalysesPage() {
         <p className="text-sm text-destructive">Fehler beim Laden der Referenzanalysen.</p>
       )}
 
-      {/* Pending section */}
       {pending.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5">
@@ -593,12 +905,11 @@ export function ReferenceAnalysesPage() {
         </section>
       )}
 
-      {/* Confirmed section */}
       {confirmed.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-            In Wissensbibliothek übernommen ({confirmed.length})
+            Bestätigt ({confirmed.length})
           </h2>
           {confirmed.map((item) => (
             <ReferenceAnalysisCard key={item.id} item={item} onUpdate={refresh} />
@@ -606,11 +917,10 @@ export function ReferenceAnalysesPage() {
         </section>
       )}
 
-      {/* Rejected section */}
       {rejected.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground" />
+            <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/50" />
             Abgelehnt ({rejected.length})
           </h2>
           {rejected.map((item) => (
@@ -619,11 +929,10 @@ export function ReferenceAnalysesPage() {
         </section>
       )}
 
-      {data?.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <BookOpen className="w-8 h-8 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Noch keine Referenzanalysen hochgeladen.</p>
-          <p className="text-xs mt-1">Starte mit dem Upload-Formular oben.</p>
+      {!isLoading && !isError && data?.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground text-sm space-y-2">
+          <BookOpen className="w-8 h-8 mx-auto opacity-30" />
+          <p>Noch keine Referenzanalysen. Lade deinen ersten Screenshot hoch.</p>
         </div>
       )}
     </div>
