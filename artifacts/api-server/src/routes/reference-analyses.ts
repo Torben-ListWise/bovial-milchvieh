@@ -294,13 +294,21 @@ router.patch(
         ? (editedCommandSynonyms as unknown[]).filter((s): s is string => typeof s === "string")
         : null;
     }
-    updates.updatedAt = new Date().toISOString();
+    updates.updatedAt = new Date();
 
-    const [row] = await db
-      .update(referenceAnalysesTable)
-      .set(updates as any)
-      .where(eq(referenceAnalysesTable.id, id))
-      .returning();
+    let row: typeof referenceAnalysesTable.$inferSelect | undefined;
+    try {
+      const result = await db
+        .update(referenceAnalysesTable)
+        .set(updates as any)
+        .where(eq(referenceAnalysesTable.id, id))
+        .returning();
+      row = result[0];
+    } catch (err: unknown) {
+      logger.error({ err, id, updates: Object.keys(updates) }, "PATCH reference-analysis fehlgeschlagen");
+      res.status(500).json({ error: "Speichern fehlgeschlagen — bitte erneut versuchen" });
+      return;
+    }
 
     if (!row) { res.status(404).json({ error: "Nicht gefunden" }); return; }
     res.json(row);
