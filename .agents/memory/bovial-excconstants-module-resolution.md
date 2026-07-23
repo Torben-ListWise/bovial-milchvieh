@@ -1,19 +1,50 @@
 ---
-name: EXConstants MODULE_NOT_FOUND in pnpm monorepo (iOS build)
-description: getAppConfig.js (run from Pods/ExpoConstants/ at Xcode archive time) cannot find @expo/env or @expo/config — three approaches tried; only require.resolve({paths}) is reliable.
+name: EXConstants iOS build failure (Codemagic + pnpm + Xcode 16)
+description: get-app-config-ios.sh runs from the real npm package path (not Pods/); BUNDLE_FORMAT unset in Xcode 16 causes exit 1 — patch the pnpm-resolved file.
 ---
 
-## Rule
-Both must be in place for Codemagic iOS builds to succeed:
+## The rule
 
-1. `@expo/env ~2.0.8` and `@expo/config ~12.0.13` as explicit **devDependencies** in `bovial-mobile/package.json` (so pnpm creates symlinks in `bovial-mobile/node_modules/`)
-2. A codemagic.yaml step **after** `pod install` that overwrites `Pods/ExpoConstants/scripts/build/getAppConfig.js` with a patched version using `require.resolve('@expo/env', { paths: [projectRoot + '/node_modules'] })` instead of bare `require('@expo/env')`.
+The `EXConstants` Xcode script phase (`[CP-User] Generate app.config for prebuilt Constants.manifest`) runs `get-app-config-ios.sh` **directly from the expo-constants npm package path** — NOT from `Pods/EXConstants/` or `Pods/ExpoConstants/`. Patching files inside `Pods/` has zero effect.
 
-**Why:** `getAppConfig.js` runs from `Pods/ExpoConstants/scripts/build/` at Xcode archive time. Three approaches were tried and failed before this one:
-1. Node.js walk-up — reaches `bovial-mobile/node_modules/` which has symlinks, but unreliable in Xcode's sandboxed environment
-2. NODE_PATH via `.xcode.env` — `with-node.sh` sources it, but `PODS_ROOT` may not be set in Xcode 26.4.1 making the source a no-op
-3. **`require.resolve({ paths: [...] })`** — patches the script directly; the most robust approach since it bypasses all environment-dependent resolution
+## How the script is invoked
 
-**How to apply:** See `codemagic.yaml` step "Patch EXConstants getAppConfig.js (pnpm monorepo fix)". Includes a dry-run test after patching so real errors appear in codemagic logs, not inside Xcode's opaque exit-65.
+Podspec (`ios/EXConstants.podspec`) script_phase:
+```
+bash -l -c "$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh"
+```
 
-**Versions:** `@expo/env ~2.0.8` (installed: 2.0.11), `@expo/config ~12.0.13` (installed: 12.0.13)
+`PODS_TARGET_SRCROOT` = absolute path to the `ios/` subdir of the expo-constants package
+(e.g. `bovial-mobile/node_modules/expo-constants/ios`).
+
+So `../scripts/get-app-config-ios.sh` = `bovial-mobile/node_modules/expo-constants/scripts/get-app-config-ios.sh`.
+
+Inside the script, `EXPO_CONSTANTS_PACKAGE_DIR` is resolved via `pwd -P`, which follows pnpm symlinks to the real pnpm store path. The script then calls `${EXPO_CONSTANTS_PACKAGE_DIR}/scripts/getAppConfig.js` (there's a tiny re-export shim at `scripts/getAppConfig.js`; the compiled file is at `scripts/build/getAppConfig.js`).
+
+## Root cause of Xcode 16 failure
+
+`BUNDLE_FORMAT` is not set by Xcode 16 for resource bundle targets. The script exits 1 in the `else` branch of the `if [ "$BUNDLE_FORMAT" == "shallow" ]` check (neither shallow nor deep matches empty string).
+
+## The fix (codemagic.yaml, after pod install)
+
+Resolve the pnpm symlink and patch the REAL file in the pnpm store:
+
+```bash
+LINK="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules/expo-constants"
+EXPO_CONSTANTS_DIR="$(cd "$LINK" && pwd -P)"
+SH="$EXPO_CONSTANTS_DIR/scripts/get-app-config-ios.sh"
+# python3: insert BUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}" before the if-check
+```
+
+**Why:** `pwd -P` resolves the pnpm symlink so we patch the real file that Xcode will execute. Patching `Pods/EXConstants/` is a dead end — those files are never executed.
+
+## Pod name facts
+
+- CocoaPods pod name: `EXConstants` (podspec: `ios/EXConstants.podspec`)
+- Xcode build target: `EXConstants`
+- Pods directory: `Pods/EXConstants/` (NOT `Pods/ExpoConstants/`)
+- Irrelevant for the fix — patch the npm package, not Pods
+
+## Node / @expo/config resolution
+
+`getAppConfig.js` requires `@expo/config`. Since pnpm stores expo-constants with its own isolated `node_modules`, Node.js walk-up from the resolved pnpm store path finds `@expo/config` in the adjacent pnpm store `node_modules`. No extra NODE_PATH injection needed for this require.

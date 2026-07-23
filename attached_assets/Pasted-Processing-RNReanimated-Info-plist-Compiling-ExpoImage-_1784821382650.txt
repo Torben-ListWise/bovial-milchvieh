@@ -1,0 +1,50 @@
+Processing RNReanimated-Info.plist
+▸ Compiling ExpoImage-dummy.m
+▸ Touching ExpoWebBrowser.framework (in target 'ExpoWebBrowser' from project 'Pods')
+▸ Touching ExpoSystemUI.framework (in target 'ExpoSystemUI' from project 'Pods')
+▸ Touching ExpoSymbols.framework (in target 'ExpoSymbols' from project 'Pods')
+▸ Touching ExpoSplashScreen.framework (in target 'ExpoSplashScreen' from project 'Pods')
+▸ Touching ExpoSecureStore.framework (in target 'ExpoSecureStore' from project 'Pods')
+▸ Touching ExpoLocation.framework (in target 'ExpoLocation' from project 'Pods')
+▸ Touching ExpoLinking.framework (in target 'ExpoLinking' from project 'Pods')
+▸ Touching ExpoLinearGradient.framework (in target 'ExpoLinearGradient' from project 'Pods')
+▸ Touching ExpoKeepAwake.framework (in target 'ExpoKeepAwake' from project 'Pods')
+▸ Touching ExpoImagePicker.framework (in target 'ExpoImagePicker' from project 'Pods')
+▸ Touching ExpoHead.framework (in target 'ExpoHead' from project 'Pods')
+▸ Touching ExpoHaptics.framework (in target 'ExpoHaptics' from project 'Pods')
+▸ Touching ExpoGlassEffect.framework (in target 'ExpoGlassEffect' from project 'Pods')
+▸ Touching ExpoFont.framework (in target 'ExpoFont' from project 'Pods')
+▸ Touching ExpoBlur.framework (in target 'ExpoBlur' from project 'Pods')
+▸ Touching ExpoFileSystem.framework (in target 'ExpoFileSystem' from project 'Pods')
+▸ Touching ExpoCrypto.framework (in target 'ExpoCrypto' from project 'Pods')
+▸ Touching EXImageLoader.framework (in target 'EXImageLoader' from project 'Pods')
+▸ Touching ExpoAsset.framework (in target 'ExpoAsset' from project 'Pods')
+▸ Touching EXApplication.framework (in target 'EXApplication' from project 'Pods')
+▸ Touching ClerkGoogleSignIn.framework (in target 'ClerkGoogleSignIn' from project 'Pods')
+▸ Touching ExpoImage.framework (in target 'ExpoImage' from project 'Pods')
+▸ Compiling steps.cpp
+▸ Compiling vectors.cpp
+▸ Compiling ViewStylesRepository.cpp
+▸ Compiling ValueInterpolator.cpp
+▸ Compiling UpdatesRegistryManager.cpp
+▸ Compiling props.cpp
+▸ Compiling matrix.cpp
+▸ Compiling linear.cpp
+    Run script build phase '[CP-User] [Hermes] Replace Hermes for the right configuration, if needed' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'hermes-engine' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNWorklets' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNReanimated' from project 'Pods')
+Failed to archive ios/Bovial.xcworkspace. The following build commands failed:
+
+PhaseScriptExecution [CP-User]\ Generate\ app.config\ for\ prebuilt\ Constants.manifest /Users/builder/Library/Developer/Xcode/DerivedData/Bovial-gyskgafptbizxvfmjceqvnrkjosd/Build/Intermediates.noindex/ArchiveIntermediates/Bovial/IntermediateBuildFilesPath/Pods.build/Release-iphoneos/EXConstants.build/Script-46EB2E0002A6B0.sh (in target 'EXConstants' from project 'Pods')
+	...
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'EXApplication-ExpoApplication_privacy' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'EXApplication' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'ClerkGoogleSignIn' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'AppCheckCore' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'AppAuth-AppAuthCore_Privacy' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'AppAuth' from project 'Pods')
+
+
+Build failed :|
+Step 11 script `Build IPA` exited with status code 65

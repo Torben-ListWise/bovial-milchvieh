@@ -77,67 +77,48 @@ workflows:
           cd artifacts/bovial-mobile/ios
           pod install
 
-      - name: Ensure getAppConfig.js exists in Pods (pnpm monorepo fix)
+      - name: Patch get-app-config-ios.sh (BUNDLE_FORMAT fallback for Xcode 16+)
         script: |
-          # In pnpm monorepos CocoaPods may install expo-constants without the
-          # scripts/build/ compiled output because symlinks can confuse the pod
-          # install file-copy step. We ensure the file exists by copying it from
-          # the npm package resolved in bovial-mobile/node_modules.
-          PODS_DIR="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants"
-          NPM_DIR="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules/expo-constants"
-
-          echo "=== ExpoConstants Pods scripts tree ==="
-          find "$PODS_DIR/scripts" -type f 2>/dev/null || echo "(no files found)"
-
-          echo "=== expo-constants npm package scripts tree ==="
-          find "$NPM_DIR/scripts" -type f 2>/dev/null || echo "(not found in node_modules)"
-
-          TARGET="$PODS_DIR/scripts/build/getAppConfig.js"
-          if [ -f "$TARGET" ]; then
-            echo "✅ $TARGET already exists — no copy needed"
-          else
-            SRC="$NPM_DIR/scripts/build/getAppConfig.js"
-            if [ ! -f "$SRC" ]; then
-              # Try pnpm store path
-              SRC=$(find "${CM_BUILD_DIR}/node_modules/.pnpm" -path "*/expo-constants*/scripts/build/getAppConfig.js" 2>/dev/null | head -1)
-            fi
-            if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
-              echo "❌ getAppConfig.js not found anywhere — cannot continue"
-              exit 1
-            fi
-            mkdir -p "$PODS_DIR/scripts/build"
-            cp "$SRC" "$TARGET"
-            echo "✅ Copied getAppConfig.js from: $SRC"
+          # The EXConstants Xcode script phase runs get-app-config-ios.sh directly
+          # from the expo-constants npm package (via $PODS_TARGET_SRCROOT/../scripts/).
+          # It does NOT run from Pods/EXConstants/ — so we must patch the real
+          # npm package file (resolving the pnpm symlink with pwd -P).
+          #
+          # Root cause of failure: BUNDLE_FORMAT is not set by Xcode 16 for
+          # resource bundle targets, causing exit 1 in the else branch.
+          LINK="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules/expo-constants"
+          if [ ! -d "$LINK" ]; then
+            echo "❌ expo-constants not found at $LINK"
+            exit 1
           fi
-          echo "=== getAppConfig.js content (first 5 lines) ==="
-          head -5 "$TARGET"
-
-      - name: Patch get-app-config-ios.sh (NODE_PATH + BUNDLE_FORMAT)
-        script: |
-          SH="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants/scripts/get-app-config-ios.sh"
+          # Resolve pnpm symlink to the real package directory
+          EXPO_CONSTANTS_DIR="$(cd "$LINK" && pwd -P)"
+          SH="$EXPO_CONSTANTS_DIR/scripts/get-app-config-ios.sh"
+          echo "=== Real path: $SH ==="
           if [ ! -f "$SH" ]; then
-            echo "⚠️  get-app-config-ios.sh not found — skipping"
-          else
-            # Patch 1: inject NODE_PATH export after shebang so `node getAppConfig.js`
-            # resolves @expo/config and @expo/env via NODE_PATH.
-            # SRCROOT (Xcode build setting) = bovial-mobile/ios
-            # so ${SRCROOT}/../node_modules = bovial-mobile/node_modules
-            if grep -q "NODE_PATH_PATCHED" "$SH"; then
-              echo "✅ NODE_PATH already patched — skipping"
-            else
-              python3 -c "import sys; f=open(sys.argv[1],'r'); lines=f.readlines(); f.close(); idx=1 if lines and lines[0].startswith('#!') else 0; lines.insert(idx,'# NODE_PATH_PATCHED\nexport NODE_PATH=\"\${SRCROOT}/../node_modules\"\n'); open(sys.argv[1],'w').writelines(lines)" "$SH"
-              echo "✅ NODE_PATH injected"
-            fi
-            # Patch 2: BUNDLE_FORMAT fallback for Xcode 16+
-            if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
-              echo "✅ BUNDLE_FORMAT already patched — skipping"
-            else
-              sed -i '' 's/^if \[ "\$BUNDLE_FORMAT" == "shallow" \]/# BUNDLE_FORMAT_PATCHED\nBUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\nif [ "$BUNDLE_FORMAT" == "shallow" ]/' "$SH"
-              echo "✅ BUNDLE_FORMAT fallback patched"
-            fi
-            echo "=== Patched get-app-config-ios.sh (first 20 lines) ==="
-            head -20 "$SH"
+            echo "❌ get-app-config-ios.sh not found at resolved path"
+            exit 1
           fi
+          if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
+            echo "✅ Already patched — skipping"
+          else
+            python3 -c "
+import sys
+with open(sys.argv[1], 'r') as f:
+    content = f.read()
+old = 'if [ \"\$BUNDLE_FORMAT\" == \"shallow\" ]'
+new = '# BUNDLE_FORMAT_PATCHED: default to shallow when unset (Xcode 16 may not set it)\nBUNDLE_FORMAT=\"\${BUNDLE_FORMAT:-shallow}\"\n' + old
+if old not in content:
+    print('WARNING: expected pattern not found — script may have changed')
+    sys.exit(0)
+with open(sys.argv[1], 'w') as f:
+    f.write(content.replace(old, new, 1))
+print('Patched successfully')
+" "$SH"
+            echo "✅ BUNDLE_FORMAT fallback injected"
+          fi
+          echo "=== BUNDLE_FORMAT section (context) ==="
+          grep -n -A2 -B2 "BUNDLE_FORMAT" "$SH"
 
       - name: Fetch signing files
         script: |
