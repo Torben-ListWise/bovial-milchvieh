@@ -229,19 +229,20 @@ function AnimatedCurrentStep({
   );
 }
 
-function buildStyles(colors: ReturnType<typeof useColors>) {
+function buildStyles(colors: ReturnType<typeof useColors>, faded: boolean) {
   return StyleSheet.create({
     wrap: {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 10,
       marginBottom: 8,
+      opacity: faded ? 0.55 : 1,
     },
     avatarDot: {
       width: 26,
       height: 26,
       borderRadius: 13,
-      backgroundColor: colors.primary + "18",
+      backgroundColor: faded ? "#22c55e18" : colors.primary + "18",
       alignItems: "center",
       justifyContent: "center",
       marginTop: 2,
@@ -252,7 +253,7 @@ function buildStyles(colors: ReturnType<typeof useColors>) {
       borderRadius: 16,
       borderTopLeftRadius: 4,
       paddingHorizontal: 14,
-      paddingVertical: 12,
+      paddingVertical: faded ? 8 : 12,
       gap: 6,
     },
     timelineBody: {
@@ -262,7 +263,7 @@ function buildStyles(colors: ReturnType<typeof useColors>) {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      paddingVertical: 3,
+      paddingVertical: faded ? 2 : 3,
     },
     stepDot: {
       width: 18,
@@ -274,7 +275,7 @@ function buildStyles(colors: ReturnType<typeof useColors>) {
     },
     stepLabel: {
       flex: 1,
-      fontSize: 12,
+      fontSize: faded ? 11 : 12,
       fontFamily: "Inter_400Regular",
       color: colors.mutedForeground,
     },
@@ -343,11 +344,12 @@ function buildStyles(colors: ReturnType<typeof useColors>) {
 type Props = {
   completedSteps: string[];
   currentStep: string | null;
+  faded?: boolean;
 };
 
-export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
+export function AgentStepsTimeline({ completedSteps, currentStep, faded = false }: Props) {
   const colors = useColors();
-  const s = buildStyles(colors);
+  const s = buildStyles(colors, faded);
 
   const dedupedSteps: { icon: IoniconName; label: string; count: number }[] =
     [];
@@ -369,13 +371,25 @@ export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
     normalizedCurrent !== null && labelIndexMap.has(normalizedCurrent.label);
 
   const hasSteps = dedupedSteps.length > 0;
-  const showCurrentStep = normalizedCurrent && !currentAlreadyCompleted;
-  const showConnecting = !normalizedCurrent && !hasSteps;
+  // Live current-step indicator is shown regardless of faded state so that
+  // progress events keep updating alongside streaming text/charts.
+  const showCurrentStep = normalizedCurrent !== null && !currentAlreadyCompleted;
+  // "Verbinde" and pulsing-dots states are pre-content chrome only.
+  const showConnecting = !faded && !normalizedCurrent && !hasSteps;
+
+  // Nothing to render in faded mode if there are no steps and no live step.
+  if (faded && !hasSteps && !showCurrentStep) {
+    return null;
+  }
 
   return (
     <View style={s.wrap}>
       <View style={s.avatarDot}>
-        <ActivityIndicator size="small" color={colors.primary} />
+        {faded && !showCurrentStep ? (
+          <Ionicons name="checkmark" size={14} color="#22c55e" />
+        ) : (
+          <ActivityIndicator size="small" color={colors.primary} />
+        )}
       </View>
 
       <View style={s.bubble}>
@@ -384,7 +398,7 @@ export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
             {dedupedSteps.length > 1 && <View style={s.connector} />}
             {dedupedSteps.map(({ icon, label, count }, i) => (
               <AnimatedStepRow
-                key={label}
+                key={i}
                 icon={icon}
                 label={label}
                 count={count}
@@ -395,16 +409,13 @@ export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
         )}
 
         {showCurrentStep ? (
-          <AnimatedCurrentStep
-            label={normalizedCurrent!.label}
-            styles={s}
-          />
+          <AnimatedCurrentStep label={normalizedCurrent!.label} styles={s} />
         ) : showConnecting ? (
           <View style={s.connectingRow}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={s.connectingLabel}>Verbinde mit Agent…</Text>
           </View>
-        ) : hasSteps && !currentStep ? (
+        ) : hasSteps && !currentStep && !faded ? (
           <View style={s.workingRow}>
             <View style={s.dotsRow}>
               <PulsingDot color={colors.primary} delay={0} />

@@ -707,12 +707,11 @@ export default function ChatScreen() {
                 />
               ) : (
                 <>
-                  {(streaming.completedSteps.length > 0 || streaming.currentStep) && (
-                    <AgentStepsTimeline
-                      completedSteps={streaming.completedSteps}
-                      currentStep={streaming.currentStep}
-                    />
-                  )}
+                  <AgentStepsTimeline
+                    completedSteps={streaming.completedSteps}
+                    currentStep={streaming.currentStep}
+                    faded
+                  />
                   <MessageBubble
                     message={{
                       id: "__streaming__",
