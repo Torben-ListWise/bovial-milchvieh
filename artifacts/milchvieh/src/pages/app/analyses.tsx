@@ -1467,11 +1467,13 @@ function FollowUpChips({
   onAsk,
   fading = false,
   exiting = false,
+  disabled = false,
 }: {
   questions: string[];
   onAsk: (q: string) => void;
   fading?: boolean;
   exiting?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -1490,8 +1492,9 @@ function FollowUpChips({
           <button
             key={i}
             onClick={() => onAsk(q)}
+            disabled={disabled}
             style={{ animationDelay: `${i * 60}ms` }}
-            className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left animate-in fade-in slide-in-from-bottom-2 fill-mode-both"
+            className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors text-left animate-in fade-in slide-in-from-bottom-2 fill-mode-both disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
           >
             {q}
           </button>
@@ -1517,10 +1520,12 @@ function ChatStartChips({
   datasetId,
   onAsk,
   onTemplateRun,
+  disabled = false,
 }: {
   datasetId: string;
   onAsk: (question: string) => void;
   onTemplateRun: (analysisId: string) => void;
+  disabled?: boolean;
 }) {
   const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
   const { getToken } = useAuth();
@@ -1582,6 +1587,7 @@ function ChatStartChips({
           <button
             key={i}
             type="button"
+            disabled={disabled}
             onClick={() => {
               if (c.actionHref) {
                 navigate(`${c.actionHref}?datasetId=${datasetId}`);
@@ -1608,7 +1614,7 @@ function ChatStartChips({
             key={t.id}
             type="button"
             onClick={() => runTemplate.mutate({ datasetId, templateId: t.id })}
-            disabled={runTemplate.isPending}
+            disabled={disabled || runTemplate.isPending}
             className={chipClass}
           >
             {t.title}
@@ -2989,6 +2995,33 @@ export function AnalysesPage() {
           setChatQuotaExceeded(true);
           return;
         }
+        if (status === 429) {
+          const retryAfter =
+            data?.retryAfterSeconds ??
+            (Number(err?.response?.headers?.get?.("Retry-After")) || undefined);
+          const seconds = retryAfter ? Math.ceil(retryAfter) : null;
+          toast({
+            variant: "destructive",
+            title: "Zu viele Anfragen",
+            description: seconds
+              ? `Bitte warte ${seconds} Sekunde${seconds !== 1 ? "n" : ""} und versuche es erneut.`
+              : "Bitte warte kurz und versuche es erneut.",
+          });
+          return;
+        }
+        if (status === 401) {
+          toast({
+            variant: "destructive",
+            title: "Sitzung abgelaufen",
+            description: "Sitzung abgelaufen – bitte Seite neu laden.",
+          });
+          return;
+        }
+        console.error("[useAskQuestion] Unerwarteter Fehler:", {
+          status,
+          data,
+          err,
+        });
         toast({
           variant: "destructive",
           title: "Fehler",
@@ -3730,6 +3763,7 @@ export function AnalysesPage() {
                 <p className="text-sm text-muted-foreground">Stelle eine Frage oder starte eine Vorlage:</p>
                 <ChatStartChips
                   datasetId={datasetId!}
+                  disabled={ask.isPending}
                   onAsk={(q) => { handleSubmit(q); }}
                   onTemplateRun={(id) => {
                     setActiveAnalysisId(id);
@@ -3950,6 +3984,7 @@ export function AnalysesPage() {
                 <FollowUpChips
                   questions={lastAssistantMsg!.followUpQuestions as string[]}
                   onAsk={(q) => { handleSubmit(q); }}
+                  disabled={ask.isPending}
                 />
               )}
 

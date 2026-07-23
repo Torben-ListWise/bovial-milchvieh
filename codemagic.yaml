@@ -104,21 +104,21 @@ workflows:
           else
             _PATCH=$(mktemp /tmp/patch_XXXXXX.py)
             cat > "$_PATCH" << 'PYEOF'
-          import sys
-          with open(sys.argv[1], 'r') as f:
-              content = f.read()
-          old = 'if [ "$BUNDLE_FORMAT" == "shallow" ]'
-          new_text = (
-              '# BUNDLE_FORMAT_PATCHED: default to shallow when unset (Xcode 16 may not set it)\n'
-              'BUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\n'
-          ) + old
-          if old not in content:
-              print('WARNING: expected pattern not found - script may have changed')
-          else:
-              with open(sys.argv[1], 'w') as f:
-                  f.write(content.replace(old, new_text, 1))
-              print('Patched successfully')
-          PYEOF
+import sys
+with open(sys.argv[1], 'r') as f:
+    content = f.read()
+old = 'if [ "$BUNDLE_FORMAT" == "shallow" ]'
+new_text = (
+    '# BUNDLE_FORMAT_PATCHED: default to shallow when unset (Xcode 16 may not set it)\n'
+    'BUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\n'
+) + old
+if old not in content:
+    print('WARNING: expected pattern not found - script may have changed')
+else:
+    with open(sys.argv[1], 'w') as f:
+        f.write(content.replace(old, new_text, 1))
+    print('Patched successfully')
+PYEOF
             python3 "$_PATCH" "$SH"
             rm -f "$_PATCH"
             echo "✅ BUNDLE_FORMAT fallback injected"

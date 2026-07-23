@@ -2,11 +2,11 @@
  * In-memory sliding-window rate limiter per userId.
  *
  * Two independent windows are enforced:
- *   • SHORT: max 5 requests per 60 seconds
+ *   • SHORT: max 8 requests per 60 seconds
  *   • LONG:  max 30 requests per 3600 seconds
  *
  * Both limits are configurable via environment variables:
- *   RATE_LIMIT_SHORT_MAX   (default 5)
+ *   RATE_LIMIT_SHORT_MAX   (default 8)
  *   RATE_LIMIT_SHORT_SEC   (default 60)
  *   RATE_LIMIT_LONG_MAX    (default 30)
  *   RATE_LIMIT_LONG_SEC    (default 3600)
@@ -21,7 +21,7 @@
 
 import { logger } from "./logger";
 
-const SHORT_MAX = parseInt(process.env.RATE_LIMIT_SHORT_MAX ?? "5", 10);
+const SHORT_MAX = parseInt(process.env.RATE_LIMIT_SHORT_MAX ?? "8", 10);
 const SHORT_SEC = parseInt(process.env.RATE_LIMIT_SHORT_SEC ?? "60", 10);
 const LONG_MAX = parseInt(process.env.RATE_LIMIT_LONG_MAX ?? "30", 10);
 const LONG_SEC = parseInt(process.env.RATE_LIMIT_LONG_SEC ?? "3600", 10);
