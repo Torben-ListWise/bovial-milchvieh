@@ -10,15 +10,25 @@ export const referenceAnalysesTable = pgTable("reference_analyses", {
   id: uuid("id").primaryKey().defaultRandom(),
   adminUserId: text("admin_user_id").notNull(),
   status: text("status").notNull().default("pending_review"), // pending_review | confirmed | rejected
-  rawInput: text("raw_input").notNull(),           // raw text from upload (or OCR) + admin note
-  adminNote: text("admin_note"),                    // optional freetext annotation by admin
-  uploadFilename: text("upload_filename"),          // original filename if an image was provided
+  rawInput: text("raw_input").notNull(),
+  adminNote: text("admin_note"),
+  uploadFilename: text("upload_filename"),
+  imageObjectPath: text("image_object_path"),    // object-storage path for uploaded screenshot
   // AI-extracted fields (set on POST)
-  extractedCommand: text("extracted_command"),      // DairyComp command found, or null
+  extractedCommand: text("extracted_command"),
   extractedCommandSynonyms: jsonb("extracted_command_synonyms").$type<string[]>(),
   extractedPattern: text("extracted_pattern").notNull().default(""),
   extractedClassification: text("extracted_classification").notNull().default(""),
   extractedTopic: text("extracted_topic").notNull().default("Herdenmanagement"),
+  // Command quality signals
+  commandConfidence: text("command_confidence"),  // 'ok' | 'uncertain'
+  commandAlternative: text("command_alternative"), // second-pass result if it differs
+  commandFlags: jsonb("command_flags").$type<Array<{
+    token: string;
+    status: "ok" | "uncertain" | "unknown";
+    suggestion?: string;
+    distance?: number;
+  }>>(),
   // Admin-edited versions (null = not edited, use extracted)
   editedPattern: text("edited_pattern"),
   editedClassification: text("edited_classification"),

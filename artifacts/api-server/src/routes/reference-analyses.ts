@@ -12,12 +12,13 @@ import { getModelForTask } from "../lib/agent";
 import { SHARED_TERMINOLOGY_RULES, SHARED_DERIVATION_PROHIBITION } from "../lib/sharedDomainRules";
 import { chunkText, embedTexts } from "../lib/embeddings";
 import { logger } from "../lib/logger";
+import objectStorage from "../lib/objectStorage";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
 const anthropic = new Anthropic();
 
-// ── Predefined topic list (must match knowledge categorization) ───────────────
+// ── Predefined topic list ─────────────────────────────────────────────────────
 const VALID_TOPICS = [
   "Milchleistung & Laktation",
   "Eutergesundheit & Zellzahl",
@@ -28,6 +29,114 @@ const VALID_TOPICS = [
   "Betriebswirtschaft",
   "Technik & Stallbau",
 ];
+
+// ── DairyComp known-token dictionary ─────────────────────────────────────────
+// Extracted from the DairyComp glossar knowledge document + standard field list.
+// Used to validate OCR/AI-extracted field names in commands.
+const KNOWN_DAIRYCOMP_TOKENS = new Set<string>([
+  // Command keywords
+  "LIST", "SUM", "SHOW", "GRAPH", "SORT", "EVENTS", "BREDSUM", "ENTER", "CHPEN",
+  "FOR", "BY", "NOT", "AND", "EC", "REM", "OMIT", "FIND", "ADD", "MOVE", "MARK",
+  // Core animal fields
+  "ID", "PEN", "LACT", "DIM", "DDRY", "DCC", "SCC", "RC", "RPRO", "INMILK",
+  "CDAT", "AGED", "GENDE", "RASSE", "EID", "INT", "HITAE", "BETRI", "SBRED",
+  // Milk fields
+  "MILK", "DMLK1", "DMLK2", "DMLK3", "DMLK4", "DMLK5", "DMLK6", "DMLK7",
+  "WMLK1", "WMLK2", "WMLK3", "MDEV", "MDIFF", "MIDIF", "MCON", "MKDAT",
+  "M1", "M2", "M3", "M4", "M5", "ME1", "ME2", "ME3", "WMLK", "DMLK",
+  // Reproductive events
+  "BRED", "PREG", "OPEN", "HEAT", "FRESH", "ABORT", "SOLD", "DIED", "MOVED",
+  "DSLH", "DSLP", "DSLC", "DSLE", "DSBRED", "DAYOPEN", "DAYOPN",
+  // BCS
+  "BCS", "BCSV", "BC15", "BC30", "BC60", "BC120", "BC200", "BC300", "BC400",
+  "BCSD15", "BCSD30", "BCSD60", "BCSD120", "BCSD200", "BCSD300", "BCSD400", "BCSDRY",
+  // Identification / coding
+  "SCODE", "SDESC", "VETC", "REG1", "HERD", "MODUE", "LCTGP", "PIT1", "PIT2",
+  "AREA", "AR1", "AR2", "AR3", "AR4", "APEN",
+  // Activity / sensor
+  "ACTIV", "ACDAY", "ACTIM", "ACTITMS", "ACDAT", "ACLEV",
+  // Date helpers
+  "MKDAT", "KEDAT", "BDAT", "EDAT", "VDAT", "TDAT", "SYDAT", "CDES",
+  // Misc common
+  "DUE", "MUN", "ECM", "CUT", "TEMP", "NOTE", "NOTIZ",
+  // Glossar-extracted (common ones from ALTER3 doc)
+  "5STEL", "LMAST", "WDIFF", "MAST", "TEAT", "LAME", "LAHM", "RESP",
+  "DSLP", "DXDAT", "DXLEV", "EASE", "EDAT",
+]);
+
+// Command/operator tokens that should never be flagged
+const COMMAND_STOP_TOKENS = new Set<string>([
+  "LIST", "SUM", "SHOW", "GRAPH", "SORT", "EVENTS", "BREDSUM", "ENTER",
+  "FOR", "BY", "NOT", "AND", "OR",
+]);
+
+// ── Levenshtein distance ──────────────────────────────────────────────────────
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+// ── Validate a DairyComp command string ───────────────────────────────────────
+type TokenFlag = { token: string; status: "ok" | "uncertain" | "unknown"; suggestion?: string; distance?: number };
+
+function validateDairyCompCommand(cmd: string | null): {
+  confidence: "ok" | "uncertain";
+  flags: TokenFlag[];
+} {
+  if (!cmd) return { confidence: "ok", flags: [] };
+
+  // Extract uppercase alphabetic tokens (strip numbers, operators, backslashes)
+  const rawTokens = cmd.toUpperCase().split(/[\s=<>!%\\\-+*/(){}\[\],"']+/);
+  const tokens = rawTokens
+    .map((t) => t.replace(/[^A-Z]/g, ""))
+    .filter((t) => t.length >= 2 && !/^\d+$/.test(t));
+
+  const flags: TokenFlag[] = [];
+  let hasUncertain = false;
+
+  for (const token of tokens) {
+    if (KNOWN_DAIRYCOMP_TOKENS.has(token)) {
+      flags.push({ token, status: "ok" });
+      continue;
+    }
+
+    // Find closest known token
+    let bestDist = Infinity;
+    let bestMatch = "";
+    for (const known of KNOWN_DAIRYCOMP_TOKENS) {
+      // Only compare tokens of similar length (± 2 chars) for performance
+      if (Math.abs(known.length - token.length) > 2) continue;
+      const d = levenshtein(token, known);
+      if (d < bestDist) {
+        bestDist = d;
+        bestMatch = known;
+      }
+    }
+
+    if (bestDist === 0) {
+      flags.push({ token, status: "ok" });
+    } else if (bestDist <= 2) {
+      flags.push({ token, status: "uncertain", suggestion: bestMatch, distance: bestDist });
+      hasUncertain = true;
+    } else {
+      flags.push({ token, status: "unknown" });
+      hasUncertain = true;
+    }
+  }
+
+  return { confidence: hasUncertain ? "uncertain" : "ok", flags };
+}
 
 // ── Extraction prompt ─────────────────────────────────────────────────────────
 const EXTRACTION_SYSTEM_PROMPT = `Du bist ein Milchwirtschafts-Experte und destillierst aus konkreten Analysebeispielen allgemeingültige Interpretationsmuster für andere Betriebe.
@@ -41,6 +150,8 @@ ${SHARED_DERIVATION_PROHIBITION}
 Deine Aufgabe:
 
 1. DAIRYCOMP-BEFEHL (optional): Falls im Text ein DairyComp 305-Befehl erkennbar ist (LIST, SUM, EVENTS, SORT, GRAPH, BREDSUM\\E o.ä.), extrahiere ihn exakt (extractedCommand) und erstelle 4–6 deutsche Klartext-Synonyme, die beschreiben was der Befehl ausgibt (extractedCommandSynonyms). Achte dabei auf die Terminologie-Trennregel: BREDSUM\\E gibt die Pregnancy Rate aus — die Spalte "Preg/Bred" darin ist die Konzeptionsrate. Synonyme müssen diese Unterscheidung korrekt widerspiegeln. Wenn kein Befehl erkennbar ist, setze beide Felder auf null.
+
+WICHTIG für Befehlserkennung: Lies jeden Buchstaben eines Feldnamens einzeln ab. DairyComp-Felder sind case-sensitiv und oft kurze Abkürzungen (z.B. DDRY = Days Dry, DIM = Days in Milk, DMLK1 = Daily Milk 1). Schreibe den erkannten Befehl exakt so auf, wie er im Bild/Text erscheint.
 
 2. INTERPRETATIONSMUSTER (Pflicht): Schreibe ein generalisiertes Fachtext-Muster in 3–6 Sätzen. Struktur: "Auffällig [hohe/niedrige] [Kennzahl] im Bereich [Kontext] deutet meist auf [Ursache] hin. [Differentialdiagnose]. Stellschrauben: [generische Maßnahmen]." Keine Zahlen. Nicht betriebsspezifisch.
 
@@ -119,6 +230,44 @@ async function runExtraction(
       : "",
     extractedTopic: topic,
   };
+}
+
+// ── Helper: run extraction TWICE and compare commands ─────────────────────────
+async function runDoublePassExtraction(
+  textContent: string,
+  imageBase64?: string,
+  imageMimeType?: string,
+): Promise<{
+  extraction: Awaited<ReturnType<typeof runExtraction>>;
+  commandAlternative: string | null;
+}> {
+  // Always run first pass
+  const first = await runExtraction(textContent, imageBase64, imageMimeType);
+
+  // Only run second pass if image was provided (OCR is where errors occur)
+  if (!imageBase64) {
+    return { extraction: first, commandAlternative: null };
+  }
+
+  let second: Awaited<ReturnType<typeof runExtraction>>;
+  try {
+    second = await runExtraction(textContent, imageBase64, imageMimeType);
+  } catch (err) {
+    logger.warn({ err }, "Zweiter Extraktionsdurchgang fehlgeschlagen — verwende ersten");
+    return { extraction: first, commandAlternative: null };
+  }
+
+  // Compare the two commands
+  const cmd1 = first.extractedCommand?.trim() ?? null;
+  const cmd2 = second.extractedCommand?.trim() ?? null;
+
+  if (cmd1 === cmd2) {
+    return { extraction: first, commandAlternative: null };
+  }
+
+  // They differ — return first extraction but note the alternative
+  logger.info({ cmd1, cmd2 }, "Befehl-Extraktion: Abweichung zwischen erstem und zweitem Durchgang");
+  return { extraction: first, commandAlternative: cmd2 };
 }
 
 // ── Helper: inject DairyComp synonyms into glossar doc ───────────────────────
@@ -230,8 +379,47 @@ router.get(
   },
 );
 
+// GET /api/admin/reference-analyses/:id/image
+// Serves the stored screenshot from object storage
+router.get(
+  "/admin/reference-analyses/:id/image",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const [ref] = await db
+      .select({ imageObjectPath: referenceAnalysesTable.imageObjectPath })
+      .from(referenceAnalysesTable)
+      .where(eq(referenceAnalysesTable.id, id))
+      .limit(1);
+
+    if (!ref) { res.status(404).json({ error: "Nicht gefunden" }); return; }
+    if (!ref.imageObjectPath) { res.status(404).json({ error: "Kein Bild gespeichert" }); return; }
+
+    try {
+      const file = await objectStorage.getObjectEntityFile(ref.imageObjectPath);
+      const contentType = ref.imageObjectPath.endsWith(".png") ? "image/png"
+        : ref.imageObjectPath.endsWith(".webp") ? "image/webp"
+        : "image/jpeg";
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      if (file.stream) {
+        file.stream.pipe(res);
+      } else if (file.buffer) {
+        res.send(file.buffer);
+      } else {
+        res.status(500).json({ error: "Bild nicht lesbar" });
+      }
+    } catch (err: unknown) {
+      logger.error({ err, id }, "Referenzanalyse-Bild konnte nicht geladen werden");
+      res.status(404).json({ error: "Bild nicht verfügbar" });
+    }
+  },
+);
+
 // POST /api/admin/reference-analyses
-// Body: { rawText?: string, adminNote?: string, imageBase64?: string, imageMimeType?: string, uploadFilename?: string }
+// Body: { rawText?, adminNote?, imageBase64?, imageMimeType?, uploadFilename? }
 router.post(
   "/admin/reference-analyses",
   requireAuth,
@@ -246,13 +434,40 @@ router.post(
 
     const rawInput = [rawText, adminNote].filter(Boolean).join("\n\n--- Einschätzung des Experten ---\n");
 
-    let extraction: Awaited<ReturnType<typeof runExtraction>>;
+    // Run double-pass extraction
+    let doublePass: Awaited<ReturnType<typeof runDoublePassExtraction>>;
     try {
-      extraction = await runExtraction(rawInput, imageBase64, imageMimeType);
+      doublePass = await runDoublePassExtraction(rawInput, imageBase64, imageMimeType);
     } catch (err: unknown) {
       logger.error({ err }, "Referenzanalyse-Extraktion fehlgeschlagen");
       res.status(502).json({ error: "KI-Extraktion fehlgeschlagen — bitte erneut versuchen" });
       return;
+    }
+
+    const { extraction, commandAlternative } = doublePass;
+
+    // Validate the extracted command
+    const validation = validateDairyCompCommand(extraction.extractedCommand);
+
+    // If second pass found a different command, also validate that and pick uncertain if needed
+    let finalConfidence = validation.confidence;
+    if (commandAlternative !== null) {
+      finalConfidence = "uncertain";
+    }
+
+    // Store image in object storage if provided
+    let imageObjectPath: string | null = null;
+    if (imageBase64) {
+      try {
+        const imgBuf = Buffer.from(imageBase64, "base64");
+        const ext = imageMimeType?.includes("png") ? "png"
+          : imageMimeType?.includes("webp") ? "webp"
+          : "jpg";
+        const subpath = `reference-analyses/screenshots/${randomUUID()}.${ext}`;
+        imageObjectPath = await objectStorage.uploadBytesAsEntity(subpath, imgBuf, imageMimeType ?? "image/jpeg");
+      } catch (err: unknown) {
+        logger.warn({ err }, "Bild konnte nicht in Object-Storage gespeichert werden — wird ohne Bild fortgefahren");
+      }
     }
 
     const [row] = await db
@@ -263,11 +478,15 @@ router.post(
         rawInput,
         adminNote: adminNote ?? null,
         uploadFilename: uploadFilename ?? null,
+        imageObjectPath,
         extractedCommand: extraction.extractedCommand,
         extractedCommandSynonyms: extraction.extractedCommandSynonyms,
         extractedPattern: extraction.extractedPattern,
         extractedClassification: extraction.extractedClassification,
         extractedTopic: extraction.extractedTopic,
+        commandConfidence: finalConfidence,
+        commandAlternative: commandAlternative ?? null,
+        commandFlags: validation.flags.length > 0 ? validation.flags : null,
       })
       .returning();
 
@@ -276,7 +495,6 @@ router.post(
 );
 
 // PATCH /api/admin/reference-analyses/:id
-// Body: { editedPattern?: string, editedClassification?: string, editedCommand?: string | null, editedCommandSynonyms?: string[] | null }
 router.patch(
   "/admin/reference-analyses/:id",
   requireAuth,
@@ -288,7 +506,17 @@ router.patch(
     const updates: Record<string, unknown> = {};
     if (typeof editedPattern === "string") updates.editedPattern = editedPattern;
     if (typeof editedClassification === "string") updates.editedClassification = editedClassification;
-    if (editedCommand !== undefined) updates.editedCommand = typeof editedCommand === "string" ? editedCommand : null;
+    if (editedCommand !== undefined) {
+      const cmd = typeof editedCommand === "string" ? editedCommand.trim() || null : null;
+      updates.editedCommand = cmd;
+      // Re-validate the edited command
+      if (cmd) {
+        const v = validateDairyCompCommand(cmd);
+        updates.commandConfidence = v.confidence;
+        updates.commandFlags = v.flags.length > 0 ? v.flags : null;
+        updates.commandAlternative = null; // user manually corrected, clear divergence
+      }
+    }
     if (editedCommandSynonyms !== undefined) {
       updates.editedCommandSynonyms = Array.isArray(editedCommandSynonyms)
         ? (editedCommandSynonyms as unknown[]).filter((s): s is string => typeof s === "string")
@@ -383,9 +611,6 @@ router.post(
 );
 
 // POST /api/admin/reference-analyses/:id/reextract
-// Re-runs AI extraction with the current (updated) prompt on the stored rawInput.
-// Only allowed on non-confirmed entries. Image-only submissions (empty rawInput)
-// cannot be re-extracted here — user must re-upload the screenshot.
 router.post(
   "/admin/reference-analyses/:id/reextract",
   requireAuth,
@@ -409,6 +634,7 @@ router.post(
       return;
     }
 
+    // Re-extract from stored text only (image is in object storage but not re-sent here)
     let extraction: Awaited<ReturnType<typeof runExtraction>>;
     try {
       extraction = await runExtraction(ref.rawInput);
@@ -418,6 +644,8 @@ router.post(
       return;
     }
 
+    const validation = validateDairyCompCommand(extraction.extractedCommand);
+
     const [updated] = await db
       .update(referenceAnalysesTable)
       .set({
@@ -426,6 +654,9 @@ router.post(
         extractedPattern: extraction.extractedPattern,
         extractedClassification: extraction.extractedClassification,
         extractedTopic: extraction.extractedTopic,
+        commandConfidence: validation.confidence,
+        commandFlags: validation.flags.length > 0 ? validation.flags : null,
+        commandAlternative: null,
         editedPattern: null,
         editedClassification: null,
         updatedAt: new Date(),
