@@ -63,14 +63,6 @@ workflows:
           # expo prebuild --clean wipes ios/ — so we create .xcode.env AFTER
           # prebuild but BEFORE pod install. with-node.sh sources this file
           # before every Node-based Xcode script phase (e.g. EXConstants).
-          #
-          # NODE_PATH is required in pnpm monorepos: getAppConfig.js calls
-          # require('@expo/env') from inside Pods/ExpoConstants/scripts/build/.
-          # Without NODE_PATH the module walk-up may not reach
-          # bovial-mobile/node_modules even though the symlinks exist there,
-          # because pnpm symlinks can be skipped by Node's resolver in some
-          # platform/version combinations. Setting NODE_PATH is unconditionally
-          # safe and explicit.
           NODE_BINARY_PATH="$(which node)"
           NODE_MODULES_PATH="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules"
           {
@@ -79,25 +71,46 @@ workflows:
           } > artifacts/bovial-mobile/ios/.xcode.env
           echo "=== ios/.xcode.env written ==="
           cat artifacts/bovial-mobile/ios/.xcode.env
-          echo "=== Verify @expo/env + @expo/config resolvable with NODE_PATH ==="
-          NODE_PATH="${NODE_MODULES_PATH}" node -e "
-            require('@expo/env');
-            require('@expo/config');
-            console.log('✅ @expo/env and @expo/config resolved OK via NODE_PATH');
-          " || echo "❌ Module resolution with NODE_PATH FAILED — check NODE_MODULES_PATH"
 
       - name: Install CocoaPods
         script: |
           cd artifacts/bovial-mobile/ios
           pod install
 
-      - name: Inspect ExpoConstants scripts (diagnostic)
+      - name: Ensure getAppConfig.js exists in Pods (pnpm monorepo fix)
         script: |
-          PODS_EXCONSTANTS="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants"
-          echo "=== ExpoConstants scripts tree ==="
-          find "$PODS_EXCONSTANTS/scripts" -type f 2>/dev/null || echo "no scripts dir found"
-          echo "=== get-app-config-ios.sh first 30 lines ==="
-          head -30 "$PODS_EXCONSTANTS/scripts/get-app-config-ios.sh" 2>/dev/null || echo "not found"
+          # In pnpm monorepos CocoaPods may install expo-constants without the
+          # scripts/build/ compiled output because symlinks can confuse the pod
+          # install file-copy step. We ensure the file exists by copying it from
+          # the npm package resolved in bovial-mobile/node_modules.
+          PODS_DIR="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants"
+          NPM_DIR="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules/expo-constants"
+
+          echo "=== ExpoConstants Pods scripts tree ==="
+          find "$PODS_DIR/scripts" -type f 2>/dev/null || echo "(no files found)"
+
+          echo "=== expo-constants npm package scripts tree ==="
+          find "$NPM_DIR/scripts" -type f 2>/dev/null || echo "(not found in node_modules)"
+
+          TARGET="$PODS_DIR/scripts/build/getAppConfig.js"
+          if [ -f "$TARGET" ]; then
+            echo "✅ $TARGET already exists — no copy needed"
+          else
+            SRC="$NPM_DIR/scripts/build/getAppConfig.js"
+            if [ ! -f "$SRC" ]; then
+              # Try pnpm store path
+              SRC=$(find "${CM_BUILD_DIR}/node_modules/.pnpm" -path "*/expo-constants*/scripts/build/getAppConfig.js" 2>/dev/null | head -1)
+            fi
+            if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
+              echo "❌ getAppConfig.js not found anywhere — cannot continue"
+              exit 1
+            fi
+            mkdir -p "$PODS_DIR/scripts/build"
+            cp "$SRC" "$TARGET"
+            echo "✅ Copied getAppConfig.js from: $SRC"
+          fi
+          echo "=== getAppConfig.js content (first 5 lines) ==="
+          head -5 "$TARGET"
 
       - name: Patch get-app-config-ios.sh (NODE_PATH + BUNDLE_FORMAT)
         script: |
@@ -105,38 +118,30 @@ workflows:
           if [ ! -f "$SH" ]; then
             echo "⚠️  get-app-config-ios.sh not found — skipping"
           else
-            # Patch 1: inject NODE_PATH export after the shebang so that when
-            # get-app-config-ios.sh calls `node getAppConfig.js`, Node.js finds
-            # @expo/config and @expo/env via NODE_PATH rather than the walk-up
-            # algorithm (which fails in pnpm monorepos).
-            # SRCROOT is a standard Xcode build setting = bovial-mobile/ios,
-            # so ${SRCROOT}/../node_modules = bovial-mobile/node_modules.
+            # Patch 1: inject NODE_PATH export after shebang so `node getAppConfig.js`
+            # resolves @expo/config and @expo/env via NODE_PATH.
+            # SRCROOT (Xcode build setting) = bovial-mobile/ios
+            # so ${SRCROOT}/../node_modules = bovial-mobile/node_modules
             if grep -q "NODE_PATH_PATCHED" "$SH"; then
               echo "✅ NODE_PATH already patched — skipping"
             else
               python3 -c "import sys; f=open(sys.argv[1],'r'); lines=f.readlines(); f.close(); idx=1 if lines and lines[0].startswith('#!') else 0; lines.insert(idx,'# NODE_PATH_PATCHED\nexport NODE_PATH=\"\${SRCROOT}/../node_modules\"\n'); open(sys.argv[1],'w').writelines(lines)" "$SH"
-              echo "✅ NODE_PATH injected into get-app-config-ios.sh"
+              echo "✅ NODE_PATH injected"
             fi
-            # Patch 2: BUNDLE_FORMAT fallback so the script never fails when
-            # Xcode 16+ does not propagate BUNDLE_FORMAT to pod script phases.
+            # Patch 2: BUNDLE_FORMAT fallback for Xcode 16+
             if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
               echo "✅ BUNDLE_FORMAT already patched — skipping"
             else
               sed -i '' 's/^if \[ "\$BUNDLE_FORMAT" == "shallow" \]/# BUNDLE_FORMAT_PATCHED\nBUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\nif [ "$BUNDLE_FORMAT" == "shallow" ]/' "$SH"
               echo "✅ BUNDLE_FORMAT fallback patched"
             fi
-            echo "=== Patched get-app-config-ios.sh (first 25 lines) ==="
-            head -25 "$SH"
+            echo "=== Patched get-app-config-ios.sh (first 20 lines) ==="
+            head -20 "$SH"
           fi
 
       - name: Fetch signing files
         script: |
           keychain initialize
-          # CERTIFICATE_PRIVATE_KEY (iOS env group) must be a valid RSA PEM key.
-          # It is used to match an existing Apple Distribution certificate or
-          # create a new one (--create). Because it is stable across builds,
-          # Apple only ever creates ONE certificate for this key — no 409.
-          # See setup instructions in codemagic-signing-setup.md at repo root.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
@@ -149,11 +154,6 @@ workflows:
       - name: Build IPA
         script: |
           cd artifacts/bovial-mobile
-          # PROJECT_ROOT is read by expo-constants' get-app-config-ios.sh to
-          # locate the project's package.json at Xcode archive time.
-          # Default would be $PROJECT_DIR/../.. (ios/Pods/../.. = bovial-mobile),
-          # but we set it explicitly so it is never wrong regardless of how
-          # xcodebuild resolves PROJECT_DIR in an archive vs. build context.
           export PROJECT_ROOT="${CM_BUILD_DIR}/artifacts/bovial-mobile"
           xcode-project use-profiles
           xcode-project build-ipa \
