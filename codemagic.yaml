@@ -79,37 +79,46 @@ workflows:
 
       - name: Patch get-app-config-ios.sh (BUNDLE_FORMAT fallback for Xcode 16+)
         script: |
-          # The EXConstants Xcode script phase runs get-app-config-ios.sh directly
-          # from the expo-constants npm package (via $PODS_TARGET_SRCROOT/../scripts/).
-          # It does NOT run from Pods/EXConstants/ — so we must patch the real
-          # npm package file (resolving the pnpm symlink with pwd -P).
+          # PRIMARY FIX: withBundleFormatFix.js config plugin sets BUNDLE_FORMAT=shallow
+          # as an Xcode build setting on the EXConstants target via a Podfile post_install
+          # hook. This step is a belt-and-suspenders file-level patch as a backup.
           #
-          # Root cause of failure: BUNDLE_FORMAT is not set by Xcode 16 for
-          # resource bundle targets, causing exit 1 in the else branch.
+          # Key improvement vs. previous approach: we do NOT resolve the pnpm symlink with
+          # pwd -P (which points to the read-only pnpm store on macOS). Instead:
+          #   1. Copy the script via the symlink path to a writable temp file
+          #   2. Patch the temp file
+          #   3. rm the symlink (removes only the symlink, not the store file)
+          #   4. cp the patched file into the now-vacant path
+          # This sidesteps all pnpm-store read-only permission issues on macOS CI.
           LINK="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules/expo-constants"
           if [ ! -d "$LINK" ]; then
             echo "❌ expo-constants not found at $LINK"
             exit 1
           fi
-          # Resolve pnpm symlink to the real package directory
-          EXPO_CONSTANTS_DIR="$(cd "$LINK" && pwd -P)"
-          SH="$EXPO_CONSTANTS_DIR/scripts/get-app-config-ios.sh"
-          echo "=== Real path: $SH ==="
-          if [ ! -f "$SH" ]; then
-            echo "❌ get-app-config-ios.sh not found at resolved path"
+          SH_LINK="$LINK/scripts/get-app-config-ios.sh"
+          if [ ! -f "$SH_LINK" ]; then
+            echo "❌ get-app-config-ios.sh not found (via symlink)"
             exit 1
           fi
-          if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
+          echo "=== Script path (via symlink): $SH_LINK ==="
+          echo "=== Real path: $(cd "$(dirname "$SH_LINK")" && pwd -P)/$(basename "$SH_LINK") ==="
+          if grep -q "BUNDLE_FORMAT_PATCHED" "$SH_LINK"; then
             echo "✅ Already patched — skipping"
           else
+            _TMP=$(mktemp /tmp/get-app-config-ios_XXXXXX.sh)
+            cp "$SH_LINK" "$_TMP"
             _PATCH=$(mktemp /tmp/patch_XXXXXX.py)
-            echo 'aW1wb3J0IHN5cwp3aXRoIG9wZW4oc3lzLmFyZ3ZbMV0sICdyJykgYXMgZjoKICAgIGNvbnRlbnQgPSBmLnJlYWQoKQpvbGQgPSAnaWYgWyAiJEJVTkRMRV9GT1JNQVQiID09ICJzaGFsbG93IiBdJwpuZXdfdGV4dCA9ICgKICAgICcjIEJVTkRMRV9GT1JNQVRfUEFUQ0hFRDogZGVmYXVsdCB0byBzaGFsbG93IHdoZW4gdW5zZXQgKFhjb2RlIDE2IG1heSBub3Qgc2V0IGl0KVxuJwogICAgJ0JVTkRMRV9GT1JNQVQ9IiR7QlVORExFX0ZPUk1BVDotc2hhbGxvd30iXG4nCikgKyBvbGQKaWYgb2xkIG5vdCBpbiBjb250ZW50OgogICAgcHJpbnQoJ1dBUk5JTkc6IGV4cGVjdGVkIHBhdHRlcm4gbm90IGZvdW5kIC0gc2NyaXB0IG1heSBoYXZlIGNoYW5nZWQnKQplbHNlOgogICAgd2l0aCBvcGVuKHN5cy5hcmd2WzFdLCAndycpIGFzIGY6CiAgICAgICAgZi53cml0ZShjb250ZW50LnJlcGxhY2Uob2xkLCBuZXdfdGV4dCwgMSkpCiAgICBwcmludCgnUGF0Y2hlZCBzdWNjZXNzZnVsbHknKQo=' | base64 -d > "$_PATCH"
-            python3 "$_PATCH" "$SH"
+            echo 'aW1wb3J0IHN5cwp3aXRoIG9wZW4oc3lzLmFyZ3ZbMV0sICdyJykgYXMgZjoKICAgIGNvbnRlbnQgPSBmLnJlYWQoKQpvbGQgPSAnaWYgWyAiJEJVTkRMRV9GT1JNQVQiID09ICJzaGFsbG93IiBdJwpuZXdfdGV4dCA9ICgKICAgICcjIEJVTkRMRV9GT1JNQVRfUEFUQ0hFRDogZGVmYXVsdCB0byBzaGFsbG93IHdoZW4gdW5zZXQgKFhjb2RlIDE2IG1heSBub3Qgc2V0IGl0KQonCiAgICAnQlVORExFX0ZPUk1BVD0iJHtCVU5ETEVfRk9STUFUOi1zaGFsbG93fSIKJwopICsgb2xkCmlmIG9sZCBub3QgaW4gY29udGVudDoKICAgIHByaW50KCdXQVJOSU5HOiBleHBlY3RlZCBwYXR0ZXJuIG5vdCBmb3VuZCDigJQgc2NyaXB0IG1heSBoYXZlIGNoYW5nZWQ7IG5vIHBhdGNoIGFwcGxpZWQnKQplbHNlOgogICAgd2l0aCBvcGVuKHN5cy5hcmd2WzFdLCAndycpIGFzIGY6CiAgICAgICAgZi53cml0ZShjb250ZW50LnJlcGxhY2Uob2xkLCBuZXdfdGV4dCwgMSkpCiAgICBwcmludCgnUGF0Y2hlZCBzdWNjZXNzZnVsbHknKQo=' | base64 -d > "$_PATCH"
+            python3 "$_PATCH" "$_TMP"
             rm -f "$_PATCH"
-            echo "✅ BUNDLE_FORMAT fallback injected"
+            rm -f "$SH_LINK"
+            cp "$_TMP" "$SH_LINK"
+            chmod +x "$SH_LINK"
+            rm -f "$_TMP"
+            echo "✅ BUNDLE_FORMAT fallback injected (symlink replaced with patched file)"
           fi
           echo "=== BUNDLE_FORMAT section (context) ==="
-          grep -n -A2 -B2 "BUNDLE_FORMAT" "$SH"
+          grep -n -A2 -B2 "BUNDLE_FORMAT" "$SH_LINK"
 
       - name: Fetch signing files
         script: |

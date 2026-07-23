@@ -39,7 +39,8 @@
           }
         }
       ],
-      "./plugins/withSpmPostInstallFix.js"
+      "./plugins/withSpmPostInstallFix.js",
+      "./plugins/withBundleFormatFix.js"
     ],
     "experiments": {
       "typedRoutes": true,

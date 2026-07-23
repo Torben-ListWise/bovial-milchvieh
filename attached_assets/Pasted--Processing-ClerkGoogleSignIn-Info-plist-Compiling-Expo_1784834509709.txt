@@ -1,0 +1,21 @@
+
+▸ Processing ClerkGoogleSignIn-Info.plist
+▸ Compiling ExpoImage-dummy.m
+    Run script build phase '[CP-User] [Hermes] Replace Hermes for the right configuration, if needed' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'hermes-engine' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNWorklets' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNReanimated' from project 'Pods')
+Failed to archive ios/Bovial.xcworkspace. The following build commands failed:
+
+PhaseScriptExecution [CP-User]\ Generate\ app.config\ for\ prebuilt\ Constants.manifest /Users/builder/Library/Developer/Xcode/DerivedData/Bovial-gyskgafptbizxvfmjceqvnrkjosd/Build/Intermediates.noindex/ArchiveIntermediates/Bovial/IntermediateBuildFilesPath/Pods.build/Release-iphoneos/EXConstants.build/Script-46EB2E0002A6B0.sh (in target 'EXConstants' from project 'Pods')
+	...
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'EXApplication-ExpoApplication_privacy' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'EXApplication' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'ClerkGoogleSignIn' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'AppCheckCore' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'AppAuth-AppAuthCore_Privacy' from project 'Pods')
+	note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'AppAuth' from project 'Pods')
+
+
+Build failed :|
+Step 10 script `Build IPA` exited with status code 65
