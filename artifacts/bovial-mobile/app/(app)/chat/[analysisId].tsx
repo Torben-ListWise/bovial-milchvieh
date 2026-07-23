@@ -96,7 +96,6 @@ export default function ChatScreen() {
   const analysisPickerRef = useRef<BottomSheetModal>(null);
 
   const streamingTextRef = useRef("");
-  const rafPendingRef = useRef(false);
   const lastFollowUpsRef = useRef<string[]>([]);
 
   const router = useRouter();
@@ -205,7 +204,6 @@ export default function ChatScreen() {
       esRef.current?.close();
       esRef.current = null;
       streamingTextRef.current = "";
-      rafPendingRef.current = false;
       setAgentError(null);
 
       const token = await getToken();
@@ -256,19 +254,17 @@ export default function ChatScreen() {
         const chunk: string = payload.text ?? "";
         if (!chunk) return;
 
+        // Accumulate in ref so setStreaming always reads the latest full text
         streamingTextRef.current += chunk;
+        const accText = streamingTextRef.current;
 
-        if (!rafPendingRef.current) {
-          rafPendingRef.current = true;
-          requestAnimationFrame(() => {
-            rafPendingRef.current = false;
-            const accText = streamingTextRef.current;
-            setStreaming((prev) =>
-              prev ? { ...prev, text: accText, currentStep: null } : prev
-            );
-            scrollToBottom();
-          });
-        }
+        // Direct setState per delta — no rAF batching. Without this, rapid-fire
+        // deltas from image analyses (no tool-call pauses) accumulate across
+        // multiple animation frames before a single render, causing burst display.
+        setStreaming((prev) =>
+          prev ? { ...prev, text: accText, currentStep: null } : prev
+        );
+        scrollToBottom();
       });
 
       es.addEventListener("turn_reset" as any, () => {

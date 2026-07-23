@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { flushSync } from "react-dom";
 import type { Chart } from "@workspace/api-client-react";
 import { getAuthToken } from "@workspace/api-client-react";
 
@@ -227,26 +228,18 @@ export function useStreamingState() {
   const [charts, setCharts] = useState<Chart[]>([]);
   const [sources, setSources] = useState<string[]>([]);
 
-  const pendingDeltaRef = useRef("");
-  const rafRef = useRef<number | null>(null);
   const prevStepRef = useRef<string | null>(null);
 
-  const flushDelta = useCallback(() => {
-    const delta = pendingDeltaRef.current;
-    pendingDeltaRef.current = "";
-    rafRef.current = null;
-    if (delta) setText((prev) => prev + delta);
+  const onDelta = useCallback((delta: string) => {
+    // flushSync bypasses React 18 auto-batching so each individual token
+    // delta triggers its own synchronous render. Without this, rapid-fire
+    // deltas from image analyses (no tool-call pauses) arrive within the
+    // same event-loop tick and are batched into a single render — causing
+    // the entire response to appear as a burst at the end.
+    flushSync(() => {
+      setText((prev) => prev + delta);
+    });
   }, []);
-
-  const onDelta = useCallback(
-    (delta: string) => {
-      pendingDeltaRef.current += delta;
-      if (!rafRef.current) {
-        rafRef.current = requestAnimationFrame(flushDelta);
-      }
-    },
-    [flushDelta],
-  );
 
   const onProgress = useCallback((step: string) => {
     const prev = prevStepRef.current;
@@ -272,11 +265,6 @@ export function useStreamingState() {
   }, []);
 
   const reset = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    pendingDeltaRef.current = "";
     prevStepRef.current = null;
     setText("");
     setProgressStep(null);
@@ -289,11 +277,6 @@ export function useStreamingState() {
   // Used on turn_reset events so Turn-N preamble text is cleared before
   // Turn-N+1 text starts streaming, without losing progress step state.
   const resetText = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    pendingDeltaRef.current = "";
     setText("");
   }, []);
 
