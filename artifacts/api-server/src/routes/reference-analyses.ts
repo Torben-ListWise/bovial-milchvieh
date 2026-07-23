@@ -83,7 +83,7 @@ async function runExtraction(
   userContent.push({ type: "text", text: textPart });
 
   const msg = await anthropic.messages.create({
-    model: getModelForTask("extraction"),
+    model: getModelForTask("benchmark_extraction"),
     max_tokens: 1200,
     system: EXTRACTION_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userContent }],
