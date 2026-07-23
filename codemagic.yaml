@@ -61,11 +61,30 @@ workflows:
       - name: Create .xcode.env (node path for Xcode script phases)
         script: |
           # expo prebuild --clean wipes ios/ — so we create .xcode.env AFTER
-          # prebuild but BEFORE pod install. with-node.sh reads this file to
-          # locate the node binary inside Xcode's sandboxed script-phase PATH
-          # (which does NOT include /opt/homebrew/bin on Apple Silicon macs).
-          echo "export NODE_BINARY=$(which node)" > artifacts/bovial-mobile/ios/.xcode.env
-          echo "Wrote NODE_BINARY=$(which node) to ios/.xcode.env"
+          # prebuild but BEFORE pod install. with-node.sh sources this file
+          # before every Node-based Xcode script phase (e.g. EXConstants).
+          #
+          # NODE_PATH is required in pnpm monorepos: getAppConfig.js calls
+          # require('@expo/env') from inside Pods/ExpoConstants/scripts/build/.
+          # Without NODE_PATH the module walk-up may not reach
+          # bovial-mobile/node_modules even though the symlinks exist there,
+          # because pnpm symlinks can be skipped by Node's resolver in some
+          # platform/version combinations. Setting NODE_PATH is unconditionally
+          # safe and explicit.
+          NODE_BINARY_PATH="$(which node)"
+          NODE_MODULES_PATH="${CM_BUILD_DIR}/artifacts/bovial-mobile/node_modules"
+          {
+            echo "export NODE_BINARY=${NODE_BINARY_PATH}"
+            echo "export NODE_PATH=${NODE_MODULES_PATH}"
+          } > artifacts/bovial-mobile/ios/.xcode.env
+          echo "=== ios/.xcode.env written ==="
+          cat artifacts/bovial-mobile/ios/.xcode.env
+          echo "=== Verify @expo/env + @expo/config resolvable with NODE_PATH ==="
+          NODE_PATH="${NODE_MODULES_PATH}" node -e "
+            require('@expo/env');
+            require('@expo/config');
+            console.log('✅ @expo/env and @expo/config resolved OK via NODE_PATH');
+          " || echo "❌ Module resolution with NODE_PATH FAILED — check NODE_MODULES_PATH"
 
       - name: Install CocoaPods
         script: |
