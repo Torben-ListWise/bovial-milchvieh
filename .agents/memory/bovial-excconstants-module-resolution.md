@@ -1,21 +1,19 @@
 ---
 name: EXConstants MODULE_NOT_FOUND in pnpm monorepo (iOS build)
-description: getAppConfig.js (run from Pods/ExpoConstants/ at Xcode archive time) cannot find @expo/env or @expo/config unless they are explicit direct deps of the mobile package.
+description: getAppConfig.js (run from Pods/ExpoConstants/ at Xcode archive time) cannot find @expo/env or @expo/config — three approaches tried; only require.resolve({paths}) is reliable.
 ---
 
 ## Rule
-Add `@expo/env` and `@expo/config` as explicit **devDependencies** in `artifacts/bovial-mobile/package.json`. Without this, the Codemagic iOS build fails with exit code 65 from the `Generate app.config for prebuilt Constants.manifest` Xcode script phase.
+Both must be in place for Codemagic iOS builds to succeed:
 
-**Why:** expo-constants' `getAppConfig.js` is run by Xcode from `Pods/ExpoConstants/scripts/build/` at archive time. It calls `require('@expo/env')` and `require('@expo/config')`. Node.js walks up the directory tree: `Pods/ExpoConstants/` → `Pods/` → `ios/` → `artifacts/bovial-mobile/`. In pnpm, transitive deps are NOT symlinked into the package's own `node_modules/` unless they are listed as direct deps. So the walk-up hits `artifacts/bovial-mobile/node_modules/` and finds nothing → `MODULE_NOT_FOUND` → uncaught exception → exit 65.
+1. `@expo/env ~2.0.8` and `@expo/config ~12.0.13` as explicit **devDependencies** in `bovial-mobile/package.json` (so pnpm creates symlinks in `bovial-mobile/node_modules/`)
+2. A codemagic.yaml step **after** `pod install` that overwrites `Pods/ExpoConstants/scripts/build/getAppConfig.js` with a patched version using `require.resolve('@expo/env', { paths: [projectRoot + '/node_modules'] })` instead of bare `require('@expo/env')`.
 
-**How to apply:** If the iOS build ever fails again with `exit 65` from `Generate app.config for prebuilt Constants.manifest`, first check if `@expo/env` and `@expo/config` are still in `bovial-mobile/package.json`. Also verify symlinks exist:
-```
-ls artifacts/bovial-mobile/node_modules/@expo/env
-ls artifacts/bovial-mobile/node_modules/@expo/config
-```
+**Why:** `getAppConfig.js` runs from `Pods/ExpoConstants/scripts/build/` at Xcode archive time. Three approaches were tried and failed before this one:
+1. Node.js walk-up — reaches `bovial-mobile/node_modules/` which has symlinks, but unreliable in Xcode's sandboxed environment
+2. NODE_PATH via `.xcode.env` — `with-node.sh` sources it, but `PODS_ROOT` may not be set in Xcode 26.4.1 making the source a no-op
+3. **`require.resolve({ paths: [...] })`** — patches the script directly; the most robust approach since it bypasses all environment-dependent resolution
 
-**Versions (as of last fix):**
-- `@expo/env`: `~2.0.8` (installed: 2.0.11)
-- `@expo/config`: `~12.0.13` (installed: 12.0.13)
+**How to apply:** See `codemagic.yaml` step "Patch EXConstants getAppConfig.js (pnpm monorepo fix)". Includes a dry-run test after patching so real errors appear in codemagic logs, not inside Xcode's opaque exit-65.
 
-The `PROJECT_ROOT` env var in codemagic.yaml is a separate (harmless) explicit set — it was NOT the root cause. The module resolution failure was the actual cause.
+**Versions:** `@expo/env ~2.0.8` (installed: 2.0.11), `@expo/config ~12.0.13` (installed: 12.0.13)

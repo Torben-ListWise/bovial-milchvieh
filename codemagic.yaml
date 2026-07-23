@@ -91,6 +91,65 @@ workflows:
           cd artifacts/bovial-mobile/ios
           pod install
 
+      - name: Patch EXConstants getAppConfig.js (pnpm monorepo fix)
+        script: |
+          # getAppConfig.js runs from inside Pods/ExpoConstants/scripts/build/ and
+          # calls require('@expo/env') / require('@expo/config'). In a pnpm monorepo
+          # Node.js cannot resolve these via the normal walk-up because pnpm's
+          # isolated node_modules structure doesn't hoist them to every ancestor.
+          # Fix: replace the require() calls with require.resolve({ paths: [projectRoot] })
+          # so Node.js looks directly in bovial-mobile/node_modules — where pnpm
+          # has created symlinks because we added both packages as explicit devDeps.
+          SCRIPT="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants/scripts/build/getAppConfig.js"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "❌ getAppConfig.js not found at: $SCRIPT"
+            exit 1
+          fi
+          echo "=== Original getAppConfig.js (first 10 lines) ==="
+          head -10 "$SCRIPT"
+          cat > "$SCRIPT" << 'GETAPPCONFIG_EOF'
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const possibleProjectRoot = process.argv[2];
+const destinationDir = process.argv[3];
+let projectRoot;
+if (fs_1.default.existsSync(path_1.default.join(possibleProjectRoot, 'package.json'))) {
+    projectRoot = possibleProjectRoot;
+}
+else if (fs_1.default.existsSync(path_1.default.join(possibleProjectRoot, '..', 'package.json'))) {
+    projectRoot = path_1.default.resolve(possibleProjectRoot, '..');
+}
+else {
+    throw new Error(`Unable to locate project (no package.json found) at path: ${possibleProjectRoot}`);
+}
+// pnpm monorepo fix: resolve @expo/* modules explicitly from the project's
+// node_modules directory, bypassing Node.js module walk-up limitations.
+const projectNodeModules = path_1.default.join(projectRoot, 'node_modules');
+const resolveOpts = { paths: [projectNodeModules] };
+const expoEnvPath = require.resolve('@expo/env', resolveOpts);
+const expoConfigPath = require.resolve('@expo/config', resolveOpts);
+require(expoEnvPath).load(projectRoot);
+process.chdir(projectRoot);
+const { getConfig } = require(expoConfigPath);
+const { exp } = getConfig(projectRoot, {
+    isPublicConfig: true,
+    skipSDKVersionRequirement: true,
+});
+fs_1.default.writeFileSync(path_1.default.join(destinationDir, 'app.config'), JSON.stringify(exp));
+GETAPPCONFIG_EOF
+          echo "=== Patched getAppConfig.js written ==="
+          echo "=== Dry-run test (projectRoot=${CM_BUILD_DIR}/artifacts/bovial-mobile) ==="
+          mkdir -p /tmp/test_app_config
+          node "$SCRIPT" "${CM_BUILD_DIR}/artifacts/bovial-mobile" /tmp/test_app_config 2>&1 \
+            && echo "✅ getAppConfig.js dry-run OK" \
+            && echo "app.config content:" && cat /tmp/test_app_config/app.config | head -3 \
+            || echo "❌ getAppConfig.js dry-run FAILED (see error above)"
+
       - name: Fetch signing files
         script: |
           keychain initialize
