@@ -22,9 +22,31 @@ export interface FetchedAlert {
   summary: string;
   sourceUrl: string;
   officialDate: string | null;
+  affectedSpecies: string[];
 }
 
 // ── Themen-Erkennung ──────────────────────────────────────────────────────────
+
+/**
+ * topic → affectedSpecies mapping (muss mit disease_catalog übereinstimmen)
+ */
+const TOPIC_SPECIES: Record<string, string[]> = {
+  BTV:             ["milchvieh", "schweine"],
+  MKS:             ["milchvieh", "schweine", "geflügel"],
+  ASP:             ["schweine"],
+  KSP:             ["schweine"],
+  Vogelgrippe:     ["geflügel"],
+  Newcastle:       ["geflügel"],
+  LumpySkin:       ["milchvieh"],
+  PferdeKrankheit: ["allgemein"],
+  Brucellose:      ["milchvieh", "schweine"],
+  Tollwut:         ["allgemein"],
+  Schmallenberg:   ["milchvieh"],
+  Rinderpest:      ["milchvieh"],
+  RHDV:            ["allgemein"],
+  Hantavirus:      ["allgemein"],
+  allgemein:       ["allgemein"],
+};
 
 const TOPIC_PATTERNS: [RegExp, string][] = [
   [/blauzunge|btv[-\s]?\d*/i, "BTV"],
@@ -40,13 +62,17 @@ const TOPIC_PATTERNS: [RegExp, string][] = [
   [/blauzungen/i, "BTV"],
   [/schmallenberg/i, "Schmallenberg"],
   [/rinderpest|ppr\b/i, "Rinderpest"],
+  [/h[äa]morrhagische.{0,20}kaninchen|rhdv/i, "RHDV"],
+  [/hantavirus/i, "Hantavirus"],
 ];
 
-function detectTopic(text: string): string {
+function detectTopic(text: string): { topic: string; affectedSpecies: string[] } {
   for (const [pattern, topic] of TOPIC_PATTERNS) {
-    if (pattern.test(text)) return topic;
+    if (pattern.test(text)) {
+      return { topic, affectedSpecies: TOPIC_SPECIES[topic] ?? ["allgemein"] };
+    }
   }
-  return "allgemein";
+  return { topic: "allgemein", affectedSpecies: ["allgemein"] };
 }
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
@@ -128,7 +154,7 @@ export async function fetchFliAlerts(): Promise<FetchedAlert[]> {
         : `${FLI_BASE}${rawHref}`;
 
       const officialDate = extractDate(block);
-      const topic = detectTopic(rawTitle + " " + block);
+      const { topic, affectedSpecies } = detectTopic(rawTitle + " " + block);
       const externalId = makeExternalId("fli", href, rawTitle);
 
       // Kurze Zusammenfassung aus Textblock (erste ~200 Zeichen nach dem Link)
@@ -146,6 +172,7 @@ export async function fetchFliAlerts(): Promise<FetchedAlert[]> {
         summary: summary.slice(0, 600),
         sourceUrl: href,
         officialDate,
+        affectedSpecies,
       });
 
       if (results.length >= 20) break;
@@ -190,7 +217,7 @@ export async function fetchLavesAlerts(): Promise<FetchedAlert[]> {
         : `${LAVES_BASE}${rawHref}`;
 
       const officialDate = extractDate(block);
-      const topic = detectTopic(rawTitle + " " + block);
+      const { topic, affectedSpecies } = detectTopic(rawTitle + " " + block);
       const externalId = makeExternalId("laves_nds", href, rawTitle);
 
       const plainBlock = stripHtml(block);
@@ -207,6 +234,7 @@ export async function fetchLavesAlerts(): Promise<FetchedAlert[]> {
         summary: summary.slice(0, 600),
         sourceUrl: href,
         officialDate,
+        affectedSpecies,
       });
 
       if (results.length >= 20) break;
@@ -221,14 +249,16 @@ export async function fetchLavesAlerts(): Promise<FetchedAlert[]> {
         const rawTitle = stripHtml(lm[2]);
         if (!rawTitle || rawTitle.length < 15) continue;
         const href = lm[1].startsWith("http") ? lm[1] : `${LAVES_BASE}${lm[1]}`;
+        const { topic, affectedSpecies } = detectTopic(rawTitle);
         results.push({
           sourceKey: "laves_nds",
           externalId: makeExternalId("laves_nds", href, rawTitle),
-          topic: detectTopic(rawTitle),
+          topic,
           title: rawTitle.slice(0, 255),
           summary: rawTitle,
           sourceUrl: href,
           officialDate: null,
+          affectedSpecies,
         });
         if (results.length >= 10) break;
       }

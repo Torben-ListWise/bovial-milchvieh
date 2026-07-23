@@ -53,6 +53,12 @@ export const animalHealthAlertsTable = pgTable(
     /** Datum der amtlichen Meldung (YYYY-MM-DD, aus Quelle extrahiert) */
     officialDate: text("official_date"),
 
+    /**
+     * Betroffene Tierarten — entsprechen focus_area-Schlüsseln.
+     * Default: ['allgemein'] = wird allen Betriebstypen angezeigt.
+     */
+    affectedSpecies: text("affected_species").array().notNull().default(["allgemein"]),
+
     /** Zeitpunkt des Fetches */
     fetchedAt: timestamp("fetched_at", { withTimezone: true })
       .notNull()

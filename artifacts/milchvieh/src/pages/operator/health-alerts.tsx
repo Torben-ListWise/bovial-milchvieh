@@ -33,7 +33,24 @@ interface HealthAlert {
   reviewedAt: string | null;
   createdAt: string;
   fetchedAt: string;
+  affectedSpecies?: string[] | null;
 }
+
+const SPECIES_LABELS: Record<string, string> = {
+  milchvieh: "Milchvieh",
+  schweine:  "Schweine",
+  geflügel:  "Geflügel",
+  ackerbau:  "Ackerbau",
+  allgemein: "Allgemein",
+};
+
+const SPECIES_COLORS: Record<string, string> = {
+  milchvieh: "bg-blue-50 text-blue-700 border-blue-200",
+  schweine:  "bg-pink-50 text-pink-700 border-pink-200",
+  geflügel:  "bg-orange-50 text-orange-700 border-orange-200",
+  ackerbau:  "bg-lime-50 text-lime-700 border-lime-200",
+  allgemein: "bg-gray-50 text-gray-600 border-gray-200",
+};
 
 const SOURCE_LABELS: Record<string, string> = {
   fli: "FLI (bundesweit)",
@@ -129,6 +146,21 @@ function AlertCard({
               </span>
             )}
           </div>
+          {(alert.affectedSpecies ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1">
+              {(alert.affectedSpecies ?? ["allgemein"]).map((s) => (
+                <span
+                  key={s}
+                  className={cn(
+                    "text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                    SPECIES_COLORS[s] ?? "bg-gray-50 text-gray-600 border-gray-200",
+                  )}
+                >
+                  {SPECIES_LABELS[s] ?? s}
+                </span>
+              ))}
+            </div>
+          )}
           <h3 className="text-sm font-semibold text-foreground leading-snug">
             {alert.title}
           </h3>

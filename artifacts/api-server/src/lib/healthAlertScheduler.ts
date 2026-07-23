@@ -54,6 +54,7 @@ export async function runHealthAlertFetch(): Promise<{
         summary: alert.summary,
         sourceUrl: alert.sourceUrl,
         officialDate: alert.officialDate ?? undefined,
+        affectedSpecies: alert.affectedSpecies,
         status: "pending",
       });
       inserted++;

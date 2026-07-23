@@ -8,6 +8,7 @@ import { startNewsScheduler } from "./lib/newsWeeklyBatch";
 import { startThiScheduler } from "./lib/thi";
 import { startChipScheduler } from "./lib/chipScheduler";
 import { startHealthAlertScheduler } from "./lib/healthAlertScheduler";
+import { runDiseaseCatalogMigration } from "./lib/diseaseCatalogMigration";
 import { startCrossFarmPatternScheduler } from "./lib/crossFarmPatternScheduler";
 import { ensureExtensions, setupAnalystSandbox, pool, db, knowledgeDocumentsTable, analysesTable, messagesTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, ne, or, desc } from "drizzle-orm";
@@ -184,6 +185,9 @@ ensureExtensions()
     // Set up the DB-level security sandbox for run_sql (idempotent)
     await setupAnalystSandbox();
     logger.info("Analyst sandbox (milchvieh_analyst role + RLS) bereit");
+
+    // Disease catalog: Tabelle + Spalte + Seed (idempotent)
+    await runDiseaseCatalogMigration();
 
     const httpServer = createServer(app);
     attachWebSocketServer(httpServer);

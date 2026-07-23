@@ -26,6 +26,7 @@ export * from "./contextFacts";
 export * from "./referenceAnalyses";
 export * from "./creditUsageLog";
 export * from "./animalHealthAlerts";
+export * from "./diseaseCatalog";
 export * from "./weatherCache";
 export * from "./crossFarmPatterns";
 export * from "./referralBonuses";

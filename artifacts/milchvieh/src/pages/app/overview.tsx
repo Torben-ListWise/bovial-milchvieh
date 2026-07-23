@@ -54,6 +54,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -1378,6 +1383,76 @@ interface HealthAlertItem {
   sourceUrl: string;
   officialDate: string | null;
   updatedAt: string;
+  affectedSpecies?: string[];
+}
+
+interface DiseaseCatalogEntry {
+  topicKey: string;
+  name: string;
+  description: string;
+  transmission: string;
+  symptoms: string;
+  prevention: string;
+  affectedSpecies: string[];
+}
+
+function useDiseaseCatalog() {
+  return useQuery<DiseaseCatalogEntry[]>({
+    queryKey: ["disease-catalog"],
+    queryFn: async () => {
+      const token = await getAuthToken();
+      const resp = await fetch(`${API_BASE_OV}/api/disease-catalog`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+function DiseaseInfoPopover({ topic, catalog }: { topic: string; catalog: DiseaseCatalogEntry[] }) {
+  const entry = catalog.find((e) => e.topicKey === topic);
+  if (!entry || (!entry.description && !entry.transmission && !entry.symptoms && !entry.prevention)) {
+    return null;
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600/60 hover:text-amber-700 hover:bg-amber-100 transition-colors shrink-0"
+          title={`Mehr zu ${entry.name}`}
+          type="button"
+        >
+          <Info className="w-3 h-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 text-sm space-y-2.5" align="start">
+        <p className="font-semibold text-foreground leading-snug">{entry.name}</p>
+        {entry.description && (
+          <p className="text-xs text-muted-foreground leading-relaxed">{entry.description}</p>
+        )}
+        {entry.transmission && (
+          <div>
+            <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide mb-0.5">Übertragung</p>
+            <p className="text-xs text-muted-foreground">{entry.transmission}</p>
+          </div>
+        )}
+        {entry.symptoms && (
+          <div>
+            <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide mb-0.5">Symptome</p>
+            <p className="text-xs text-muted-foreground">{entry.symptoms}</p>
+          </div>
+        )}
+        {entry.prevention && (
+          <div>
+            <p className="text-[11px] font-semibold text-foreground uppercase tracking-wide mb-0.5">Prävention</p>
+            <p className="text-xs text-muted-foreground">{entry.prevention}</p>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function HealthAlertsSection() {
@@ -1393,6 +1468,8 @@ function HealthAlertsSection() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: catalog = [] } = useDiseaseCatalog();
 
   if (!alerts || alerts.length === 0) return null;
 
@@ -1414,6 +1491,12 @@ function HealthAlertsSection() {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200/60">
+                  {alert.topic}
+                </span>
+                <DiseaseInfoPopover topic={alert.topic} catalog={catalog} />
+              </div>
               <p className="text-xs font-semibold text-amber-900 leading-snug">
                 {alert.title}
               </p>
