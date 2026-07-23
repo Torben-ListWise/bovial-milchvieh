@@ -82,16 +82,20 @@ workflows:
           # must be revoked at https://developer.apple.com/account/resources/certificates/list
           # before running this build for the first time, so that --create
           # can succeed (Apple enforces a max of 2 Distribution certs per team).
+          # Generate a fresh RSA key and export it as CERTIFICATE_PRIVATE_KEY
+          # so that app-store-connect reads a valid PEM from the env var.
+          # The stored CERTIFICATE_PRIVATE_KEY in the iOS group is invalid
+          # (argparse reads it globally before --certificate-key can override).
+          # Overwriting the env var in the shell is the only reliable fix.
+          # NOTE: revoke existing Apple Distribution certs first if you see 409:
+          # https://developer.apple.com/account/resources/certificates/list
           openssl genrsa -out /tmp/cm_cert.key.pem 2048 2>/dev/null
-          # Unset the env var so app-store-connect does not pick it up globally
-          # (argparse reads it before our --certificate-key flag can override).
-          CERTIFICATE_PRIVATE_KEY="" \
+          export CERTIFICATE_PRIVATE_KEY="$(cat /tmp/cm_cert.key.pem)"
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key "@file:/tmp/cm_cert.key.pem" \
             --create
           keychain add-certificates
 
