@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { Chart } from "@workspace/api-client-react";
 import { getAuthToken } from "@workspace/api-client-react";
 
@@ -120,6 +119,15 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
           for (const ev of events) {
             if (stoppedRef.current) break;
             dispatch(ev.type, ev.data);
+            // Yield to the browser's task queue after each delta so the
+            // browser can paint the token before the next one is processed.
+            // Without this, all events in a single reader.read() chunk are
+            // handled in one synchronous JS task — the browser only paints
+            // once at the end, making the entire response appear as a burst.
+            // Progress-step events also only become visible after this yield.
+            if (ev.type === "delta") {
+              await new Promise<void>((r) => setTimeout(r, 0));
+            }
           }
         }
       } catch (err: unknown) {
@@ -231,14 +239,10 @@ export function useStreamingState() {
   const prevStepRef = useRef<string | null>(null);
 
   const onDelta = useCallback((delta: string) => {
-    // flushSync bypasses React 18 auto-batching so each individual token
-    // delta triggers its own synchronous render. Without this, rapid-fire
-    // deltas from image analyses (no tool-call pauses) arrive within the
-    // same event-loop tick and are batched into a single render — causing
-    // the entire response to appear as a burst at the end.
-    flushSync(() => {
-      setText((prev) => prev + delta);
-    });
+    // Each delta arrives in its own macrotask (enforced by the setTimeout(0)
+    // yield in the read loop), so React 18 auto-batching never combines two
+    // tokens into a single render. No flushSync needed here.
+    setText((prev) => prev + delta);
   }, []);
 
   const onProgress = useCallback((step: string) => {
