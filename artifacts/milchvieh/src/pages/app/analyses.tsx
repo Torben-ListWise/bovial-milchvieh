@@ -2861,6 +2861,9 @@ export function AnalysesPage() {
   const mountedAtRef = useRef(Date.now());
   // Track previous isAgentWorking value to fire polling after agent ends
   const wasAgentWorkingRef = useRef(false);
+  // True when the user explicitly clicked "+" to start a fresh analysis.
+  // Prevents the auto-restore effect from immediately re-selecting an old analysis.
+  const userClickedNewRef = useRef(false);
   const followUpPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const followUpPollingStartRef = useRef<number>(0);
 
@@ -2896,6 +2899,17 @@ export function AnalysesPage() {
       },
     },
   });
+
+  // Auto-restore: when the page loads without an explicit analysisId in the URL
+  // and the user hasn't deliberately clicked "+", jump straight into the most
+  // recently updated analysis so the user continues where they left off.
+  useEffect(() => {
+    if (userClickedNewRef.current) return;    // user explicitly wants a fresh start
+    if (activeAnalysisId) return;             // already have one selected
+    if (!analysesList || analysesList.length === 0) return;
+    setActiveAnalysisId(analysesList[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysesList]);
 
   const { startStream, stopStream } = useAnalysisStream({
     onDelta: streaming.onDelta,
@@ -3304,6 +3318,7 @@ export function AnalysesPage() {
   }
 
   function handleNewAnalysis() {
+    userClickedNewRef.current = true;
     setActiveAnalysisId(null);
     setQuestion("");
     setPendingContextFileIds([]);
