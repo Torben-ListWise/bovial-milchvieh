@@ -62,7 +62,7 @@ import {
   CheckCircle2, Clock, Check, FileText, Sheet, FileSpreadsheet,
   Plus, X, RefreshCw,
   BookOpen, Calculator, BarChart2, Coins, Trophy, AlertTriangle,
-  Layers, Database, Search, Cog, ArrowDown, ChevronDown, Share2,
+  Layers, Database, Search, Cog, ArrowDown, ArrowUp, ChevronDown, Share2,
   Pin, MoreHorizontal, Trash2,
   ThumbsUp, ThumbsDown, Image as ImageIcon,
   Bell, BookMarked,
@@ -2368,6 +2368,8 @@ function AnalysisResultsPanel({
   pendingQuestion,
   streamingText,
   streamingCharts,
+  currentStep,
+  completedSteps,
   onFollowUpClick,
   highlightMessageId,
 }: {
@@ -2376,6 +2378,8 @@ function AnalysisResultsPanel({
   pendingQuestion?: string;
   streamingText?: string;
   streamingCharts?: Chart[];
+  currentStep?: string | null;
+  completedSteps?: string[];
   onFollowUpClick?: (q: string) => void;
   highlightMessageId?: string | null;
 }) {
@@ -2402,12 +2406,11 @@ function AnalysisResultsPanel({
   function handleResultScroll() {
     const el = scrollRef.current;
     if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setShowResultScrollButton(distFromBottom > 100);
+    setShowResultScrollButton(el.scrollTop > 100);
   }
 
-  function scrollResultToBottom() {
-    resultBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  function scrollResultToTop() {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const msgs = analysis?.messages ?? [];
@@ -2485,26 +2488,15 @@ function AnalysisResultsPanel({
     };
   }, [lastWidgetSpec?.type]);
 
-  // Scroll to the streaming area as soon as the agent starts — don't wait for the full response.
+  // Streaming card is always at the top — scroll there as soon as the agent starts.
   useEffect(() => {
     if (!isWorking) return;
-    if (resultPairs.length === 0) {
-      // First question: the streaming card is at the very top, scroll the panel there immediately.
-      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      // Follow-up: scroll the streaming card into view right at the start.
-      streamingCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [isWorking]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to newest result when switching to a different analysis.
-  // If results exist → jump to last card; if empty → reset to top.
+  // Scroll to top when switching analyses (newest result is always at top).
   useEffect(() => {
-    if (lastCardRef.current) {
-      lastCardRef.current.scrollIntoView({ behavior: "instant", block: "end" });
-    } else {
-      scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
-    }
+    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
     setShowResultScrollButton(false);
   }, [analysis?.id]);
 
@@ -2613,9 +2605,22 @@ function AnalysisResultsPanel({
   return (
     <div className="relative h-full flex flex-col">
       <div ref={scrollRef} onScroll={handleResultScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {resultPairs.map((pair, idx) => (
+        {isWorking && (
+          <div ref={streamingCardRef}>
+            {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
+              <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
+            ) : (completedSteps && completedSteps.length > 0) ? (
+              <AgentStepsTimeline completedSteps={completedSteps} currentStep={currentStep ?? null} />
+            ) : (
+              <AgentWorkingBanner currentStep={currentStep ?? null} />
+            )}
+          </div>
+        )}
+
+        {[...resultPairs].reverse().map((pair, idx) => (
           <div
             key={pair.msg.id}
+            ref={idx === 0 ? lastCardRef : undefined}
             className={
               highlightedMsgId === pair.msg.id
                 ? "rounded-xl ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow duration-500"
@@ -2626,7 +2631,6 @@ function AnalysisResultsPanel({
               questionTitle={pair.questionTitle}
               msg={pair.msg}
               analysisId={analysis.id}
-              cardRef={idx === resultPairs.length - 1 ? lastCardRef : undefined}
               onFollowUpClick={onFollowUpClick}
               isAgentWorking={isWorking}
             />
@@ -2636,45 +2640,15 @@ function AnalysisResultsPanel({
           </div>
         ))}
 
-        {isWorking && (
-          <div ref={streamingCardRef}>
-          {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
-            <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
-          ) : (
-          <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-              <AiIcon size={14} working className="text-primary" />
-            </div>
-            <div className="flex-1 rounded-2xl rounded-tl-sm border-l-4 border-primary bg-primary/5 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="flex gap-1 shrink-0">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
-                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
-                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
-                </span>
-                <span className="text-sm font-medium text-foreground">Berechne Ergebnis…</span>
-              </div>
-              {workingQuestion && (
-                <p className="text-xs text-muted-foreground mt-1.5 truncate max-w-[360px]">
-                  „{workingQuestion}"
-                </p>
-              )}
-            </div>
-          </div>
-          )
-          }
-          </div>
-        )}
-
         <div ref={resultBottomRef} className="h-2" />
       </div>
       {showResultScrollButton && (
         <button
-          onClick={scrollResultToBottom}
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border shadow-md text-xs text-foreground hover:bg-accent transition-colors"
+          onClick={scrollResultToTop}
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border shadow-md text-xs text-foreground hover:bg-accent transition-colors"
         >
-          <ArrowDown className="w-3.5 h-3.5" />
-          Zur neuesten Antwort
+          <ArrowUp className="w-3.5 h-3.5" />
+          Zur aktuellen Antwort
         </button>
       )}
       {selectionState && onFollowUpClick && (
@@ -4309,7 +4283,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} currentStep={currentStep} completedSteps={completedSteps} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
           </div>
         </div>
       </div>
@@ -4331,7 +4305,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} currentStep={currentStep} completedSteps={completedSteps} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
             </div>
           )}
         </div>
