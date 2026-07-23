@@ -97,6 +97,7 @@ export default function ChatScreen() {
 
   const streamingTextRef = useRef("");
   const lastFollowUpsRef = useRef<string[]>([]);
+  const prevCompletedCountRef = useRef(0);
 
   const router = useRouter();
   const { data: analysis, refetch } = useGetAnalysis(analysisId ?? "");
@@ -393,6 +394,14 @@ export default function ChatScreen() {
       lastFollowUpsRef.current = lastAssistantMsg.followUpQuestions;
     }
   }, [lastAssistantMsg?.id]);
+
+  const completedCount = streaming?.completedSteps.length ?? 0;
+  useEffect(() => {
+    if (completedCount > prevCompletedCountRef.current) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    prevCompletedCountRef.current = completedCount;
+  }, [completedCount]);
 
   const showDiaryCta =
     !streaming && lastAssistantMsg && lastAssistantMsg.loggedEvent != null;

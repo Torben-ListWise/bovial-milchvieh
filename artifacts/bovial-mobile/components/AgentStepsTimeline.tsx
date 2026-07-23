@@ -152,38 +152,85 @@ function PulsingDot({ color, delay }: { color: string; delay: number }) {
   );
 }
 
-type Props = {
-  completedSteps: string[];
-  currentStep: string | null;
-};
+function AnimatedStepRow({
+  icon,
+  label,
+  count,
+  styles,
+}: {
+  icon: IoniconName;
+  label: string;
+  count: number;
+  styles: ReturnType<typeof buildStyles>;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
 
-export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
-  const colors = useColors();
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 240,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
-  const dedupedSteps: { icon: IoniconName; label: string; count: number }[] =
-    [];
-  const labelIndexMap = new Map<string, number>();
+  const opacity = anim;
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [6, 0],
+  });
 
-  for (const step of completedSteps) {
-    const { icon, label } = normalizeStep(step);
-    const existing = labelIndexMap.get(label);
-    if (existing !== undefined) {
-      dedupedSteps[existing].count += 1;
-    } else {
-      labelIndexMap.set(label, dedupedSteps.length);
-      dedupedSteps.push({ icon, label, count: 1 });
-    }
-  }
+  return (
+    <Animated.View style={[styles.stepRow, { opacity, transform: [{ translateY }] }]}>
+      <View style={styles.stepDot}>
+        <Ionicons name={icon} size={10} color="#fff" />
+      </View>
+      <Text style={styles.stepLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {count > 1 && <Text style={styles.stepCount}>×{count}</Text>}
+    </Animated.View>
+  );
+}
 
-  const normalizedCurrent = currentStep ? normalizeStep(currentStep) : null;
-  const currentAlreadyCompleted =
-    normalizedCurrent !== null && labelIndexMap.has(normalizedCurrent.label);
+function AnimatedCurrentStep({
+  label,
+  styles,
+}: {
+  label: string;
+  styles: ReturnType<typeof buildStyles>;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const prevLabel = useRef<string | null>(null);
 
-  const hasSteps = dedupedSteps.length > 0;
-  const showCurrentStep = normalizedCurrent && !currentAlreadyCompleted;
-  const showConnecting = !normalizedCurrent && !hasSteps;
+  useEffect(() => {
+    if (prevLabel.current === label) return;
+    prevLabel.current = label;
+    anim.setValue(0);
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [label]);
 
-  const s = StyleSheet.create({
+  const opacity = anim;
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [4, 0],
+  });
+
+  return (
+    <Animated.View style={[styles.activeRow, { opacity, transform: [{ translateY }] }]}>
+      <View style={styles.activeDot} />
+      <Text style={styles.activeLabel} numberOfLines={1}>
+        {label}…
+      </Text>
+    </Animated.View>
+  );
+}
+
+function buildStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
     wrap: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -291,6 +338,39 @@ export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
       backgroundColor: colors.border,
     },
   });
+}
+
+type Props = {
+  completedSteps: string[];
+  currentStep: string | null;
+};
+
+export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
+  const colors = useColors();
+  const s = buildStyles(colors);
+
+  const dedupedSteps: { icon: IoniconName; label: string; count: number }[] =
+    [];
+  const labelIndexMap = new Map<string, number>();
+
+  for (const step of completedSteps) {
+    const { icon, label } = normalizeStep(step);
+    const existing = labelIndexMap.get(label);
+    if (existing !== undefined) {
+      dedupedSteps[existing].count += 1;
+    } else {
+      labelIndexMap.set(label, dedupedSteps.length);
+      dedupedSteps.push({ icon, label, count: 1 });
+    }
+  }
+
+  const normalizedCurrent = currentStep ? normalizeStep(currentStep) : null;
+  const currentAlreadyCompleted =
+    normalizedCurrent !== null && labelIndexMap.has(normalizedCurrent.label);
+
+  const hasSteps = dedupedSteps.length > 0;
+  const showCurrentStep = normalizedCurrent && !currentAlreadyCompleted;
+  const showConnecting = !normalizedCurrent && !hasSteps;
 
   return (
     <View style={s.wrap}>
@@ -303,28 +383,22 @@ export function AgentStepsTimeline({ completedSteps, currentStep }: Props) {
           <View style={{ position: "relative" }}>
             {dedupedSteps.length > 1 && <View style={s.connector} />}
             {dedupedSteps.map(({ icon, label, count }, i) => (
-              <View key={i} style={s.stepRow}>
-                <View style={s.stepDot}>
-                  <Ionicons name={icon} size={10} color="#fff" />
-                </View>
-                <Text style={s.stepLabel} numberOfLines={1}>
-                  {label}
-                </Text>
-                {count > 1 && (
-                  <Text style={s.stepCount}>×{count}</Text>
-                )}
-              </View>
+              <AnimatedStepRow
+                key={label}
+                icon={icon}
+                label={label}
+                count={count}
+                styles={s}
+              />
             ))}
           </View>
         )}
 
         {showCurrentStep ? (
-          <View style={s.activeRow}>
-            <View style={s.activeDot} />
-            <Text style={s.activeLabel} numberOfLines={1}>
-              {normalizedCurrent!.label}…
-            </Text>
-          </View>
+          <AnimatedCurrentStep
+            label={normalizedCurrent!.label}
+            styles={s}
+          />
         ) : showConnecting ? (
           <View style={s.connectingRow}>
             <ActivityIndicator size="small" color={colors.primary} />
