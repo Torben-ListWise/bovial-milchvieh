@@ -2540,21 +2540,16 @@ function AnalysisResultsPanel({
   }
 
   if (resultPairs.length === 0 && isWorking) {
-    if (streamingText || (streamingCharts && streamingCharts.length > 0)) {
-      return (
-        <div className="h-full overflow-y-auto px-4 py-4">
-          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
-          <div className="h-2" />
-        </div>
-      );
-    }
     return (
-      <div className="flex flex-col h-full items-center justify-center p-8 text-center">
-        <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
-        <p className="text-sm text-muted-foreground">Berechne Ergebnis…</p>
-        {workingQuestion && (
-          <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">„{workingQuestion}"</p>
+      <div className="h-full overflow-y-auto px-4 py-4 space-y-4">
+        {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
+          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
+        ) : (completedSteps && completedSteps.length > 0) ? (
+          <AgentStepsTimeline completedSteps={completedSteps} currentStep={currentStep ?? null} />
+        ) : (
+          <AgentWorkingBanner currentStep={currentStep ?? null} />
         )}
+        <div className="h-2" />
       </div>
     );
   }

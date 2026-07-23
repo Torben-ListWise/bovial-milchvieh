@@ -119,15 +119,13 @@ export function useAnalysisStream(callbacks: StreamCallbacks) {
           for (const ev of events) {
             if (stoppedRef.current) break;
             dispatch(ev.type, ev.data);
-            // Yield to the browser's task queue after each delta so the
-            // browser can paint the token before the next one is processed.
-            // Without this, all events in a single reader.read() chunk are
-            // handled in one synchronous JS task — the browser only paints
-            // once at the end, making the entire response appear as a burst.
-            // Progress-step events also only become visible after this yield.
-            if (ev.type === "delta") {
-              await new Promise<void>((r) => setTimeout(r, 0));
-            }
+            // Yield to the browser's task queue after EVERY event so React can
+            // flush state updates (progress steps, charts, text deltas) before
+            // the next event is processed. Without this yield, all events in a
+            // single reader.read() chunk are handled in one synchronous JS task
+            // and the browser only paints once at the end — making progress
+            // steps invisible and text appear as a burst rather than streaming.
+            await new Promise<void>((r) => setTimeout(r, 0));
           }
         }
       } catch (err: unknown) {
