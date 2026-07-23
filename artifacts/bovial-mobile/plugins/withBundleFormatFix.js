@@ -8,38 +8,27 @@
  *
  * Root cause: Xcode 16 no longer sets BUNDLE_FORMAT for resource-bundle
  * targets (like EXConstants.bundle). The script get-app-config-ios.sh
- * contains:
+ * checks `$BUNDLE_FORMAT` and exits 1 when it's empty.
  *
- *   if [ "$BUNDLE_FORMAT" == "shallow" ]; then ...
- *   elif [ "$BUNDLE_FORMAT" == "deep" ]; then ...
- *   else echo "Unsupported bundle format: $BUNDLE_FORMAT"; exit 1
+ * Fix: inject Ruby code INTO the existing CocoaPods post_install block
+ * (CocoaPods 1.x supports only one post_install hook — adding a second
+ * one causes "Specifying multiple post_install hooks is unsupported").
  *
- * So when BUNDLE_FORMAT is empty, the build fails with exit code 1.
- *
- * Fix: Inject a CocoaPods post_install hook that sets
- *   BUNDLE_FORMAT = shallow
- * as an explicit build setting on the EXConstants pod target.
- * Xcode then passes it as an environment variable when running the
- * EXConstants script phase, and the script succeeds.
- *
- * This approach avoids patching files in the pnpm store (which are
- * read-only on macOS CI environments), and instead modifies the
- * generated Pods.xcodeproj via the standard CocoaPods post_install hook.
+ * The injected code sets BUNDLE_FORMAT = shallow as an Xcode build
+ * setting on the EXConstants pod target so the script phase always sees
+ * BUNDLE_FORMAT=shallow at build time.
  */
 
 const { withDangerousMod } = require("@expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
-const MARKER = "# --- withBundleFormatFix: EXConstants BUNDLE_FORMAT=shallow (Xcode 16) ---";
+const MARKER = "# [BundleFormatFix] BUNDLE_FORMAT=shallow injected";
 
-const PODFILE_HOOK = `
-${MARKER}
-# EXConstants's get-app-config-ios.sh exits 1 when $BUNDLE_FORMAT is unset.
-# Xcode 16 stopped setting it for resource-bundle targets. This hook sets
-# the build setting on the EXConstants pod target so Xcode always passes
-# BUNDLE_FORMAT=shallow when running the script phase.
-post_install do |installer|
+// Ruby snippet to inject INSIDE the existing post_install block.
+// Indented with 2 spaces to match typical Podfile style.
+const RUBY_SNIPPET = `
+  ${MARKER}
   installer.pods_project.targets.each do |target|
     next unless target.name == 'EXConstants'
     target.build_configurations.each do |config|
@@ -47,9 +36,14 @@ post_install do |installer|
     end
     ::Pod::UI.puts '[BundleFormatFix] Set BUNDLE_FORMAT=shallow on EXConstants target'
   end
-end
-${MARKER}
 `;
+
+// Anchors tried in order; we inject immediately after the first match.
+// Expo prebuild generates "post_install do |installer|" in the Podfile.
+const POST_INSTALL_ANCHORS = [
+  "post_install do |installer|",
+  "post_install do |installer| #",
+];
 
 function withBundleFormatFix(config) {
   return withDangerousMod(config, [
@@ -69,9 +63,31 @@ function withBundleFormatFix(config) {
         return cfg;
       }
 
-      contents = contents.trimEnd() + "\n" + PODFILE_HOOK + "\n";
+      let anchorIdx = -1;
+      let anchorLen = 0;
+      for (const anchor of POST_INSTALL_ANCHORS) {
+        const idx = contents.indexOf(anchor);
+        if (idx !== -1) {
+          anchorIdx = idx;
+          anchorLen = anchor.length;
+          console.log(`[BundleFormatFix] Found anchor: "${anchor}"`);
+          break;
+        }
+      }
+
+      if (anchorIdx === -1) {
+        console.warn(
+          "[BundleFormatFix] WARNING: 'post_install do |installer|' not found in Podfile. " +
+          "Cannot inject BUNDLE_FORMAT fix. The codemagic.yaml backup patch step will handle it."
+        );
+        return cfg;
+      }
+
+      // Insert Ruby snippet immediately after the anchor line
+      const insertAt = anchorIdx + anchorLen;
+      contents = contents.slice(0, insertAt) + RUBY_SNIPPET + contents.slice(insertAt);
       fs.writeFileSync(podfilePath, contents);
-      console.log("[BundleFormatFix] Podfile patched — BUNDLE_FORMAT=shallow hook added");
+      console.log("[BundleFormatFix] Injected BUNDLE_FORMAT=shallow into existing post_install block");
 
       return cfg;
     },

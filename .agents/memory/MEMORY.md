@@ -38,3 +38,4 @@
 - [Milchvieh systemExtra pattern](milchvieh-systemextra-pattern.md) — all per-dataset context (rules, farmNotes, diary, contextFacts, warnings) assembled in processQuestion and passed as systemExtra array; add new blocks there, never inside runAgent itself
 - [Milchvieh shared domain rules](milchvieh-shared-domain-rules.md) — sharedDomainRules.ts is single source of truth for all universal LLM prompt blocks; every new prompt must import from it
 - [EXConstants MODULE_NOT_FOUND (iOS build)](bovial-excconstants-module-resolution.md) — @expo/env + @expo/config must be explicit devDeps in bovial-mobile or pnpm won't symlink them for Xcode's getAppConfig.js walk-up
+- [CocoaPods post_install uniqueness](cocoapods-post-install-unique.md) — only ONE post_install hook allowed; inject inside existing block, never append a second one
