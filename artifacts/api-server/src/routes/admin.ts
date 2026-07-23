@@ -901,4 +901,178 @@ router.post(
   },
 );
 
+// ── GET /api/admin/bi-dashboard ──────────────────────────────────────────────
+// Business-Intelligence-Überblick: Tool-Nutzung, Chip-Kategorien, Plan-Verteilung,
+// Wochenaktivität pro Betrieb, Abwanderungs-Frühwarnung.
+router.get(
+  "/admin/bi-dashboard",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    try {
+      // 1) Top-10 Tools aus beta_tool_logs
+      const toolsResult = await db.execute(sql`
+        SELECT tool_name AS "toolName", COUNT(*)::int AS count
+        FROM beta_tool_logs
+        GROUP BY tool_name
+        ORDER BY count DESC
+        LIMIT 10
+      `);
+      const topTools = (toolsResult as any).rows ?? toolsResult;
+
+      // 2) Top-10 Chip-Kategorien der letzten 90 Tage
+      const chipsResult = await db.execute(sql`
+        SELECT category, COUNT(*)::int AS count
+        FROM daily_chip_suggestions
+        WHERE valid_date >= (CURRENT_DATE - INTERVAL '90 days')
+        GROUP BY category
+        ORDER BY count DESC
+        LIMIT 10
+      `);
+      const topChipCategories = (chipsResult as any).rows ?? chipsResult;
+
+      // 3) Plan-Verteilung (aktive Kunden)
+      const planResult = await db.execute(sql`
+        SELECT
+          COALESCE(s.plan, 'free') AS plan,
+          COUNT(*)::int AS "userCount"
+        FROM users u
+        LEFT JOIN subscriptions s ON s.user_id = u.id
+        WHERE u.role = 'customer'
+        GROUP BY COALESCE(s.plan, 'free')
+        ORDER BY "userCount" DESC
+      `);
+      const planDistribution = (planResult as any).rows ?? planResult;
+
+      // 4) Analysen pro Betrieb pro Woche (letzte 8 Wochen)
+      const weeklyResult = await db.execute(sql`
+        SELECT
+          u.id AS "userId",
+          COALESCE(u.name, u.email) AS "userName",
+          TO_CHAR(DATE_TRUNC('week', a.created_at), 'YYYY-WW') AS week,
+          COUNT(*)::int AS analyses
+        FROM analyses a
+        JOIN users u ON u.id = a.user_id
+        WHERE a.created_at >= NOW() - INTERVAL '8 weeks'
+          AND u.role = 'customer'
+        GROUP BY u.id, week
+        ORDER BY "userId", week
+      `);
+      const weeklyActivity = (weeklyResult as any).rows ?? weeklyResult;
+
+      // 5) Abwanderungs-Frühwarnung: letzte 14 Tage vs. 14 Tage davor
+      const churnResult = await db.execute(sql`
+        WITH recent AS (
+          SELECT user_id, COUNT(*) AS cnt
+          FROM analyses
+          WHERE created_at >= NOW() - INTERVAL '14 days'
+            AND user_id IN (SELECT id FROM users WHERE role = 'customer')
+          GROUP BY user_id
+        ),
+        prior AS (
+          SELECT user_id, COUNT(*) AS cnt
+          FROM analyses
+          WHERE created_at >= NOW() - INTERVAL '28 days'
+            AND created_at < NOW() - INTERVAL '14 days'
+            AND user_id IN (SELECT id FROM users WHERE role = 'customer')
+          GROUP BY user_id
+        )
+        SELECT
+          p.user_id AS "userId",
+          COALESCE(u.name, u.email) AS "userName",
+          u.email AS "userEmail",
+          p.cnt::int AS "priorCount",
+          COALESCE(r.cnt, 0)::int AS "recentCount",
+          ROUND((1 - COALESCE(r.cnt, 0)::numeric / NULLIF(p.cnt, 0)) * 100) AS "dropPercent"
+        FROM prior p
+        LEFT JOIN recent r ON r.user_id = p.user_id
+        JOIN users u ON u.id = p.user_id
+        WHERE p.cnt >= 3
+          AND COALESCE(r.cnt, 0)::numeric / NULLIF(p.cnt, 0) < 0.5
+        ORDER BY "dropPercent" DESC
+        LIMIT 20
+      `);
+      const churnRisk = (churnResult as any).rows ?? churnResult;
+
+      res.json({ topTools, topChipCategories, planDistribution, weeklyActivity, churnRisk });
+    } catch (err) {
+      logger.error({ err }, "admin/bi-dashboard fehlgeschlagen");
+      res.status(500).json({ error: "Interner Fehler" });
+    }
+  },
+);
+
+// ── GET /api/admin/credit-margin ─────────────────────────────────────────────
+// Margenanalyse pro Preisplan: Einnahmen vs. tatsächliche API-Kosten diesen Monat.
+router.get(
+  "/admin/credit-margin",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    try {
+      const PLAN_PRICES: Record<string, number> = {
+        basis: 1.99,
+        starter: 19.0,
+        pro: 49.0,
+        premium_max: 99.0,
+        free: 0,
+        beta: 0,
+      };
+
+      const yearMonth = new Date().toISOString().slice(0, 7);
+
+      // Per-plan: Nutzeranzahl + API-Kosten diesen Monat
+      const result = await db.execute(sql.raw(`
+        SELECT
+          COALESCE(s.plan, 'free') AS plan,
+          COUNT(DISTINCT u.id)::int AS "activeUsers",
+          COALESCE(SUM(c.api_cost_millicents), 0)::bigint AS "totalApiCostMillicents",
+          COALESCE(AVG(user_costs.user_mc), 0) AS "avgApiCostMillicentsPerUser"
+        FROM users u
+        LEFT JOIN subscriptions s ON s.user_id = u.id
+        LEFT JOIN credit_usage_log c ON c.user_id = u.id
+          AND c.created_at >= '${yearMonth}-01'
+        LEFT JOIN (
+          SELECT user_id, SUM(api_cost_millicents) AS user_mc
+          FROM credit_usage_log
+          WHERE created_at >= '${yearMonth}-01'
+          GROUP BY user_id
+        ) user_costs ON user_costs.user_id = u.id
+        WHERE u.role = 'customer'
+        GROUP BY COALESCE(s.plan, 'free')
+        ORDER BY "activeUsers" DESC
+      `));
+      const rows = (result as any).rows ?? result;
+
+      const margins = rows.map((r: any) => {
+        const plan = r.plan as string;
+        const priceEur = PLAN_PRICES[plan] ?? 0;
+        const activeUsers = parseInt(r.activeUsers ?? "0", 10);
+        const monthlyRevenueEur = priceEur * activeUsers;
+        const totalApiCostEur = parseInt(r.totalApiCostMillicents ?? "0", 10) / 100_000;
+        const avgApiCostEurPerUser = parseFloat(r.avgApiCostMillicentsPerUser ?? "0") / 100_000;
+        const marginEur = monthlyRevenueEur - totalApiCostEur;
+        const marginPct = monthlyRevenueEur > 0
+          ? Math.round((marginEur / monthlyRevenueEur) * 100)
+          : null;
+        return {
+          plan,
+          priceEur,
+          activeUsers,
+          monthlyRevenueEur: parseFloat(monthlyRevenueEur.toFixed(2)),
+          totalApiCostEur: parseFloat(totalApiCostEur.toFixed(4)),
+          avgApiCostEurPerUser: parseFloat(avgApiCostEurPerUser.toFixed(4)),
+          marginEur: parseFloat(marginEur.toFixed(2)),
+          marginPct,
+        };
+      });
+
+      res.json({ margins, yearMonth });
+    } catch (err) {
+      logger.error({ err }, "admin/credit-margin fehlgeschlagen");
+      res.status(500).json({ error: "Interner Fehler" });
+    }
+  },
+);
+
 export default router;

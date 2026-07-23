@@ -733,6 +733,30 @@ export async function setupAnalystSandbox(): Promise<void> {
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS logged_event JSONB"
   );
 
+  // Migration: referral bonuses table + new columns on team_invites
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS referral_bonuses (
+      id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id         TEXT        NOT NULL,
+      invite_id       UUID        NOT NULL,
+      year_month      TEXT        NOT NULL,
+      bonus_credits   INTEGER     NOT NULL DEFAULT 30,
+      granted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS referral_bonuses_user_idx ON referral_bonuses (user_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS referral_bonuses_invite_idx ON referral_bonuses (invite_id)"
+  );
+  await pool.query(
+    "ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS invite_type TEXT NOT NULL DEFAULT 'team'"
+  );
+  await pool.query(
+    "ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS referral_bonus_granted BOOLEAN NOT NULL DEFAULT false"
+  );
+
   // Seed default news topics if table is empty
   const { rows: topicRows } = await pool.query(
     "SELECT COUNT(*)::int AS c FROM news_topics"

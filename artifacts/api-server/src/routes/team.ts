@@ -1,18 +1,21 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
-import { getSubscription } from "../lib/quota";
+import { getSubscription, currentYearMonth } from "../lib/quota";
 import { countActiveInvites, getActiveHostIds } from "../lib/teamAccess";
 import { z } from "zod";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
 const MAX_TEAM_SLOTS = 3;
 const INVITE_VALID_DAYS = 7;
 const GRACE_DAYS = 30;
+const REFERRAL_BONUS_CREDITS = 30;
 
 const CreateInviteBody = z.object({
-  guestEmail: z.string().email(),
+  guestEmail: z.string().email().optional(),
+  inviteType: z.enum(["team", "referral"]).optional().default("team"),
 });
 
 function addDays(date: Date, days: number): Date {
@@ -75,36 +78,43 @@ router.get("/team/invites", requireAuth, async (req: Request, res: Response) => 
 router.post("/team/invites", requireAuth, async (req: Request, res: Response) => {
   const hostUserId = req.userId!;
 
-  const sub = await getSubscription(hostUserId);
-  if (sub.plan !== "pro") {
-    res.status(403).json({ error: "Team-Einladungen sind nur im Pro-Tarif verfügbar." });
-    return;
-  }
-
   const parsed = CreateInviteBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Ungültige E-Mail-Adresse." });
     return;
   }
-  const { guestEmail } = parsed.data;
+  const { inviteType } = parsed.data;
+  const guestEmail = parsed.data.guestEmail ?? `referral-${Date.now()}@bovial.app`;
 
-  const activeCount = await countActiveInvites(hostUserId);
-  if (activeCount >= MAX_TEAM_SLOTS) {
-    res.status(409).json({ error: `Maximale Team-Größe (${MAX_TEAM_SLOTS}) erreicht.` });
-    return;
+  // Team invites require pro plan; referral invites are available to all
+  if (inviteType === "team") {
+    const sub = await getSubscription(hostUserId);
+    if (sub.plan !== "pro" && sub.plan !== "premium_max") {
+      res.status(403).json({ error: "Team-Einladungen sind nur im Premium-Tarif verfügbar." });
+      return;
+    }
+  }
+
+  // Team invites count against slots; referral invites do not
+  if (inviteType === "team") {
+    const activeCount = await countActiveInvites(hostUserId);
+    if (activeCount >= MAX_TEAM_SLOTS) {
+      res.status(409).json({ error: `Maximale Team-Größe (${MAX_TEAM_SLOTS}) erreicht.` });
+      return;
+    }
   }
 
   const expiresAt = addDays(new Date(), INVITE_VALID_DAYS);
 
   const { rows } = await pool.query<{ id: string; token: string }>(
-    `INSERT INTO team_invites (host_user_id, guest_email, expires_at)
-     VALUES ($1, $2, $3)
+    `INSERT INTO team_invites (host_user_id, guest_email, expires_at, invite_type)
+     VALUES ($1, $2, $3, $4)
      RETURNING id, token`,
-    [hostUserId, guestEmail.toLowerCase(), expiresAt.toISOString()],
+    [hostUserId, guestEmail.toLowerCase(), expiresAt.toISOString(), inviteType],
   );
 
   const invite = rows[0];
-  res.status(201).json({ id: invite.id, token: invite.token, guestEmail, expiresAt });
+  res.status(201).json({ id: invite.id, token: invite.token, guestEmail, expiresAt, inviteType });
 });
 
 // ── DELETE /api/team/invites/:id — revoke invite ────────────────────────────
@@ -251,7 +261,18 @@ router.post("/team/accept/:token", requireAuth, async (req: Request, res: Respon
     return;
   }
 
-  if (guestEmail && guestEmail.toLowerCase() !== row.guest_email.toLowerCase()) {
+  const inviteDetails = await pool.query<{
+    invite_type: string;
+    referral_bonus_granted: boolean;
+  }>(
+    `SELECT invite_type, referral_bonus_granted FROM team_invites WHERE id = $1::uuid`,
+    [row.id],
+  );
+  const inviteType = inviteDetails.rows[0]?.invite_type ?? "team";
+  const bonusAlreadyGranted = inviteDetails.rows[0]?.referral_bonus_granted === true;
+
+  // For team invites: verify email matches (strict). For referral invites: any user may accept.
+  if (inviteType === "team" && guestEmail && guestEmail.toLowerCase() !== row.guest_email.toLowerCase()) {
     res.status(403).json({ error: "Diese Einladung gilt für eine andere E-Mail-Adresse." });
     return;
   }
@@ -265,7 +286,29 @@ router.post("/team/accept/:token", requireAuth, async (req: Request, res: Respon
     [guestUserId, row.id],
   );
 
-  res.json({ ok: true });
+  // Grant referral bonus credits to both sides (fire-and-forget)
+  if (inviteType === "referral" && !bonusAlreadyGranted) {
+    const yearMonth = currentYearMonth();
+    try {
+      await pool.query(
+        `INSERT INTO referral_bonuses (user_id, invite_id, year_month, bonus_credits)
+         VALUES ($1, $2, $3, $4), ($5, $2, $3, $4)`,
+        [guestUserId, row.id, yearMonth, REFERRAL_BONUS_CREDITS, row.host_user_id],
+      );
+      await pool.query(
+        `UPDATE team_invites SET referral_bonus_granted = true WHERE id = $1::uuid`,
+        [row.id],
+      );
+      logger.info(
+        { inviteId: row.id, referrer: row.host_user_id, referee: guestUserId, credits: REFERRAL_BONUS_CREDITS },
+        "Referral-Bonus gutgeschrieben",
+      );
+    } catch (err) {
+      logger.warn({ err, inviteId: row.id }, "Referral-Bonus konnte nicht gutgeschrieben werden");
+    }
+  }
+
+  res.json({ ok: true, referralBonusGranted: inviteType === "referral" && !bonusAlreadyGranted });
 });
 
 // ── GET /api/team/my-hosts — hosts the user is guest for ───────────────────

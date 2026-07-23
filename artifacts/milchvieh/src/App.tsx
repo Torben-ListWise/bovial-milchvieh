@@ -146,6 +146,7 @@ import { HealthAlertsOperatorPage } from "@/pages/operator/health-alerts";
 import { CrossFarmPatternsOperatorPage } from "@/pages/operator/cross-farm-patterns";
 import { UserManagementPage } from "@/pages/operator/user-management";
 import { WeatherConceptionPage } from "@/pages/app/weather-conception";
+import { BIDashboardPage } from "@/pages/operator/bi-dashboard";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -381,6 +382,7 @@ function AppPortal() {
         <Route path="/app/health-alerts" component={HealthAlertsOperatorPage} />
         <Route path="/app/cross-farm-patterns" component={CrossFarmPatternsOperatorPage} />
         <Route path="/app/user-management" component={UserManagementPage} />
+        <Route path="/app/bi-dashboard" component={BIDashboardPage} />
         <Route path="/app/weather-correlation" component={WeatherConceptionPage} />
         <Route path="/app/upgrade" component={UpgradePage} />
         <Route path="/app/semen-planning">

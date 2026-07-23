@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, uniqueIndex, uuid, boolean } from "drizzle-orm/pg-core";
 
 export const subscriptionsTable = pgTable("subscriptions", {
   userId: text("user_id").primaryKey(),
@@ -39,6 +39,10 @@ export const teamInvitesTable = pgTable("team_invites", {
   guestUserId: text("guest_user_id"),
   token: uuid("token").notNull().unique().defaultRandom(),
   status: text("status").notNull().default("pending"),
+  /** 'team' = same-farm guest access; 'referral' = new independent farm referral */
+  inviteType: text("invite_type").notNull().default("team"),
+  /** True once referral bonuses have been granted to both sides. */
+  referralBonusGranted: boolean("referral_bonus_granted").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),

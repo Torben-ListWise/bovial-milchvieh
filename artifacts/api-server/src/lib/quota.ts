@@ -124,10 +124,20 @@ export async function getQuotaStatus(userId: string): Promise<{
     .limit(1);
 
   const used = quota?.count ?? 0;
+
+  // Add referral bonus credits to the effective limit for this month
+  const [bonusRow] = await db.execute(sql`
+    SELECT COALESCE(SUM(bonus_credits), 0)::int AS total
+    FROM referral_bonuses
+    WHERE user_id = ${userId} AND year_month = ${yearMonth}
+  `).then((r) => ((r as any).rows ?? r) as Array<{ total: number }>);
+  const bonusCredits = bonusRow?.total ?? 0;
+  const effectiveLimit = limit === Infinity ? Infinity : limit + bonusCredits;
+
   const periodEnd = (sub as any).currentPeriodEnd ?? null;
   const gracePeriodEndsAt = (sub as any).gracePeriodEndsAt ?? null;
 
-  return { plan, limit, used, yearMonth, periodEnd, gracePeriodEndsAt };
+  return { plan, limit: effectiveLimit, used, yearMonth, periodEnd, gracePeriodEndsAt };
 }
 
 /**

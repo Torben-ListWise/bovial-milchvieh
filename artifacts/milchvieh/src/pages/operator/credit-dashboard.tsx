@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, BarChart3, Users, Zap, TrendingUp, Crown, RefreshCw } from "lucide-react";
+import { AlertTriangle, BarChart3, Users, Zap, TrendingUp, Crown, RefreshCw, Euro } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -83,6 +83,108 @@ function ComplexityBadge({ complexity }: { complexity: string }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cfg.color}`}>
       {cfg.label}
     </span>
+  );
+}
+
+type MarginRow = {
+  plan: string;
+  priceEur: number;
+  activeUsers: number;
+  monthlyRevenueEur: number;
+  totalApiCostEur: number;
+  avgApiCostEurPerUser: number;
+  marginEur: number;
+  marginPct: number | null;
+};
+
+const PLAN_LABELS_MARGIN: Record<string, string> = {
+  free: "Kostenlos", basis: "Basis", starter: "Professional",
+  pro: "Premium", premium_max: "Premium Max", beta: "Beta",
+};
+
+function MarginSection() {
+  const { getToken } = useAuth();
+  const [rows, setRows] = useState<MarginRow[]>([]);
+  const [yearMonth, setYearMonth] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_BASE}/api/admin/credit-margin`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const d = await res.json();
+          setRows(d.margins ?? []);
+          setYearMonth(d.yearMonth ?? "");
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [getToken]);
+
+  function marginColor(pct: number | null) {
+    if (pct === null) return "text-muted-foreground";
+    if (pct >= 70) return "text-green-700 font-semibold";
+    if (pct >= 40) return "text-blue-700";
+    if (pct >= 0) return "text-amber-700";
+    return "text-destructive font-semibold";
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Euro className="w-4 h-4" />
+          Margenanalyse pro Preisplan — {yearMonth}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground mb-3">
+          Einnahmen (Listenpreis × aktive Nutzer) vs. tatsächliche API-Kosten dieses Monats.
+          Nur Nutzer mit role='customer'. Keine Stripe-Stornierungen berücksichtigt.
+        </p>
+        {loading ? (
+          <div className="animate-pulse space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-8 bg-muted rounded" />)}</div>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Noch keine Nutzungsdaten vorhanden.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs">
+                  <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Plan</th>
+                  <th className="text-right py-2 pr-4 font-medium text-muted-foreground">Nutzer</th>
+                  <th className="text-right py-2 pr-4 font-medium text-muted-foreground">Einnahmen (€)</th>
+                  <th className="text-right py-2 pr-4 font-medium text-muted-foreground">API-Kosten ges. (€)</th>
+                  <th className="text-right py-2 pr-4 font-medium text-muted-foreground">Ø Kosten/Nutzer (€)</th>
+                  <th className="text-right py-2 pr-4 font-medium text-muted-foreground">Marge (€)</th>
+                  <th className="text-right py-2 font-medium text-muted-foreground">Marge (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.plan} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="py-2 pr-4 font-medium">{PLAN_LABELS_MARGIN[r.plan] ?? r.plan}</td>
+                    <td className="text-right py-2 pr-4">{r.activeUsers.toLocaleString("de-DE")}</td>
+                    <td className="text-right py-2 pr-4">{r.monthlyRevenueEur.toFixed(2)} €</td>
+                    <td className="text-right py-2 pr-4">{r.totalApiCostEur.toFixed(4)} €</td>
+                    <td className="text-right py-2 pr-4">{r.avgApiCostEurPerUser.toFixed(4)} €</td>
+                    <td className="text-right py-2 pr-4">{r.marginEur.toFixed(2)} €</td>
+                    <td className={`text-right py-2 ${marginColor(r.marginPct)}`}>
+                      {r.marginPct !== null ? `${r.marginPct} %` : "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -279,6 +381,9 @@ export function CreditDashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Margin Analysis Section */}
+      <MarginSection />
 
       {/* Filter + Recent Entries */}
       <Card>

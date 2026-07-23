@@ -712,6 +712,100 @@ function TeamSectionWrapper() {
   return <TeamSection billingPlan={status?.plan ?? null} />;
 }
 
+// ── Landwirt wirbt Landwirt ──────────────────────────────────────────────────
+function ReferralSection() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
+  const [link, setLink] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const BASE_PATH = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+
+  function referralLink(token: string) {
+    return `${window.location.origin}${BASE_PATH}/team/accept/${token}`;
+  }
+
+  async function handleCreate() {
+    setCreating(true);
+    try {
+      const authToken = await getToken();
+      const res = await fetch(`${API_BASE}/api/team/invites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ inviteType: "referral" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Fehler", description: data.error ?? "Link konnte nicht erstellt werden." });
+        return;
+      }
+      setLink(referralLink(data.token));
+    } catch {
+      toast({ variant: "destructive", title: "Fehler", description: "Verbindung fehlgeschlagen." });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function copyLink() {
+    if (!link) return;
+    navigator.clipboard.writeText(link).then(() => toast({ title: "Empfehlungslink kopiert" }));
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          Landwirt wirbt Landwirt
+        </CardTitle>
+        <CardDescription>
+          Teile diesen Link mit einem anderen Betrieb. Wenn er sich als neuer, eigenständiger Betrieb registriert und den Link nutzt,
+          erhalten <strong>beide Seiten automatisch 30 Bonus-Credits</strong> für den aktuellen Monat.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="p-4 rounded-lg border border-primary/20 bg-primary/3 text-sm space-y-2">
+          <p className="font-medium">So funktioniert es:</p>
+          <ul className="text-muted-foreground text-xs space-y-1 list-disc list-inside">
+            <li>Empfehlungslink erstellen und weiterschicken</li>
+            <li>Der empfangene Betrieb registriert sich über den Link</li>
+            <li>Beide erhalten automatisch 30 Bonus-Credits (= 30 einfache Fragen oder 10 komplexe Analysen)</li>
+            <li>Unbegrenzt viele Empfehlungen möglich</li>
+          </ul>
+        </div>
+        {link ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground font-medium">Dein Empfehlungslink:</p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={link}
+                className="flex-1 h-9 px-3 text-xs rounded-md border border-input bg-muted font-mono truncate"
+              />
+              <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={copyLink}>
+                <Copy className="w-4 h-4" />
+                Kopieren
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Link ist 7 Tage gültig. Danach einfach einen neuen erstellen.
+            </p>
+          </div>
+        ) : (
+          <Button onClick={handleCreate} disabled={creating} className="gap-2">
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+            Empfehlungslink erstellen
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function StallstandortSection() {
   const { getToken } = useAuth();
   const { toast } = useToast();
@@ -1146,7 +1240,12 @@ export function SettingsPage() {
       )}
 
       {/* Team */}
-      {activeTab === "team" && <TeamSectionWrapper />}
+      {activeTab === "team" && (
+        <div className="space-y-4">
+          <TeamSectionWrapper />
+          <ReferralSection />
+        </div>
+      )}
 
       {/* Datenschutz & Daten */}
       {activeTab === "datenschutz" && (
