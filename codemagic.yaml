@@ -93,18 +93,23 @@ workflows:
 
       - name: Patch EXConstants getAppConfig.js (pnpm monorepo fix)
         script: |
-          # getAppConfig.js runs from inside Pods/ExpoConstants/scripts/build/ and
-          # calls require('@expo/config'). In a pnpm monorepo Node.js cannot resolve
+          # getAppConfig.js runs from inside Pods/ExpoConstants/scripts/ (or scripts/build/)
+          # and calls require('@expo/config'). In a pnpm monorepo Node.js cannot resolve
           # this via the normal walk-up. Fix: use require.resolve({ paths: [projectNodeModules] })
           # so Node looks directly in bovial-mobile/node_modules (explicit pnpm symlinks).
           #
           # The patched JS content is stored as base64 to avoid YAML heredoc issues
           # (content at column 0 would terminate the YAML block scalar).
-          SCRIPT="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants/scripts/build/getAppConfig.js"
-          if [ ! -f "$SCRIPT" ]; then
-            echo "❌ getAppConfig.js not found at: $SCRIPT"
-            exit 1
+          PODS_EXCONSTANTS="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants"
+          echo "=== ExpoConstants scripts tree ==="
+          find "$PODS_EXCONSTANTS/scripts" -type f 2>/dev/null || echo "⚠️  No scripts dir found under $PODS_EXCONSTANTS"
+          # Dynamically find the built getAppConfig.js (may be scripts/build/ or scripts/)
+          SCRIPT=$(find "$PODS_EXCONSTANTS/scripts" -name "getAppConfig.js" -not -path "*/node_modules/*" 2>/dev/null | head -1)
+          if [ -z "$SCRIPT" ]; then
+            echo "⚠️  getAppConfig.js not found anywhere under $PODS_EXCONSTANTS/scripts — skipping patch (module resolution may fail at build time)"
+            exit 0
           fi
+          echo "✅ Found getAppConfig.js at: $SCRIPT"
           echo "=== Original getAppConfig.js ==="
           cat "$SCRIPT"
           # Decode and write the patched content (single-line python3 -c — avoids col-0 YAML issue)
