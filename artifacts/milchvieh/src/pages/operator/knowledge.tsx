@@ -151,6 +151,9 @@ function KnowledgeGapsCard() {
             <p className="text-xs text-muted-foreground mt-0.5">
               Fragen, bei denen die Bibliothek keine relevanten Treffer lieferte — sortiert nach Häufigkeit.
             </p>
+            <p className="text-xs text-muted-foreground mt-1 italic">
+              Hinweis: DairyComp-Fragen, Betriebskürzel-Anfragen und Rechner-Anfragen erscheinen hier nicht — sie werden durch dedizierte Tools (Handbuch-Suche, Abkürzungsindex, Kalkulatoren) abgedeckt und zählen nicht als Lücken.
+            </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {enabled && (

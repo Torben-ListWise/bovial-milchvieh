@@ -1676,6 +1676,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         return { text: rawText };
       }
       case "calculate_investment": {
+        anyKnowledgeSearchAttempted = true;
         const investmentCost = input.investmentCost as number;
         const financingYears = Math.max(1, Math.min(30, input.financingYears as number));
         const interestRatePct = input.interestRatePct as number;
@@ -2117,6 +2118,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
 
       case "search_knowledge": {
         searchKnowledgeCalled = true;
+        anyKnowledgeSearchAttempted = true;
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
         const SIMILARITY_THRESHOLD = 0.55;
@@ -2179,6 +2181,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         }
       }
       case "search_dairycomp_manual": {
+        anyKnowledgeSearchAttempted = true;
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
         const SIMILARITY_THRESHOLD = 0.35;
@@ -2268,6 +2271,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         }
       }
       case "search_farm_abbreviations": {
+        anyKnowledgeSearchAttempted = true;
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
         const SIMILARITY_THRESHOLD = 0.25;
@@ -2425,10 +2429,12 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         }
       }
       case "show_heat_abatement_calculator": {
+        anyKnowledgeSearchAttempted = true;
         widgetSpec = { type: "heat_abatement", prefill: input as Record<string, number> };
         return { acknowledged: true, widget: "heat_abatement" };
       }
       case "show_fresh_cow_calculator": {
+        anyKnowledgeSearchAttempted = true;
         widgetSpec = { type: "fresh_cow", prefill: input as Record<string, number> };
         return { acknowledged: true, widget: "fresh_cow" };
       }
@@ -3120,6 +3126,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   let finalText = "";
   let toolWasCalled = false;
   let searchKnowledgeCalled = false;
+  // Tracks whether ANY knowledge/manual/abbreviation search was attempted this
+  // turn — used by the post-agent fallback to avoid logging false gaps when the
+  // agent legitimately used a specialised tool instead of search_knowledge.
+  let anyKnowledgeSearchAttempted = false;
   let firstTextDeltaFired = false;
   const backQuestions: FarmerQuestion[] = [];
   let widgetSpec: WidgetSpec | null = null;
@@ -3387,22 +3397,37 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   }
 
   // Post-agent fallback: if the agent produced a real answer but never called
-  // search_knowledge (despite the mandatory instruction), record the original
-  // user question as a missed query with topScore=null so the knowledge-gaps
-  // panel is populated even when the agent skips the step.
-  if (!searchKnowledgeCalled && finalText && knowledgeDocsExist) {
+  // any knowledge/manual/abbreviation search tool (despite the mandatory
+  // instruction), record the original user question as a missed query with
+  // topScore=null so the knowledge-gaps panel is populated even when the agent
+  // skips the step.
+  //
+  // Guard 1: skip when a specialised search was used instead (DairyComp,
+  //   farm-abbreviations, calculator widgets) — those are legitimate
+  //   alternatives to search_knowledge and must not create false gaps.
+  // Guard 2: skip very short or content-free follow-ups ("ja", "ok", etc.)
+  //   — query must be >8 chars AND contain either a "?" or at least 3 words.
+  if (!anyKnowledgeSearchAttempted && finalText && knowledgeDocsExist) {
     const lastUserMsg = [...opts.conversation].reverse().find((m) => m.role === "user");
     const userQuery = typeof lastUserMsg?.content === "string"
       ? lastUserMsg.content.trim()
       : "";
     if (userQuery) {
-      logger.debug({ query: userQuery }, "search_knowledge nie aufgerufen — trage missed query ein");
-      db.insert(knowledgeMissedQueriesTable).values({
-        query: userQuery,
-        topScore: null,
-        customerId: opts.userId ?? null,
-      }).catch((err) => logger.error({ err, query: userQuery }, "Fehler beim Speichern der missed query (Fallback)"));
+      const wordCount = userQuery.split(/\s+/).filter(Boolean).length;
+      const hasMinQuality = userQuery.length > 8 && (userQuery.includes("?") || wordCount >= 3);
+      if (!hasMinQuality) {
+        logger.debug({ query: userQuery }, "Fallback-missed-query übersprungen: Query zu kurz oder kein Wissensinhalt");
+      } else {
+        logger.debug({ query: userQuery }, "search_knowledge nie aufgerufen — trage missed query ein");
+        db.insert(knowledgeMissedQueriesTable).values({
+          query: userQuery,
+          topScore: null,
+          customerId: opts.userId ?? null,
+        }).catch((err) => logger.error({ err, query: userQuery }, "Fehler beim Speichern der missed query (Fallback)"));
+      }
     }
+  } else if (anyKnowledgeSearchAttempted && finalText) {
+    logger.debug("Fallback-missed-query übersprungen: alternative Wissenssuche aufgerufen");
   }
 
   // Grounding enforcement: if the model returned text without calling any
