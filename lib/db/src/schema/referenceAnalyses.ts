@@ -22,6 +22,8 @@ export const referenceAnalysesTable = pgTable("reference_analyses", {
   // Admin-edited versions (null = not edited, use extracted)
   editedPattern: text("edited_pattern"),
   editedClassification: text("edited_classification"),
+  editedCommand: text("edited_command"),
+  editedCommandSynonyms: jsonb("edited_command_synonyms").$type<string[]>(),
   // Set after confirmation
   knowledgeDocId: uuid("knowledge_doc_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

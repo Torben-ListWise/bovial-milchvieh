@@ -276,18 +276,24 @@ router.post(
 );
 
 // PATCH /api/admin/reference-analyses/:id
-// Body: { editedPattern?: string, editedClassification?: string }
+// Body: { editedPattern?: string, editedClassification?: string, editedCommand?: string | null, editedCommandSynonyms?: string[] | null }
 router.patch(
   "/admin/reference-analyses/:id",
   requireAuth,
   requireOperator,
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { editedPattern, editedClassification } = req.body ?? {};
+    const { editedPattern, editedClassification, editedCommand, editedCommandSynonyms } = req.body ?? {};
 
-    const updates: Record<string, string | undefined> = {};
+    const updates: Record<string, unknown> = {};
     if (typeof editedPattern === "string") updates.editedPattern = editedPattern;
     if (typeof editedClassification === "string") updates.editedClassification = editedClassification;
+    if (editedCommand !== undefined) updates.editedCommand = typeof editedCommand === "string" ? editedCommand : null;
+    if (editedCommandSynonyms !== undefined) {
+      updates.editedCommandSynonyms = Array.isArray(editedCommandSynonyms)
+        ? (editedCommandSynonyms as unknown[]).filter((s): s is string => typeof s === "string")
+        : null;
+    }
     updates.updatedAt = new Date().toISOString();
 
     const [row] = await db
@@ -342,12 +348,14 @@ router.post(
       return;
     }
 
-    // 2. Inject DairyComp synonyms if command was found
-    if (ref.extractedCommand && ref.extractedCommandSynonyms?.length) {
+    // 2. Inject DairyComp synonyms if command was found (prefer edited values)
+    const finalCommand = ref.editedCommand ?? ref.extractedCommand;
+    const finalSynonyms = ref.editedCommandSynonyms ?? ref.extractedCommandSynonyms;
+    if (finalCommand && finalSynonyms?.length) {
       try {
         await injectDairycompSynonyms(
-          ref.extractedCommand,
-          ref.extractedCommandSynonyms,
+          finalCommand,
+          finalSynonyms,
           req.userId!,
         );
       } catch (err: unknown) {

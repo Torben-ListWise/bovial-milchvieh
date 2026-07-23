@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthToken } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +38,8 @@ interface ReferenceAnalysis {
   extractedTopic: string;
   editedPattern: string | null;
   editedClassification: string | null;
+  editedCommand: string | null;
+  editedCommandSynonyms: string[] | null;
   knowledgeDocId: string | null;
   createdAt: string;
 }
@@ -204,8 +207,13 @@ function ReferenceAnalysisCard({
   const [expanded, setExpanded] = useState(item.status === "pending_review");
   const [editingPattern, setEditingPattern] = useState(false);
   const [editingClass, setEditingClass] = useState(false);
+  const [editingCommand, setEditingCommand] = useState(false);
   const [patternDraft, setPatternDraft] = useState(item.editedPattern ?? item.extractedPattern);
   const [classDraft, setClassDraft] = useState(item.editedClassification ?? item.extractedClassification);
+  const [commandDraft, setCommandDraft] = useState(item.editedCommand ?? item.extractedCommand ?? "");
+  const [synonymsDraft, setSynonymsDraft] = useState(
+    (item.editedCommandSynonyms ?? item.extractedCommandSynonyms ?? []).join("\n"),
+  );
 
   const confirmMutation = useMutation({
     mutationFn: () => apiFetch(`/api/admin/reference-analyses/${item.id}/confirm`, { method: "POST" }),
@@ -270,22 +278,103 @@ function ReferenceAnalysisCard({
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t border-border/40 pt-4">
 
-          {/* DairyComp command found */}
-          {item.extractedCommand && (
-            <div className="rounded-lg bg-secondary/40 border border-border/40 p-3">
-              <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1.5">
-                <Terminal className="w-3 h-3" />DairyComp-Befehl erkannt
-              </p>
-              <code className="text-xs font-mono text-foreground">{item.extractedCommand}</code>
-              {item.extractedCommandSynonyms?.length && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Synonyme: {item.extractedCommandSynonyms.join(" · ")}
+          {/* DairyComp command block — always shown for pending, or when any command data exists */}
+          {(item.extractedCommand !== null || item.editedCommand !== null || item.status === "pending_review") && (
+            <div className="rounded-lg bg-secondary/40 border border-border/40 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <Terminal className="w-3 h-3" />
+                  DairyComp-Befehl erkannt
                 </p>
+                {item.status === "pending_review" && !editingCommand && (
+                  <button
+                    onClick={() => setEditingCommand(true)}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Pencil className="w-3 h-3" />Bearbeiten
+                  </button>
+                )}
+              </div>
+
+              {editingCommand ? (
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Befehlsname (z.B. <code className="font-mono">BREDSUM\E</code>)</p>
+                    <Input
+                      value={commandDraft}
+                      onChange={(e) => setCommandDraft(e.target.value)}
+                      placeholder="Befehlsname eingeben…"
+                      className="text-sm font-mono h-8"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Synonyme (eine Zeile pro Synonym)</p>
+                    <Textarea
+                      value={synonymsDraft}
+                      onChange={(e) => setSynonymsDraft(e.target.value)}
+                      placeholder="Synonym 1&#10;Synonym 2&#10;…"
+                      rows={4}
+                      className="text-sm resize-none"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => {
+                        const synonymsArray = synonymsDraft
+                          .split(/[\n,]/)
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        saveMutation.mutate({
+                          editedCommand: commandDraft.trim() || null,
+                          editedCommandSynonyms: synonymsArray.length ? synonymsArray : null,
+                        } as any);
+                        setEditingCommand(false);
+                      }}
+                    >
+                      Speichern
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-7"
+                      onClick={() => {
+                        setCommandDraft(item.editedCommand ?? item.extractedCommand ?? "");
+                        setSynonymsDraft(
+                          (item.editedCommandSynonyms ?? item.extractedCommandSynonyms ?? []).join("\n"),
+                        );
+                        setEditingCommand(false);
+                      }}
+                    >
+                      Abbrechen
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {(item.editedCommand ?? item.extractedCommand) ? (
+                    <code className="text-xs font-mono text-foreground block">
+                      {item.editedCommand ?? item.extractedCommand}
+                    </code>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Kein Befehl erkannt — manuell eintragen</p>
+                  )}
+                  {(() => {
+                    const syns = item.editedCommandSynonyms ?? item.extractedCommandSynonyms;
+                    return syns?.length ? (
+                      <p className="text-xs text-muted-foreground">
+                        Synonyme: {syns.join(" · ")}
+                      </p>
+                    ) : null;
+                  })()}
+                  <p className="text-xs text-amber-700 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Wird nach Bestätigung automatisch dem DairyComp-Glossar hinzugefügt
+                  </p>
+                </>
               )}
-              <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" />
-                Wird nach Bestätigung automatisch dem DairyComp-Glossar hinzugefügt
-              </p>
             </div>
           )}
 
