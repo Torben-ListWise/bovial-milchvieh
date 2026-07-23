@@ -11,6 +11,7 @@ import {
   Clock,
   Check,
   X,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,9 @@ interface HealthAlert {
   affectedSpecies?: string[] | null;
 }
 
+const ALL_SPECIES = ["milchvieh", "schweine", "geflügel", "ackerbau", "allgemein"] as const;
+type Species = typeof ALL_SPECIES[number];
+
 const SPECIES_LABELS: Record<string, string> = {
   milchvieh: "Milchvieh",
   schweine:  "Schweine",
@@ -50,6 +54,14 @@ const SPECIES_COLORS: Record<string, string> = {
   geflügel:  "bg-orange-50 text-orange-700 border-orange-200",
   ackerbau:  "bg-lime-50 text-lime-700 border-lime-200",
   allgemein: "bg-gray-50 text-gray-600 border-gray-200",
+};
+
+const SPECIES_ACTIVE_COLORS: Record<string, string> = {
+  milchvieh: "bg-blue-600 text-white border-blue-600",
+  schweine:  "bg-pink-600 text-white border-pink-600",
+  geflügel:  "bg-orange-500 text-white border-orange-500",
+  ackerbau:  "bg-lime-600 text-white border-lime-600",
+  allgemein: "bg-gray-500 text-white border-gray-500",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -91,6 +103,104 @@ async function authFetch(path: string, opts?: RequestInit): Promise<Response> {
   });
 }
 
+function SpeciesEditor({
+  alertId,
+  current,
+  onSaved,
+}: {
+  alertId: string;
+  current: string[];
+  onSaved: (species: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(
+    current.length > 0 ? current : ["allgemein"],
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = (s: Species) => {
+    setSaved(false);
+    setSelected((prev) =>
+      prev.includes(s) ? (prev.length > 1 ? prev.filter((x) => x !== s) : prev) : [...prev, s],
+    );
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const resp = await authFetch(`/api/health-alerts/operator/${alertId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ affectedSpecies: selected }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error((body as any).error ?? "Fehler beim Speichern");
+      }
+      setSaved(true);
+      onSaved(selected);
+    } catch (e: any) {
+      setError(e.message ?? "Unbekannter Fehler");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty =
+    selected.slice().sort().join(",") !== current.slice().sort().join(",");
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        {ALL_SPECIES.map((s) => {
+          const active = selected.includes(s);
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => toggle(s)}
+              className={cn(
+                "text-[11px] font-medium px-2 py-0.5 rounded border transition-colors cursor-pointer",
+                active
+                  ? (SPECIES_ACTIVE_COLORS[s] ?? "bg-gray-500 text-white border-gray-500")
+                  : (SPECIES_COLORS[s] ?? "bg-gray-50 text-gray-600 border-gray-200"),
+              )}
+            >
+              {SPECIES_LABELS[s]}
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <p className="text-[11px] text-destructive">{error}</p>
+      )}
+      {isDirty && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 text-[11px] self-start"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+          ) : saved ? (
+            <Check className="w-3 h-3 mr-1 text-green-600" />
+          ) : null}
+          Tierart speichern
+        </Button>
+      )}
+      {saved && !isDirty && (
+        <p className="text-[11px] text-green-700 flex items-center gap-1">
+          <Check className="w-3 h-3" /> Gespeichert
+        </p>
+      )}
+    </div>
+  );
+}
+
 function AlertCard({
   alert,
   onApprove,
@@ -104,6 +214,12 @@ function AlertCard({
   isApproving: boolean;
   isRejecting: boolean;
 }) {
+  const [localSpecies, setLocalSpecies] = useState<string[]>(
+    (alert.affectedSpecies ?? []).length > 0
+      ? (alert.affectedSpecies as string[])
+      : ["allgemein"],
+  );
+
   const sourceLabel = SOURCE_LABELS[alert.sourceKey] ?? alert.sourceKey;
   const sourceCls =
     SOURCE_COLORS[alert.sourceKey] ?? "bg-gray-50 text-gray-700 border-gray-200";
@@ -146,9 +262,11 @@ function AlertCard({
               </span>
             )}
           </div>
-          {(alert.affectedSpecies ?? []).length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-1">
-              {(alert.affectedSpecies ?? ["allgemein"]).map((s) => (
+
+          {/* Current species badges (read-only display) */}
+          {localSpecies.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {localSpecies.map((s) => (
                 <span
                   key={s}
                   className={cn(
@@ -161,6 +279,7 @@ function AlertCard({
               ))}
             </div>
           )}
+
           <h3 className="text-sm font-semibold text-foreground leading-snug">
             {alert.title}
           </h3>
@@ -180,6 +299,18 @@ function AlertCard({
             <span className="text-[11px] text-muted-foreground/60">
               Gefetcht: {formatDate(alert.fetchedAt)}
             </span>
+          </div>
+
+          {/* Species editor — always visible for operators */}
+          <div className="mt-3 pt-3 border-t border-border/50">
+            <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">
+              Tierart-Zuweisung (klicken zum Aktivieren/Deaktivieren):
+            </p>
+            <SpeciesEditor
+              alertId={alert.id}
+              current={localSpecies}
+              onSaved={setLocalSpecies}
+            />
           </div>
         </div>
       </div>
@@ -306,6 +437,10 @@ export function HealthAlertsOperatorPage() {
             [Amtliche Quelle]
           </span>
           -Tag. Pro Thema wird immer nur die neueste Meldung angezeigt.
+          <br />
+          <span className="text-amber-700">
+            Tierart-Tags können jederzeit manuell korrigiert werden — auch nach der Freigabe.
+          </span>
         </div>
       </div>
 

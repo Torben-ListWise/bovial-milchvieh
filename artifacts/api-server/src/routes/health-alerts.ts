@@ -90,6 +90,41 @@ router.post(
   },
 );
 
+// ── Operator: Tierart-Tag manuell überschreiben ───────────────────────────────
+
+const VALID_SPECIES = ["milchvieh", "schweine", "geflügel", "ackerbau", "allgemein"] as const;
+
+router.patch(
+  "/health-alerts/operator/:id",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const id = req.params["id"] as string;
+    const { affectedSpecies } = req.body as { affectedSpecies?: unknown };
+
+    if (
+      !Array.isArray(affectedSpecies) ||
+      affectedSpecies.length === 0 ||
+      !affectedSpecies.every((s) => VALID_SPECIES.includes(s as any))
+    ) {
+      res.status(400).json({
+        error: `affectedSpecies must be a non-empty array of: ${VALID_SPECIES.join(", ")}`,
+      });
+      return;
+    }
+
+    await db
+      .update(animalHealthAlertsTable)
+      .set({
+        affectedSpecies: affectedSpecies as string[],
+        updatedAt: new Date(),
+      })
+      .where(eq(animalHealthAlertsTable.id, id));
+
+    res.json({ ok: true });
+  },
+);
+
 // ── Kunden: aktuelle bestätigte Meldungen (species-gefiltert + Aktualitäts-Gate) ─────────
 
 const FRESHNESS_DAYS = 90;
