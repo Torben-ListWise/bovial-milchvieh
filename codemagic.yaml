@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     environment:
       node: v20
-      xcode: latest
+      xcode: 16.4
       cocoapods: default
       groups:
         - iOS
@@ -148,7 +148,29 @@ GETAPPCONFIG_EOF
           node "$SCRIPT" "${CM_BUILD_DIR}/artifacts/bovial-mobile" /tmp/test_app_config 2>&1 \
             && echo "✅ getAppConfig.js dry-run OK" \
             && echo "app.config content:" && cat /tmp/test_app_config/app.config | head -3 \
-            || echo "❌ getAppConfig.js dry-run FAILED (see error above)"
+            || { echo "❌ getAppConfig.js dry-run FAILED (see error above)"; exit 1; }
+
+      - name: Patch get-app-config-ios.sh (BUNDLE_FORMAT fallback)
+        script: |
+          # In Xcode 26+, the BUNDLE_FORMAT build setting is not always propagated
+          # to pod script phases. The get-app-config-ios.sh script exits 1 if
+          # BUNDLE_FORMAT is unset or unrecognised. This patch adds a safe fallback
+          # to "shallow" (the value used by all modern Xcode/CocoaPods builds) so
+          # the script never fails on a missing build setting.
+          SH="${CM_BUILD_DIR}/artifacts/bovial-mobile/ios/Pods/ExpoConstants/scripts/get-app-config-ios.sh"
+          if [ ! -f "$SH" ]; then
+            echo "⚠️  get-app-config-ios.sh not found at: $SH — skipping"
+          else
+            # Idempotency: skip if already patched
+            if grep -q "BUNDLE_FORMAT_PATCHED" "$SH"; then
+              echo "✅ get-app-config-ios.sh already patched — skipping"
+            else
+              # Insert fallback right before the if [ "$BUNDLE_FORMAT" == ... ] block
+              sed -i '' 's/^if \[ "\$BUNDLE_FORMAT" == "shallow" \]/# BUNDLE_FORMAT_PATCHED\nBUNDLE_FORMAT="${BUNDLE_FORMAT:-shallow}"\nif [ "$BUNDLE_FORMAT" == "shallow" ]/' "$SH"
+              echo "✅ get-app-config-ios.sh patched with BUNDLE_FORMAT fallback"
+              grep -n "BUNDLE_FORMAT" "$SH"
+            fi
+          fi
 
       - name: Fetch signing files
         script: |
