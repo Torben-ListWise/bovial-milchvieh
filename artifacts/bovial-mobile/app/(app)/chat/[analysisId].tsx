@@ -32,7 +32,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { MessageBubble } from "@/components/MessageBubble";
-import { ProgressPill } from "@/components/ProgressPill";
+import { AgentStepsTimeline } from "@/components/AgentStepsTimeline";
 
 type DiaryEntry = {
   id: string;
@@ -691,25 +691,34 @@ export default function ChatScreen() {
         ListHeaderComponent={
           streaming ? (
             <View style={s.streamingWrap}>
-              <ProgressPill
-                steps={streaming.completedSteps}
-                currentStep={streaming.currentStep}
-              />
-              {(streaming.text || streaming.chart) && (
-                <MessageBubble
-                  message={{
-                    id: "__streaming__",
-                    analysisId,
-                    role: "assistant",
-                    content: streaming.text || null,
-                    charts: streaming.chart ? [streaming.chart] : [],
-                    citations: [],
-                    followUpQuestions: [],
-                    loggedEvent: null,
-                    createdAt: new Date().toISOString(),
-                  }}
-                  isStreaming
+              {!(streaming.text || streaming.chart) ? (
+                <AgentStepsTimeline
+                  completedSteps={streaming.completedSteps}
+                  currentStep={streaming.currentStep}
                 />
+              ) : (
+                <>
+                  {(streaming.completedSteps.length > 0 || streaming.currentStep) && (
+                    <AgentStepsTimeline
+                      completedSteps={streaming.completedSteps}
+                      currentStep={streaming.currentStep}
+                    />
+                  )}
+                  <MessageBubble
+                    message={{
+                      id: "__streaming__",
+                      analysisId,
+                      role: "assistant",
+                      content: streaming.text || null,
+                      charts: streaming.chart ? [streaming.chart] : [],
+                      citations: [],
+                      followUpQuestions: [],
+                      loggedEvent: null,
+                      createdAt: new Date().toISOString(),
+                    }}
+                    isStreaming
+                  />
+                </>
               )}
             </View>
           ) : diaryEntries.length > 0 ? (
