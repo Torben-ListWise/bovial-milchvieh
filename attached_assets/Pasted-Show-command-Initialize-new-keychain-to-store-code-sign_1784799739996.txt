@@ -1,0 +1,31 @@
+Show command
+Initialize new keychain to store code signing certificates at /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+Create keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db timeout to "no timeout"
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db to system default keychain
+Unlock keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+usage: app-store-connect [-h] [--log-stream {stderr,stdout}] [--no-color] [--version] [-s] [-v] {app-store-version-localizations,app-store-version-phased-releases,app-store-version-submissions,app-store-versions,apps,beta-app-review-submissions,beta-build-localizations,beta-groups,builds,bundle-ids,certificates,devices,fetch-signing-files,get-latest-app-store-build-number,get-latest-build-number,get-latest-testflight-build-number,profiles,publish,review-submission-items,review-submissions} ...
+app-store-connect: error: argument --certificate-key: Provided value "********" is not valid
+Add certificates to keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Certificates/*.p12
+Searching for files matching /Users/builder/Library/MobileDevice/Certificates/*.p12
+Did not find any certificates from specified locations
+
+
+Build failed :|
+Step 8 script `Fetch signing files` exited with status code 1
+Initialize new keychain to store code signing certificates at /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+Create keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db timeout to "no timeout"
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db to system default keychain
+Unlock keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+usage: app-store-connect [-h] [--log-stream {stderr,stdout}] [--no-color] [--version] [-s] [-v] {app-store-version-localizations,app-store-version-phased-releases,app-store-version-submissions,app-store-versions,apps,beta-app-review-submissions,beta-build-localizations,beta-groups,builds,bundle-ids,certificates,devices,fetch-signing-files,get-latest-app-store-build-number,get-latest-build-number,get-latest-testflight-build-number,profiles,publish,review-submission-items,review-submissions} ...
+app-store-connect: error: argument --certificate-key: Provided value "********" is not valid
+Add certificates to keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_qxcwueds.keychain-db
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Certificates/*.p12
+Searching for files matching /Users/builder/Library/MobileDevice/Certificates/*.p12
+Did not find any certificates from specified locations
+
+
+Build failed :|
+Step 8 script `Fetch signing files` exited with status code 1
