@@ -75,18 +75,18 @@ workflows:
       - name: Fetch signing files
         script: |
           keychain initialize
-          # codemagic-cli-tools reads CERTIFICATE_PRIVATE_KEY as a global
-          # default for --certificate-key at the Python/argparse level, so
-          # shell `unset` has no effect. Fix: generate a fresh RSA key into a
-          # temp file and pass it explicitly — an explicit flag overrides the
-          # env-var default regardless of its value.
-          openssl genrsa -out /tmp/cm_cert.key.pem 2048 2>/dev/null
+          # CERTIFICATE_PRIVATE_KEY (set in the iOS env group) must match one
+          # of the existing Apple Distribution certs. Do NOT generate a fresh
+          # RSA key here — that always produces a key that matches nothing and
+          # then fails with 409 when trying to create a 3rd certificate.
+          # If the build still fails with 409: revoke all Distribution certs in
+          # https://developer.apple.com/account/resources/certificates/list,
+          # then run again — Codemagic will create exactly one new cert.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key "@file:/tmp/cm_cert.key.pem" \
             --create
           keychain add-certificates
 
