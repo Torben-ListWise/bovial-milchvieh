@@ -1,0 +1,41 @@
+
+Initialize new keychain to store code signing certificates at /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Create keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db timeout to "no timeout"
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db to system default keychain
+Unlock keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Found 1 Bundle ID matching specified filters: identifier=com.bovial.app, platform=IOS.
+- Bovial com.bovial.app (G342U2GDMD)
+
+Found 3 Signing Certificates matching specified filters: certificateType=DISTRIBUTION,IOS_DISTRIBUTION.
+Did not find any Signing Certificates for given private key
+Creating new Signing Certificate: certificate type: DISTRIBUTION
+POST https://api.appstoreconnect.apple.com/v1/certificates returned 409: There is a problem with the request entity - You already have a current Distribution certificate or a pending certificate request.
+Add certificates to keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Certificates/*.p12
+Searching for files matching /Users/builder/Library/MobileDevice/Certificates/*.p12
+Did not find any certificates from specified locations
+Initialize new keychain to store code signing certificates at /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Create keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db timeout to "no timeout"
+Set keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db to system default keychain
+Unlock keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Found 1 Bundle ID matching specified filters: identifier=com.bovial.app, platform=IOS.
+- Bovial com.bovial.app (G342U2GDMD)
+
+Found 3 Signing Certificates matching specified filters: certificateType=DISTRIBUTION,IOS_DISTRIBUTION.
+Did not find any Signing Certificates for given private key
+Creating new Signing Certificate: certificate type: DISTRIBUTION
+POST https://api.appstoreconnect.apple.com/v1/certificates returned 409: There is a problem with the request entity - You already have a current Distribution certificate or a pending certificate request.
+Add certificates to keychain /Users/builder/Library/codemagic-cli-tools/keychains/23-07-26_xl8j3nwx.keychain-db
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Certificates/*.p12
+Searching for files matching /Users/builder/Library/MobileDevice/Certificates/*.p12
+Did not find any certificates from specified locations
+
+
+Build failed :|
+Step 7 script `Fetch signing files` exited with status code 1
+
+
+Build failed :|
+Step 7 script `Fetch signing files` exited with status code 1
