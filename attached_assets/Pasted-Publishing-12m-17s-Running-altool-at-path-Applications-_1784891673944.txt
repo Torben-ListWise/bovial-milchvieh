@@ -1,0 +1,124 @@
+Publishing
+12m 17s
+
+
+
+Running altool at path '/Applications/Xcode-26.4.app/Contents/SharedFrameworks/ContentDelivery.framework/Resources/altool'...
+
+2026-07-24 11:05:44.963 ERROR: [ContentDelivery.Uploader.A64C48900] GET UPLOAD STATE (ASSET_DESCRIPTION): received status code 500; internal server error. (PRKPQTZFBIBRFVNNBPD2WZJYIY) (500)
+2026-07-24 11:05:45.030 ERROR: [ContentDelivery.Uploader.A64C48900] GET UPLOAD STATE (ASSET_DESCRIPTION): received status code 500; internal server error. (4L6XF4D5CBESC7FWI4WXXZBW7Q) (500)
+2026-07-24 11:07:22.357 ERROR: [ContentDelivery.Uploader.A64C48900] GET UPLOAD STATE (ASSET_DESCRIPTION): received status code 500; internal server error. (LNW7NPLH5ADX7WO7SLHZSC2DDE) (500)
+2026-07-24 11:07:22.702 ERROR: [ContentDelivery.Uploader.A64C48900] GET UPLOAD STATE (ASSET_DESCRIPTION): received status code 500; internal server error. (X7HATNVNIJWXQKUF4ZR326O5UE) (500)
+2026-07-24 11:07:42.769 ERROR: [ContentDelivery.Uploader.A64C48900] GET UPLOAD STATE (ASSET_DESCRIPTION): received status code 500; internal server error. (6Q6QCTFXN3WE5V34FD2STMQDP4) (500)
+2026-07-24 11:13:45.627 ERROR: [ContentDelivery.Uploader.A64C48900] CHANGE UPLOAD STATE TO COMPLETE (ASSET_UPLOAD): received status code 500; internal server error. (IRU7SHCQCMLOMVNQQZVM6TRZ5Q) (500)
+2026-07-24 11:13:45.705 ERROR: [ContentDelivery.Uploader.A64C48900] CHANGE UPLOAD STATE TO COMPLETE (ASSET_UPLOAD): received status code 500; internal server error. (GSYO4XRBGRPYQVLYDMX7UWVX2E) (500)
+2026-07-24 11:13:45.772 ERROR: [ContentDelivery.Uploader.A64C48900] CHANGE UPLOAD STATE TO COMPLETE (ASSET_UPLOAD): received status code 500; internal server error. (RVNA32Y67IJ5NO3UBLSAT7FL4E) (500)
+2026-07-24 11:13:55.890 ERROR: [ContentDelivery.Uploader.A64BA21C0] logKPIName: The server response returned an unknown MIME/TYPE: text/html.
+2026-07-24 11:13:55.891 ERROR: [ContentDelivery.Uploader.A64BA21C0] logKpiName: Expecting status 2xx, but received status 502.
+Response: <NSHTTPURLResponse: 0xa641c1ce0> { URL: https://contentdelivery.itunes.apple.com/MZContentDeliveryService/iris/v1/metricsAndLogging } { Status Code: 502, Headers {
+    "Cache-Control" =     (
+        "no-store"
+    );
+    "Content-Length" =     (
+        555
+    );
+    "Content-Type" =     (
+        "text/html"
+    );
+    Date =     (
+        "Fri, 24 Jul 2026 11:13:55 GMT"
+    );
+    Server =     (
+        "daiquiri/5"
+    );
+    "x-apple-jingle-correlation-key" =     (
+        QD3K6BGW7UEHIAYU55TTVFRAXM
+    );
+    "x-daiquiri-debug-worker-pid" =     (
+        6130
+    );
+    "x-daiquiri-instance" =     (
+        "daiquiri:18493001:mr85p00it-hyhk03154801:7987:26HOTFIX26:daiquiri-amp-all-shared-ext-001-mr"
+    );
+} }
+2026-07-24 11:13:55.976 ERROR: [ContentDelivery.Uploader.A64BA1980] logKPIName: The server response returned an unknown MIME/TYPE: text/html.
+2026-07-24 11:13:55.976 ERROR: [ContentDelivery.Uploader.A64BA1980] logKpiName: Expecting status 2xx, but received status 502.
+Response: <NSHTTPURLResponse: 0xa641c39a0> { URL: https://contentdelivery.itunes.apple.com/MZContentDeliveryService/iris/v1/metricsAndLogging } { Status Code: 502, Headers {
+    "Cache-Control" =     (
+        "no-store"
+    );
+    "Content-Length" =     (
+        555
+    );
+    "Content-Type" =     (
+        "text/html"
+    );
+    Date =     (
+        "Fri, 24 Jul 2026 11:13:56 GMT"
+    );
+    Server =     (
+        "daiquiri/5"
+    );
+    "x-apple-jingle-correlation-key" =     (
+        MRHQ4EOZHQEKDXJF7RSWCY76PA
+    );
+    "x-daiquiri-debug-worker-pid" =     (
+        6130
+    );
+    "x-daiquiri-instance" =     (
+        "daiquiri:18493001:mr85p00it-hyhk03154801:7987:26HOTFIX26:daiquiri-amp-all-shared-ext-001-mr"
+    );
+} }
+2026-07-24 11:14:15.180 ERROR: [ContentDelivery.Uploader.A64C48900] 
+=======================================
+UPLOAD FAILED with 1 error
+=======================================
+2026-07-24 11:14:15.182 ERROR: [altool.102B4AD80] ExitFailure (31)
+{
+  "os-version" : "Version 26.4.1 (Build 25E253)",
+  "product-errors" : [
+    {
+      "code" : 409,
+      "message" : "This resource is currently being updating",
+      "underlying-errors" : [
+        {
+          "code" : -19241,
+          "message" : "This resource is currently being updating",
+          "underlying-errors" : [
+
+          ],
+          "user-info" : {
+            "NSLocalizedDescription" : "This resource is currently being updating",
+            "NSLocalizedFailureReason" : "An update has been initiated by another request and is currently being processing. Please try again later.",
+            "code" : "STATE_ERROR.UPDATING",
+            "detail" : "An update has been initiated by another request and is currently being processing. Please try again later.",
+            "id" : "b9b94562-6ad6-422e-8aca-95f6649180f5",
+            "status" : "409",
+            "title" : "This resource is currently being updating"
+          }
+        }
+      ],
+      "user-info" : {
+        "NSLocalizedDescription" : "This resource is currently being updating",
+        "NSLocalizedFailureReason" : "An update has been initiated by another request and is currently being processing. Please try again later. (ID: b9b94562-6ad6-422e-8aca-95f6649180f5)",
+        "NSUnderlyingError" : "Error Domain=IrisAPI Code=-19241 \"This resource is currently being updating\" UserInfo={status=409, detail=An update has been initiated by another request and is currently being processing. Please try again later., id=b9b94562-6ad6-422e-8aca-95f6649180f5, code=STATE_ERROR.UPDATING, title=This resource is currently being updating, NSLocalizedFailureReason=An update has been initiated by another request and is currently being processing. Please try again later., NSLocalizedDescription=This resource is currently being updating}",
+        "iris-code" : "STATE_ERROR.UPDATING"
+      }
+    }
+  ],
+  "tool-path" : "/Applications/Xcode-26.4.app/Contents/SharedFrameworks/ContentDelivery.framework/Resources",
+  "tool-version" : "26.30.4 (173004)"
+}
+
+Failed to upload archive at "/Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa":
+This resource is currently being updating
+Failed to publish /Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa
+
+Failed to publish Bovial.ipa to App Store Connect.
+
+Build failed :|
+
+
+Publishing failed :|
+Failed to publish Bovial.ipa to App Store Connect.
+
