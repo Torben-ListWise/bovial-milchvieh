@@ -48,3 +48,10 @@ SH="$EXPO_CONSTANTS_DIR/scripts/get-app-config-ios.sh"
 ## Node / @expo/config resolution
 
 `getAppConfig.js` requires `@expo/config`. Since pnpm stores expo-constants with its own isolated `node_modules`, Node.js walk-up from the resolved pnpm store path finds `@expo/config` in the adjacent pnpm store `node_modules`. No extra NODE_PATH injection needed for this require.
+
+Update (July 2026): @expo/env + @expo/config devDeps were not enough. getAppConfig.js
+also evaluates app.json config plugins — local plugin files (plugins/*.js) that
+require("@expo/config-plugins") fail at Xcode build time unless @expo/config-plugins
+is ALSO an explicit devDep of bovial-mobile (pnpm strict resolution). Symptom:
+"Cannot find module '@expo/config-plugins'", PhaseScriptExecution exit 65 in EXConstants.
+Reproduce locally: run expo-constants/scripts/getAppConfig.js <projectRoot> <destDir>.
