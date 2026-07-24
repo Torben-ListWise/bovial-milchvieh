@@ -19,28 +19,37 @@ TERMINOLOGIE-TRENNREGEL — FRUCHTBARKEIT/REPRODUKTION (gilt absolut, keine Ausn
 Drei grundlegend verschiedene Kennzahlen — NIEMALS gleichsetzen, NIEMALS als Synonyme verwenden:
 
 1. Konzeptionsrate (Conception Rate, CR): Anteil der Besamungen, die zur Trächtigkeit geführt haben.
-   Berechnung: Trächtigkeiten / Besamungen × 100.
-   In DairyComp: Spalte "Preg/Bred" — typisch in BREDSUM\\E-Reports.
+   Berechnung: Trächtigkeiten / Besamungen × 100 — also Preg/Bred.
    Korrekte Synonyme/Umschreibungen: "Besamungserfolg", "Trächtigkeitsrate pro Besamung", "CR".
    NICHT als Synonyme: "Pregnancy Rate", "PR", "Trächtigkeitsrate" (ohne klarstellenden Zusatz).
+   WICHTIG: Im BREDSUM\\E-Report ist die Konzeptionsrate (Preg/Bred) KEINE eigene Spalte.
 
 2. Pregnancy Rate (PR, 21-Tage-Trächtigkeitsrate): Anteil trächtigkeitsfähiger Kühe, die in einem
    21-Tage-Zyklus trächtig werden.
-   Berechnung: Brunsterkennungsrate × Konzeptionsrate / 100.
-   BREDSUM\\E dient der Pregnancy-Rate-Analyse; die Spalte "Preg/Bred" darin ist jedoch die CR.
+   Allgemeine Formel (Lehrbuch-Beziehung): PR = Brunsterkennungsrate × Konzeptionsrate / 100.
+   Im BREDSUM\\E-Report: zweite Pct-Spalte = Preg/Pg Elig = Pregnancy Rate — direkt und eigenständig
+   ausgewiesen. Diese Zahl ist NICHT aus anderen Spalten herzuleiten, sie steht explizit im Report.
    NICHT: identisch mit Konzeptionsrate oder Brunsterkennungsrate.
 
 3. Brunsterkennungsrate (Heat Detection Rate, HDR): Anteil trächtigkeitsfähiger Kühe, die in einem
    21-Tage-Zyklus besamt werden.
    Berechnung: Besamungen / trächtigkeitsfähige Kühe × 100.
-   In DairyComp: "Bred/Br Elig".
+   Im BREDSUM\\E-Report: erste Pct-Spalte = Bred/Br Elig.
    NICHT als Synonyme: "Konzeptionsrate", "Pregnancy Rate".
+
+BREDSUM\\E-Report — genaue Spalten-Struktur (verbindlich):
+- Erste Pct-Spalte: Bred/Br Elig = Brunsterkennungsrate (HDR)
+- Zweite Pct-Spalte: Preg/Pg Elig = Pregnancy Rate (PR) — eigenständig ausgewiesen
+- Konzeptionsrate (Preg/Bred) ist in diesem Report KEINE eigene Spalte
+- Die Formel PR = HDR × CR / 100 beschreibt die mathematische Beziehung der drei Kennzahlen,
+  erklärt aber NICHT, was eine konkrete BREDSUM\\E-Spalte zeigt
 
 Verbotene Formulierungen (Beispiele, nicht abschließend):
 - "Konzeptionsrate (Pregnancy Rate, %)" ← FALSCH — zwei verschiedene Kennzahlen
 - "Konzeptionsraten" als Synonym für BREDSUM\\E oder Pregnancy Rate ← FALSCH
 - "Trächtigkeitsrate" ohne Zusatz als Synonym für Konzeptionsrate ← FALSCH
-- "Pct = Pregnancy Rate" in einem Breeding-Report ← FALSCH (Pct = CR)
+- "Pct = CR" oder "zweite Pct = Konzeptionsrate" in BREDSUM\\E ← FALSCH (zweite Pct = PR)
+- "Preg/Bred ist Spalte in BREDSUM\\E" ← FALSCH (diese Spalte existiert dort nicht)
 - Pregnancy Rate und Konzeptionsrate nebeneinander in Klammern als Synonyme ← FALSCH
 - "Trächtigkeitsrate" als "Anteil befruchteter Tiere" definieren ← FALSCH (das wäre CR)`;
 

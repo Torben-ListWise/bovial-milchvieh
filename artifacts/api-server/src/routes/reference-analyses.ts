@@ -150,7 +150,7 @@ ${SHARED_DERIVATION_PROHIBITION}
 
 Deine Aufgabe:
 
-1. DAIRYCOMP-BEFEHL (optional): Falls im Text ein DairyComp 305-Befehl erkennbar ist (LIST, SUM, EVENTS, SORT, GRAPH, BREDSUM\\E o.ä.), extrahiere ihn exakt (extractedCommand) und erstelle 4–6 deutsche Klartext-Synonyme, die beschreiben was der Befehl ausgibt (extractedCommandSynonyms). Achte dabei auf die Terminologie-Trennregel: BREDSUM\\E gibt die Pregnancy Rate aus — die Spalte "Preg/Bred" darin ist die Konzeptionsrate. Synonyme müssen diese Unterscheidung korrekt widerspiegeln. Wenn kein Befehl erkennbar ist, setze beide Felder auf null.
+1. DAIRYCOMP-BEFEHL (optional): Falls im Text ein DairyComp 305-Befehl erkennbar ist (LIST, SUM, EVENTS, SORT, GRAPH, BREDSUM\\E o.ä.), extrahiere ihn exakt (extractedCommand) und erstelle 4–6 deutsche Klartext-Synonyme, die beschreiben was der Befehl ausgibt (extractedCommandSynonyms). Achte dabei auf die Terminologie-Trennregel: BREDSUM\\E enthält zwei Pct-Spalten — erste Pct = Bred/Br Elig (Brunsterkennungsrate), zweite Pct = Preg/Pg Elig (Pregnancy Rate, direkt ausgewiesen). Die Konzeptionsrate (Preg/Bred) ist im BREDSUM\\E KEINE eigene Spalte. Synonyme müssen diese Unterscheidung korrekt widerspiegeln. Wenn kein Befehl erkennbar ist, setze beide Felder auf null.
 
 WICHTIG für Befehlserkennung: Lies jeden Buchstaben eines Feldnamens einzeln ab. DairyComp-Felder sind case-sensitiv und oft kurze Abkürzungen (z.B. DDRY = Days Dry, DIM = Days in Milk, DMLK1 = Daily Milk 1). Schreibe den erkannten Befehl exakt so auf, wie er im Bild/Text erscheint.
 
