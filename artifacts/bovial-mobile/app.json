@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bovial.app",
-      "buildNumber": "2",
+      "buildNumber": "1001",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
