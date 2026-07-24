@@ -581,6 +581,8 @@ export function KnowledgePage() {
   const [batchExtracting, setBatchExtracting] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [activeTier, setActiveTier] = useState<number | "unclassified" | null>(null);
   const [uploadAsBenchmarkRef, setUploadAsBenchmarkRef] = useState(false);
   const [uploadAsDairyCompManual, setUploadAsDairyCompManual] = useState(false);
   const [uploadAsAbbrevList, setUploadAsAbbrevList] = useState(false);
@@ -977,12 +979,59 @@ export function KnowledgePage() {
   const MAX_VISIBLE_CATEGORIES = 6;
   const visibleCategories = showAllCategories ? categories : categories.slice(0, MAX_VISIBLE_CATEGORIES);
 
-  // Filter docs by active category
-  const filteredDocs = activeCategory === null
-    ? docs
-    : activeCategory === "__uncategorized__"
-      ? docs.filter((d) => d.status === "ready" && !d.category)
-      : docs.filter((d) => d.category === activeCategory);
+  // Build topic stats (counts per topic with per-tier breakdown)
+  interface TopicStats { total: number; byTier: Record<number, number>; unclassified: number }
+  const topicStatsMap = new Map<string, TopicStats>();
+  for (const doc of docs) {
+    const docTopics = ((doc as any).topics as string[] | undefined) ?? [];
+    const tier = doc.tierStufe as number | null | undefined;
+    for (const topic of docTopics) {
+      if (!topicStatsMap.has(topic)) {
+        topicStatsMap.set(topic, { total: 0, byTier: {}, unclassified: 0 });
+      }
+      const s = topicStatsMap.get(topic)!;
+      s.total++;
+      if (tier) {
+        s.byTier[tier] = (s.byTier[tier] ?? 0) + 1;
+      } else {
+        s.unclassified++;
+      }
+    }
+  }
+  // Total unclassified-tier docs (no tierStufe at all)
+  const unclassifiedTierCount = docs.filter((d) => !d.tierStufe).length;
+  // Per-tier totals across all docs
+  const tierTotalMap: Record<number, number> = {};
+  for (const doc of docs) {
+    const tier = doc.tierStufe as number | null | undefined;
+    if (tier) tierTotalMap[tier] = (tierTotalMap[tier] ?? 0) + 1;
+  }
+
+  // Filter docs by active category, then topic, then tier
+  const filteredDocs = (() => {
+    let result = docs;
+    if (activeCategory !== null) {
+      if (activeCategory === "__uncategorized__") {
+        result = result.filter((d) => d.status === "ready" && !d.category);
+      } else {
+        result = result.filter((d) => d.category === activeCategory);
+      }
+    }
+    if (activeTopic !== null) {
+      result = result.filter((d) => {
+        const docTopics = ((d as any).topics as string[] | undefined) ?? [];
+        return docTopics.includes(activeTopic);
+      });
+    }
+    if (activeTier !== null) {
+      if (activeTier === "unclassified") {
+        result = result.filter((d) => !d.tierStufe);
+      } else {
+        result = result.filter((d) => d.tierStufe === activeTier);
+      }
+    }
+    return result;
+  })();
 
   return (
     <PageLayout size="narrow">
@@ -1103,8 +1152,135 @@ export function KnowledgePage() {
         </Card>
       )}
 
+      {/* Topic + Tier filter section */}
+      {docs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Library className="w-3.5 h-3.5" />
+              Themen &amp; Vertrauensstufe
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4 space-y-3">
+            {/* Tier filter row */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveTier(null)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-sm border transition-colors",
+                  activeTier === null
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border hover:bg-muted",
+                )}
+              >
+                Alle Stufen ({docs.length})
+              </button>
+              {([1, 2, 3] as const).map((t) => {
+                const count = tierTotalMap[t] ?? 0;
+                if (count === 0) return null;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setActiveTier(activeTier === t ? null : t)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-sm border transition-colors",
+                      activeTier === t
+                        ? cn(TIER_LABELS[t].color, "ring-2 ring-offset-1 ring-primary")
+                        : cn(TIER_LABELS[t].color, "opacity-70 hover:opacity-100"),
+                    )}
+                  >
+                    T{t} – {t === 1 ? "Wissenschaftlich" : t === 2 ? "Branchenpraxis" : "Betriebserfahrung"} ({count})
+                  </button>
+                );
+              })}
+              {unclassifiedTierCount > 0 && (
+                <button
+                  onClick={() => setActiveTier(activeTier === "unclassified" ? null : "unclassified")}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-sm border transition-colors",
+                    activeTier === "unclassified"
+                      ? "bg-slate-200 text-slate-800 border-slate-400 ring-2 ring-offset-1 ring-primary"
+                      : "bg-muted/50 border-border hover:bg-muted text-muted-foreground",
+                  )}
+                >
+                  Noch nicht klassifiziert ({unclassifiedTierCount})
+                </button>
+              )}
+            </div>
+
+            {/* Topic filter chips */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveTopic(null)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-sm border transition-colors",
+                  activeTopic === null
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border hover:bg-muted",
+                )}
+              >
+                Alle Themen
+              </button>
+              {KNOWLEDGE_TOPICS.map((topic) => {
+                const stats = topicStatsMap.get(topic);
+                if (!stats || stats.total === 0) {
+                  return (
+                    <button
+                      key={topic}
+                      disabled
+                      className="px-3 py-1 rounded-full text-sm border border-dashed border-border text-muted-foreground/50 cursor-default"
+                      title="Keine Dokumente zu diesem Thema"
+                    >
+                      {topic} (0)
+                    </button>
+                  );
+                }
+                const tierParts: string[] = [];
+                if (stats.byTier[1]) tierParts.push(`${stats.byTier[1]} T1`);
+                if (stats.byTier[2]) tierParts.push(`${stats.byTier[2]} T2`);
+                if (stats.byTier[3]) tierParts.push(`${stats.byTier[3]} T3`);
+                const label = tierParts.length > 0
+                  ? `${topic} (${tierParts.join(", ")}${stats.unclassified > 0 ? `, ${stats.unclassified} unk.` : ""})`
+                  : `${topic} (${stats.unclassified} unk.)`;
+                return (
+                  <button
+                    key={topic}
+                    onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-sm border transition-colors",
+                      activeTopic === topic
+                        ? "bg-primary/10 text-primary border-primary ring-2 ring-offset-1 ring-primary"
+                        : "bg-primary/5 text-primary border-primary/30 hover:bg-primary/10",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active filter summary */}
+            {(activeTopic !== null || activeTier !== null) && (
+              <div className="flex items-center gap-2 pt-1 border-t">
+                <span className="text-xs text-muted-foreground">
+                  {filteredDocs.length} Dokument{filteredDocs.length !== 1 ? "e" : ""} gefunden
+                  {activeTopic !== null && <> · Thema: <strong>{activeTopic}</strong></>}
+                  {activeTier !== null && <> · Stufe: <strong>{activeTier === "unclassified" ? "Nicht klassifiziert" : `T${activeTier}`}</strong></>}
+                </span>
+                <button
+                  onClick={() => { setActiveTopic(null); setActiveTier(null); }}
+                  className="text-xs text-primary underline hover:no-underline ml-auto"
+                >
+                  Filter zurücksetzen
+                </button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Upload Card with tabs */}
-      {activeCategory === null && (
+      {activeCategory === null && activeTopic === null && activeTier === null && (
         <Card>
           <CardHeader className="pb-0">
             <div className="flex gap-1 border-b">
