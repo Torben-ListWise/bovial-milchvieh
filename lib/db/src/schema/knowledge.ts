@@ -4,6 +4,8 @@ import {
   timestamp,
   uuid,
   integer,
+  smallint,
+  jsonb,
   index,
   customType,
 } from "drizzle-orm/pg-core";
@@ -23,6 +25,33 @@ const vector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
+export const KNOWLEDGE_TOPICS = [
+  "Fruchtbarkeit",
+  "Eutergesundheit",
+  "Fütterung",
+  "Klauengesundheit",
+  "Hitzestress",
+  "Herdenstruktur",
+  "Kälber-/Jungviehaufzucht",
+  "Melktechnik",
+  "Betriebswirtschaft",
+  "Tiergesundheit-Seuchen",
+] as const;
+
+export type KnowledgeTopic = typeof KNOWLEDGE_TOPICS[number];
+
+export interface MetaPendingData {
+  metaTitel?: string | null;
+  metaAutoren?: string | null;
+  metaJahr?: number | null;
+  metaHerausgeber?: string | null;
+  metaUrl?: string | null;
+  topics?: string[];
+  tierStufe?: number | null;
+  /** 'incomplete' when Claude ran but could not determine key bibliographic fields */
+  _extractionStatus?: "pending_review" | "incomplete";
+}
+
 export const knowledgeDocumentsTable = pgTable("knowledge_documents", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
@@ -38,6 +67,13 @@ export const knowledgeDocumentsTable = pgTable("knowledge_documents", {
   category: text("category"),
   documentType: text("document_type"),
   uploadedBy: text("uploaded_by").notNull(),
+  metaTitel: text("meta_titel"),
+  metaAutoren: text("meta_autoren"),
+  metaJahr: smallint("meta_jahr"),
+  metaHerausgeber: text("meta_herausgeber"),
+  metaUrl: text("meta_url"),
+  tierStufe: smallint("tier_stufe"),
+  metaPending: jsonb("meta_pending").$type<MetaPendingData>(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -54,6 +90,19 @@ export const knowledgeChunksTable = pgTable(
   },
   (table) => [
     index("knowledge_chunks_doc_idx").on(table.docId, table.chunkIndex),
+  ],
+);
+
+export const knowledgeDocumentTopicsTable = pgTable(
+  "knowledge_document_topics",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    docId: uuid("doc_id").notNull(),
+    topic: text("topic").notNull(),
+  },
+  (table) => [
+    index("knowledge_document_topics_doc_idx").on(table.docId),
+    index("knowledge_document_topics_topic_idx").on(table.topic),
   ],
 );
 
@@ -83,3 +132,5 @@ export type KnowledgeMissedQuery =
   typeof knowledgeMissedQueriesTable.$inferSelect;
 export type InsertKnowledgeMissedQuery =
   typeof knowledgeMissedQueriesTable.$inferInsert;
+export type KnowledgeDocumentTopic =
+  typeof knowledgeDocumentTopicsTable.$inferSelect;

@@ -25,6 +25,7 @@ import {
   crossFarmPatternsTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
+import { detectQueryTopic } from "./knowledgeMetadata";
 import {
   getDatasetSchema,
   computeMetricStats,
@@ -204,6 +205,11 @@ export interface Citation {
   basis?: string | null;
   sourceType?: "betriebsdaten" | "pdf" | "wissen" | "web" | "cross_farm" | null;
   shortLabel?: string | null;
+  metaTitel?: string | null;
+  metaAutoren?: string | null;
+  metaJahr?: number | null;
+  metaHerausgeber?: string | null;
+  tierStufe?: number | null;
 }
 export interface FarmerQuestion {
   text: string;
@@ -2122,22 +2128,55 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         const query = input.query as string;
         const topK = Math.min((input.topK as number | undefined) ?? 5, 10);
         const SIMILARITY_THRESHOLD = 0.55;
+        const TOPIC_BOOST = 0.05;
         try {
           const queryVec = await embedQuery(query);
           const vecStr = `[${queryVec.join(",")}]`;
+          // Fetch more candidates to allow topic-based re-ranking
+          const fetchK = topK * 2;
           const rows = await db.execute(
             sql`
-              SELECT kc.chunk_text, kd.title, kd.category,
+              SELECT kc.chunk_text, kd.id AS doc_id, kd.title, kd.category,
+                     kd.meta_titel, kd.meta_autoren, kd.meta_jahr, kd.meta_herausgeber, kd.tier_stufe,
+                     COALESCE(
+                       (SELECT array_agg(kdt.topic) FROM knowledge_document_topics kdt WHERE kdt.doc_id = kd.id),
+                       ARRAY[]::TEXT[]
+                     ) AS topics,
                      (1 - (kc.embedding <=> ${vecStr}::vector)) AS similarity
               FROM knowledge_chunks kc
               JOIN knowledge_documents kd ON kd.id = kc.doc_id
               WHERE kd.status = 'ready'
               ORDER BY kc.embedding <=> ${vecStr}::vector
-              LIMIT ${topK}
+              LIMIT ${fetchK}
             `,
           );
-          const allRows = rows.rows as { chunk_text: string; title: string; category: string | null; similarity: number }[];
-          const relevantRows = allRows.filter((r) => Number(r.similarity) >= SIMILARITY_THRESHOLD);
+          type KnowledgeRow = {
+            chunk_text: string;
+            doc_id: string;
+            title: string;
+            category: string | null;
+            meta_titel: string | null;
+            meta_autoren: string | null;
+            meta_jahr: number | null;
+            meta_herausgeber: string | null;
+            tier_stufe: number | null;
+            topics: string[];
+            similarity: number;
+          };
+          const allRows = rows.rows as KnowledgeRow[];
+
+          // Apply topic boost based on query-topic keyword match
+          const queryTopic = detectQueryTopic(query);
+          const boostedRows = allRows
+            .map((r) => ({
+              ...r,
+              similarity: Number(r.similarity) +
+                (queryTopic && Array.isArray(r.topics) && r.topics.includes(queryTopic) ? TOPIC_BOOST : 0),
+            }))
+            .sort((a, b) => b.similarity - a.similarity);
+
+          const relevantRows = boostedRows.filter((r) => r.similarity >= SIMILARITY_THRESHOLD).slice(0, topK);
+
           if (relevantRows.length === 0) {
             const topScore = allRows[0] ? Number(allRows[0].similarity).toFixed(3) : null;
             logger.debug({ query, topScore: topScore ?? "n/a" }, "search_knowledge: keine relevanten Treffer über Schwellenwert");
@@ -2148,33 +2187,49 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             }).catch((err) => logger.error({ err, query }, "Fehler beim Speichern der missed query"));
             return { results: [], noRelevantResults: true };
           }
-          const results = relevantRows.map(
-            (r) => ({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity) }),
-          );
+
+          const results = relevantRows.map((r) => ({
+            title: r.title,
+            text: r.chunk_text,
+            similarity: Number(r.similarity),
+            tierStufe: r.tier_stufe ? Number(r.tier_stufe) : null,
+          }));
+
           // Push one citation per unique document title found in relevant results
-          // Use category as label (topic) instead of filename
           const seenTitles = new Set<string>();
-          const seenTopics = new Set<string>();
+          const seenDocIds = new Set<string>();
           for (const r of relevantRows) {
-            if (!seenTitles.has(r.title)) {
+            if (!seenDocIds.has(r.doc_id)) {
+              seenDocIds.add(r.doc_id);
               seenTitles.add(r.title);
               const topic = r.category?.trim() || "Wissensquelle";
-              if (!seenTopics.has(topic)) {
-                seenTopics.add(topic);
-                citations.push({
-                  label: topic,
-                  value: "Wissensbibliothek",
-                  basis: null,
-                  sourceType: "wissen",
-                });
-              }
+              const tierLabel = r.tier_stufe ? ` [T${r.tier_stufe}]` : "";
+              citations.push({
+                label: topic + tierLabel,
+                value: r.meta_titel ?? r.title,
+                basis: null,
+                sourceType: "wissen",
+                metaTitel: r.meta_titel ?? null,
+                metaAutoren: r.meta_autoren ?? null,
+                metaJahr: r.meta_jahr ? Number(r.meta_jahr) : null,
+                metaHerausgeber: r.meta_herausgeber ?? null,
+                tierStufe: r.tier_stufe ? Number(r.tier_stufe) : null,
+              });
             }
           }
+
           // Notify SSE listener which documents were found
           if (seenTitles.size > 0) {
             opts.onSourceSearched?.(Array.from(seenTitles));
           }
-          return { results };
+
+          // Add tier-priority instruction to the result when mixed tiers found
+          const tiers = [...new Set(relevantRows.map((r) => r.tier_stufe).filter(Boolean))];
+          const tierNote = tiers.length > 1
+            ? " WICHTIG: Bei widersprüchlichen Aussagen priorisiere Tier-1-Quellen (peer-reviewed) vor Tier-2 (Branchenpraxis) und Tier-2 vor Tier-3 (Betriebserfahrung)."
+            : "";
+
+          return { results, tierNote: tierNote || undefined };
         } catch (err) {
           logger.error({ err }, "search_knowledge fehlgeschlagen");
           return { error: "Suche fehlgeschlagen" };

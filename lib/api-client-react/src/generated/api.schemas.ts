@@ -387,6 +387,16 @@ export interface Citation {
   sourceType?: CitationSourceType;
   /** @nullable */
   shortLabel?: string | null;
+  /** @nullable */
+  metaTitel?: string | null;
+  /** @nullable */
+  metaAutoren?: string | null;
+  /** @nullable */
+  metaJahr?: number | null;
+  /** @nullable */
+  metaHerausgeber?: string | null;
+  /** @nullable */
+  tierStufe?: number | null;
 }
 
 export interface AskQuestionResponse {
@@ -891,6 +901,23 @@ export interface KnowledgeDocument {
   sourceUrl?: string | null;
   /** @nullable */
   category?: string | null;
+  /** @nullable */
+  documentType?: string | null;
+  /** @nullable */
+  metaTitel?: string | null;
+  /** @nullable */
+  metaAutoren?: string | null;
+  /** @nullable */
+  metaJahr?: number | null;
+  /** @nullable */
+  metaHerausgeber?: string | null;
+  /** @nullable */
+  metaUrl?: string | null;
+  /** @nullable */
+  tierStufe?: number | null;
+  /** @nullable */
+  metaPending?: Record<string, unknown> | null;
+  topics?: string[];
   createdAt: string;
 }
 

@@ -40,3 +40,4 @@
 - [EXConstants MODULE_NOT_FOUND (iOS build)](bovial-excconstants-module-resolution.md) — @expo/env + @expo/config must be explicit devDeps in bovial-mobile or pnpm won't symlink them for Xcode's getAppConfig.js walk-up
 - [CocoaPods post_install uniqueness](cocoapods-post-install-unique.md) — only ONE post_install hook allowed; inject inside existing block, never append a second one
 - [Clerk Expo plugin registration](bovial-clerk-plugin-registration.md) — "@clerk/expo" must be in app.json plugins + deploymentTarget 17.0, else ClerkExpo pod silently dropped → "no such module 'ClerkExpo'"
+- [Milchvieh knowledge metadata](milchvieh-knowledge-metadata.md) — bibliographic meta (Titel/Autoren/Jahr/Herausgeber/tierStufe 1-3/topics) per doc; Claude extracts to metaPending; admin confirms; +0.05 topic boost in search_knowledge

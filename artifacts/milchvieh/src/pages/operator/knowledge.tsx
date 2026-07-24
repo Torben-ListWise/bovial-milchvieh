@@ -39,9 +39,31 @@ import {
   StickyNote,
   Star,
   Settings,
+  Library,
+  BookMarked,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
+const KNOWLEDGE_TOPICS = [
+  "Fruchtbarkeit",
+  "Eutergesundheit",
+  "Fütterung",
+  "Klauengesundheit",
+  "Hitzestress",
+  "Herdenstruktur",
+  "Kälber-/Jungviehaufzucht",
+  "Melktechnik",
+  "Betriebswirtschaft",
+  "Tiergesundheit-Seuchen",
+] as const;
+
+const TIER_LABELS: Record<number, { label: string; color: string }> = {
+  1: { label: "Wissenschaftlich (peer-reviewed)", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  2: { label: "Branchenpraxis (Verbände/Beratung)", color: "bg-green-100 text-green-800 border-green-200" },
+  3: { label: "Betriebserfahrung/Praxisbericht", color: "bg-amber-100 text-amber-800 border-amber-200" },
+};
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
@@ -556,11 +578,22 @@ export function KnowledgePage() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
   const [categorizing, setCategorizing] = useState(false);
+  const [batchExtracting, setBatchExtracting] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [uploadAsBenchmarkRef, setUploadAsBenchmarkRef] = useState(false);
   const [uploadAsDairyCompManual, setUploadAsDairyCompManual] = useState(false);
   const [uploadAsAbbrevList, setUploadAsAbbrevList] = useState(false);
+  const [confirmingDocId, setConfirmingDocId] = useState<string | null>(null);
+  const [metaForm, setMetaForm] = useState<{
+    metaTitel: string;
+    metaAutoren: string;
+    metaJahr: string;
+    metaHerausgeber: string;
+    metaUrl: string;
+    tierStufe: string;
+    topics: string[];
+  }>({ metaTitel: "", metaAutoren: "", metaJahr: "", metaHerausgeber: "", metaUrl: "", tierStufe: "", topics: [] });
 
   const { data: docs = [], isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["knowledge-docs"],
@@ -674,6 +707,94 @@ export function KnowledgePage() {
     } finally {
       setCategorizing(false);
     }
+  }
+
+  async function handleBatchExtractMetadata() {
+    setBatchExtracting(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch(`${API_BASE}/api/knowledge/batch-extract-metadata`, {
+        method: "POST",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title: "Metadaten-Extraktion fehlgeschlagen",
+          description: (body as any).error ?? "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+      const { queued, message } = body as { queued: number; message?: string };
+      toast({
+        title: queued > 0
+          ? `${queued} Dokument${queued !== 1 ? "e" : ""} werden verarbeitet`
+          : "Alle Dokumente bereits verarbeitet",
+        description: message,
+      });
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["knowledge-docs"] });
+      }, 3000);
+    } catch {
+      toast({ title: "Netzwerkfehler", variant: "destructive" });
+    } finally {
+      setBatchExtracting(false);
+    }
+  }
+
+  function openMetaConfirm(doc: KnowledgeDocument) {
+    const pending = doc.metaPending as any;
+    setConfirmingDocId(doc.id);
+    setMetaForm({
+      metaTitel: pending?.metaTitel ?? doc.metaTitel ?? "",
+      metaAutoren: pending?.metaAutoren ?? doc.metaAutoren ?? "",
+      metaJahr: String(pending?.metaJahr ?? doc.metaJahr ?? ""),
+      metaHerausgeber: pending?.metaHerausgeber ?? doc.metaHerausgeber ?? "",
+      metaUrl: pending?.metaUrl ?? (doc as any).metaUrl ?? "",
+      tierStufe: String(pending?.tierStufe ?? doc.tierStufe ?? ""),
+      topics: pending?.topics ?? doc.topics ?? [],
+    });
+  }
+
+  async function handleConfirmMeta(docId: string) {
+    const token = await getAuthToken();
+    const res = await fetch(`${API_BASE}/api/knowledge/${docId}/confirm-metadata`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        metaTitel: metaForm.metaTitel || null,
+        metaAutoren: metaForm.metaAutoren || null,
+        metaJahr: metaForm.metaJahr ? Number(metaForm.metaJahr) : null,
+        metaHerausgeber: metaForm.metaHerausgeber || null,
+        metaUrl: metaForm.metaUrl || null,
+        tierStufe: metaForm.tierStufe ? Number(metaForm.tierStufe) : null,
+        topics: metaForm.topics,
+      }),
+    });
+    if (!res.ok) {
+      toast({ title: "Speichern fehlgeschlagen", variant: "destructive" });
+      return;
+    }
+    toast({ title: "Metadaten gespeichert" });
+    setConfirmingDocId(null);
+    queryClient.invalidateQueries({ queryKey: ["knowledge-docs"] });
+  }
+
+  async function handleDismissMeta(docId: string) {
+    const token = await getAuthToken();
+    await fetch(`${API_BASE}/api/knowledge/${docId}/dismiss-metadata`, {
+      method: "POST",
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    setConfirmingDocId(null);
+    queryClient.invalidateQueries({ queryKey: ["knowledge-docs"] });
   }
 
   async function uploadFile(item: UploadItem) {
@@ -877,23 +998,38 @@ export function KnowledgePage() {
           </p>
         </div>
         {readyDocs.length > 0 && (
-          <Button
-            variant="outline"
-            onClick={handleCategorizeAll}
-            disabled={categorizing || uncategorizedCount === 0}
-            className="shrink-0 gap-2"
-          >
-            {categorizing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            {categorizing
-              ? "Kategorisiere..."
-              : uncategorizedCount > 0
-                ? `KI-Kategorisierung (${uncategorizedCount})`
-                : "Alle kategorisiert"}
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              onClick={handleBatchExtractMetadata}
+              disabled={batchExtracting}
+              className="gap-2"
+            >
+              {batchExtracting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <BookMarked className="w-4 h-4" />
+              )}
+              {batchExtracting ? "Extrahiere..." : "Metadaten nachladen (Alle)"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCategorizeAll}
+              disabled={categorizing || uncategorizedCount === 0}
+              className="gap-2"
+            >
+              {categorizing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+              {categorizing
+                ? "Kategorisiere..."
+                : uncategorizedCount > 0
+                  ? `KI-Kategorisierung (${uncategorizedCount})`
+                  : "Alle kategorisiert"}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -1213,6 +1349,286 @@ export function KnowledgePage() {
         </Card>
       )}
 
+      {/* Metadata Pending Confirmation Banner — only pending_review docs (Claude found useful fields) */}
+      {docs.filter((d) => {
+        const s = (d.metaPending as any)?._extractionStatus;
+        return d.metaPending && !d.tierStufe && s !== "incomplete";
+      }).length > 0 && (() => {
+        const pendingDocs = docs.filter((d) => {
+          const s = (d.metaPending as any)?._extractionStatus;
+          return d.metaPending && !d.tierStufe && s !== "incomplete";
+        });
+        return (
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardHeader className="pb-2 pt-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-800">
+                <BookMarked className="w-4 h-4" />
+                Metadaten zur Bestätigung ausstehend ({pendingDocs.length} Dokument{pendingDocs.length !== 1 ? "e" : ""})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-4 space-y-3">
+              {pendingDocs.map((doc) => {
+                const pending = doc.metaPending as any;
+                const isOpen = confirmingDocId === doc.id;
+                return (
+                  <div key={doc.id} className="border border-amber-200 rounded-lg bg-white p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{doc.title}</p>
+                        {pending?.metaTitel && (
+                          <p className="text-xs text-muted-foreground truncate">KI-Vorschlag: {pending.metaTitel}</p>
+                        )}
+                        {pending?.topics && pending.topics.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {(pending.topics as string[]).map((t: string) => (
+                              <span key={t} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{t}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => isOpen ? setConfirmingDocId(null) : openMetaConfirm(doc)}
+                        >
+                          <Pencil className="w-3 h-3" />
+                          {isOpen ? "Schließen" : "Bestätigen"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-muted-foreground"
+                          onClick={() => handleDismissMeta(doc.id)}
+                        >
+                          Überspringen
+                        </Button>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div className="space-y-2 pt-2 border-t border-amber-100">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Titel</label>
+                            <Input
+                              className="h-7 text-xs mt-0.5"
+                              value={metaForm.metaTitel}
+                              onChange={(e) => setMetaForm((f) => ({ ...f, metaTitel: e.target.value }))}
+                              placeholder="Dokumenttitel"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Autoren</label>
+                            <Input
+                              className="h-7 text-xs mt-0.5"
+                              value={metaForm.metaAutoren}
+                              onChange={(e) => setMetaForm((f) => ({ ...f, metaAutoren: e.target.value }))}
+                              placeholder="Müller, H.; Schmidt, A."
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Jahr</label>
+                            <Input
+                              className="h-7 text-xs mt-0.5"
+                              value={metaForm.metaJahr}
+                              onChange={(e) => setMetaForm((f) => ({ ...f, metaJahr: e.target.value }))}
+                              placeholder="2023"
+                              type="number"
+                              min="1900"
+                              max="2099"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Journal / Herausgeber</label>
+                            <Input
+                              className="h-7 text-xs mt-0.5"
+                              value={metaForm.metaHerausgeber}
+                              onChange={(e) => setMetaForm((f) => ({ ...f, metaHerausgeber: e.target.value }))}
+                              placeholder="Journal of Dairy Science"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">DOI / Veröffentlichungs-URL</label>
+                            <Input
+                              className="h-7 text-xs mt-0.5"
+                              value={metaForm.metaUrl}
+                              onChange={(e) => setMetaForm((f) => ({ ...f, metaUrl: e.target.value }))}
+                              placeholder="https://doi.org/10.3168/jds.2022-..."
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Vertrauensstufe (Tier)</label>
+                          <div className="flex gap-2 mt-1">
+                            {([1, 2, 3] as const).map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => setMetaForm((f) => ({ ...f, tierStufe: String(t) }))}
+                                className={cn(
+                                  "flex-1 text-xs py-1 px-2 rounded border transition-colors",
+                                  metaForm.tierStufe === String(t)
+                                    ? TIER_LABELS[t].color + " ring-1 ring-offset-1 ring-primary"
+                                    : "border-border hover:bg-muted",
+                                )}
+                              >
+                                T{t}: {t === 1 ? "Wissenschaftlich" : t === 2 ? "Branchenpraxis" : "Betriebserfahrung"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Themen</label>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {KNOWLEDGE_TOPICS.map((topic) => (
+                              <button
+                                key={topic}
+                                type="button"
+                                onClick={() => setMetaForm((f) => ({
+                                  ...f,
+                                  topics: f.topics.includes(topic)
+                                    ? f.topics.filter((t) => t !== topic)
+                                    : [...f.topics, topic],
+                                }))}
+                                className={cn(
+                                  "text-xs py-0.5 px-2 rounded-full border transition-colors",
+                                  metaForm.topics.includes(topic)
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "border-border hover:bg-muted text-muted-foreground",
+                                )}
+                              >
+                                {topic}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => handleConfirmMeta(doc.id)}
+                            disabled={!metaForm.tierStufe}
+                          >
+                            <ShieldCheck className="w-3 h-3" />
+                            Metadaten bestätigen
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setConfirmingDocId(null)}
+                          >
+                            Abbrechen
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Incomplete extraction banner — Claude ran but couldn't find key bibliographic fields */}
+      {docs.filter((d) => (d.metaPending as any)?._extractionStatus === "incomplete" && !d.tierStufe).length > 0 && (() => {
+        const incompleteDocs = docs.filter((d) => (d.metaPending as any)?._extractionStatus === "incomplete" && !d.tierStufe);
+        return (
+          <Card className="border-rose-200 bg-rose-50/30">
+            <CardHeader className="pb-2 pt-4">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-rose-800">
+                <AlertCircle className="w-4 h-4" />
+                Metadaten unvollständig ({incompleteDocs.length} Dokument{incompleteDocs.length !== 1 ? "e" : ""}) — manuelle Eingabe erforderlich
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-4 space-y-2">
+              {incompleteDocs.map((doc) => {
+                const isOpen = confirmingDocId === doc.id;
+                return (
+                  <div key={doc.id} className="border border-rose-200 rounded-lg bg-white p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{doc.title}</p>
+                        <p className="text-xs text-rose-600">KI konnte keine bibliografischen Daten ermitteln</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1 border-rose-200 hover:bg-rose-50"
+                          onClick={() => isOpen ? setConfirmingDocId(null) : openMetaConfirm(doc)}
+                        >
+                          <Pencil className="w-3 h-3" />
+                          {isOpen ? "Schließen" : "Manuell eingeben"}
+                        </Button>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div className="space-y-2 pt-2 border-t border-rose-100">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Titel</label>
+                            <Input className="h-7 text-xs mt-0.5" value={metaForm.metaTitel} onChange={(e) => setMetaForm((f) => ({ ...f, metaTitel: e.target.value }))} placeholder="Dokumenttitel" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Autoren</label>
+                            <Input className="h-7 text-xs mt-0.5" value={metaForm.metaAutoren} onChange={(e) => setMetaForm((f) => ({ ...f, metaAutoren: e.target.value }))} placeholder="Müller, H.; Schmidt, A." />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Jahr</label>
+                            <Input className="h-7 text-xs mt-0.5" value={metaForm.metaJahr} onChange={(e) => setMetaForm((f) => ({ ...f, metaJahr: e.target.value }))} placeholder="2023" type="number" min="1900" max="2099" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Journal / Herausgeber</label>
+                            <Input className="h-7 text-xs mt-0.5" value={metaForm.metaHerausgeber} onChange={(e) => setMetaForm((f) => ({ ...f, metaHerausgeber: e.target.value }))} placeholder="Journal of Dairy Science" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">DOI / Veröffentlichungs-URL</label>
+                            <Input className="h-7 text-xs mt-0.5" value={metaForm.metaUrl} onChange={(e) => setMetaForm((f) => ({ ...f, metaUrl: e.target.value }))} placeholder="https://doi.org/10.3168/jds.2022-..." />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Vertrauensstufe (Tier)</label>
+                          <div className="flex gap-2 mt-1">
+                            {([1, 2, 3] as const).map((t) => (
+                              <button key={t} type="button" onClick={() => setMetaForm((f) => ({ ...f, tierStufe: String(t) }))}
+                                className={cn("flex-1 text-xs py-1 px-2 rounded border transition-colors", metaForm.tierStufe === String(t) ? TIER_LABELS[t].color + " ring-1 ring-offset-1 ring-primary" : "border-border hover:bg-muted")}>
+                                T{t}: {t === 1 ? "Wissenschaftlich" : t === 2 ? "Branchenpraxis" : "Betriebserfahrung"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Themen</label>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {KNOWLEDGE_TOPICS.map((topic) => (
+                              <button key={topic} type="button"
+                                onClick={() => setMetaForm((f) => ({ ...f, topics: f.topics.includes(topic) ? f.topics.filter((t) => t !== topic) : [...f.topics, topic] }))}
+                                className={cn("text-xs py-0.5 px-2 rounded-full border transition-colors", metaForm.topics.includes(topic) ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted text-muted-foreground")}>
+                                {topic}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => handleConfirmMeta(doc.id)} disabled={!metaForm.tierStufe}>
+                            <ShieldCheck className="w-3 h-3" />
+                            Metadaten speichern
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirmingDocId(null)}>Abbrechen</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Knowledge Gaps */}
       <KnowledgeGapsCard />
 
@@ -1250,6 +1666,16 @@ export function KnowledgePage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{doc.title}</p>
+                    {doc.metaTitel && doc.metaTitel !== doc.title && (
+                      <p className="text-xs text-primary/80 truncate italic">{doc.metaTitel}</p>
+                    )}
+                    {doc.metaAutoren && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {doc.metaAutoren}
+                        {doc.metaJahr ? ` (${doc.metaJahr})` : ""}
+                        {doc.metaHerausgeber ? ` · ${doc.metaHerausgeber}` : ""}
+                      </p>
+                    )}
                     {doc.sourceUrl ? (
                       <p className="text-xs text-muted-foreground truncate">
                         <a
@@ -1275,11 +1701,30 @@ export function KnowledgePage() {
                         {doc.errorMessage}
                       </p>
                     )}
-                    {doc.category && (
-                      <div className="mt-1.5">
-                        <CategoryBadge category={doc.category} />
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      {doc.category && <CategoryBadge category={doc.category} />}
+                      {doc.tierStufe && TIER_LABELS[doc.tierStufe] && (
+                        <span className={cn(
+                          "text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                          TIER_LABELS[doc.tierStufe].color,
+                        )}>
+                          T{doc.tierStufe}
+                        </span>
+                      )}
+                      {doc.topics && doc.topics.length > 0 && doc.topics.map((t) => (
+                        <span key={t} className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full border border-border">
+                          {t}
+                        </span>
+                      ))}
+                      {doc.metaPending && !doc.tierStufe && (
+                        <button
+                          className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200 hover:bg-amber-200 transition-colors"
+                          onClick={() => openMetaConfirm(doc)}
+                        >
+                          Metadaten bestätigen →
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="shrink-0 flex items-center gap-2 mt-0.5">
                     {(doc as any).documentType === "benchmark_reference" && (

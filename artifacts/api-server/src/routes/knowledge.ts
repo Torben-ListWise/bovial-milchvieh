@@ -1,10 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq, and, inArray } from "drizzle-orm";
+import { desc, eq, and, inArray, isNotNull, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
   db,
   knowledgeDocumentsTable,
   knowledgeChunksTable,
+  knowledgeDocumentTopicsTable,
+  KNOWLEDGE_TOPICS,
 } from "@workspace/db";
 import { requireAuth, requireOperator } from "../lib/auth";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -13,6 +15,11 @@ import { scrapeUrl, validateUrl, canonicalizeUrl } from "../lib/scraper";
 import { logger } from "../lib/logger";
 import Anthropic from "@anthropic-ai/sdk";
 import { getModelForTask } from "../lib/agent";
+import {
+  extractDocumentMetadata,
+  confirmDocumentMetadata,
+  runBatchMetadataExtraction,
+} from "../lib/knowledgeMetadata";
 
 interface KnowledgeUploadUrlBodyType {
   filename: string;
@@ -48,6 +55,30 @@ const KnowledgeUploadUrlBody = {
 const router: IRouter = Router();
 const objectStorage = new ObjectStorageService();
 
+function serializeDoc(d: typeof knowledgeDocumentsTable.$inferSelect) {
+  return {
+    id: d.id,
+    title: d.title,
+    filename: d.filename,
+    fileType: d.fileType,
+    status: d.status,
+    chunkCount: d.chunkCount ?? null,
+    size: d.size ?? null,
+    errorMessage: d.errorMessage ?? null,
+    sourceUrl: d.sourceUrl ?? null,
+    category: d.category ?? null,
+    documentType: d.documentType ?? null,
+    metaTitel: d.metaTitel ?? null,
+    metaAutoren: d.metaAutoren ?? null,
+    metaJahr: d.metaJahr ?? null,
+    metaHerausgeber: d.metaHerausgeber ?? null,
+    metaUrl: d.metaUrl ?? null,
+    tierStufe: d.tierStufe ?? null,
+    metaPending: d.metaPending ?? null,
+    createdAt: d.createdAt,
+  };
+}
+
 router.get(
   "/knowledge",
   requireAuth,
@@ -57,20 +88,24 @@ router.get(
       .select()
       .from(knowledgeDocumentsTable)
       .orderBy(desc(knowledgeDocumentsTable.createdAt));
+
+    const docIds = docs.filter((d) => d.status === "ready").map((d) => d.id);
+    const topicRows = docIds.length
+      ? await db
+          .select()
+          .from(knowledgeDocumentTopicsTable)
+          .where(inArray(knowledgeDocumentTopicsTable.docId, docIds))
+      : [];
+    const topicsByDocId = new Map<string, string[]>();
+    for (const r of topicRows) {
+      if (!topicsByDocId.has(r.docId)) topicsByDocId.set(r.docId, []);
+      topicsByDocId.get(r.docId)!.push(r.topic);
+    }
+
     res.json(
       docs.map((d) => ({
-        id: d.id,
-        title: d.title,
-        filename: d.filename,
-        fileType: d.fileType,
-        status: d.status,
-        chunkCount: d.chunkCount ?? null,
-        size: d.size ?? null,
-        errorMessage: d.errorMessage ?? null,
-        sourceUrl: d.sourceUrl ?? null,
-        category: d.category ?? null,
-        documentType: d.documentType ?? null,
-        createdAt: d.createdAt,
+        ...serializeDoc(d),
+        topics: topicsByDocId.get(d.id) ?? [],
       })),
     );
   },
@@ -119,7 +154,6 @@ router.post(
       objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
     }
 
-    // Single-active-document types: uploading a new version replaces the existing one.
     const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual", "farm_abbreviations", "app_faq"] as const;
     if (documentType && (SINGLE_ACTIVE_TYPES as readonly string[]).includes(documentType)) {
       const [existingDoc] = await db
@@ -131,6 +165,9 @@ router.post(
         await db
           .delete(knowledgeChunksTable)
           .where(eq(knowledgeChunksTable.docId, existingDoc.id));
+        await db
+          .delete(knowledgeDocumentTopicsTable)
+          .where(eq(knowledgeDocumentTopicsTable.docId, existingDoc.id));
         try {
           const file = await objectStorage.getObjectEntityFile(existingDoc.objectPath);
           await file.delete();
@@ -195,7 +232,6 @@ router.post(
       return;
     }
 
-    // SSRF check before anything else
     try {
       await validateUrl(rawUrl);
     } catch (err) {
@@ -205,7 +241,6 @@ router.post(
 
     const canonicalUrl = canonicalizeUrl(rawUrl);
 
-    // Deduplication: check both the raw and canonical forms
     const allDocs = await db
       .select({ sourceUrl: knowledgeDocumentsTable.sourceUrl })
       .from(knowledgeDocumentsTable)
@@ -227,8 +262,6 @@ router.post(
       return;
     }
 
-    // Create doc row immediately with a placeholder objectPath so the frontend
-    // can start polling. The real path is set once the upload succeeds.
     const placeholder = `knowledge/url-${randomUUID()}.txt`;
     const [doc] = await db
       .insert(knowledgeDocumentsTable)
@@ -243,10 +276,8 @@ router.post(
       })
       .returning();
 
-    // Return immediately so the frontend can start polling.
     res.json({ docId: doc.id });
 
-    // Run scrape + upload + ingest entirely in background.
     void (async () => {
       try {
         const scraped = await scrapeUrl(rawUrl);
@@ -263,6 +294,7 @@ router.post(
           .where(eq(knowledgeDocumentsTable.id, doc.id));
 
         await ingestKnowledgeDoc(doc.id);
+        void triggerMetadataExtraction(doc.id);
       } catch (err) {
         const message = err instanceof Error ? err.message : "URL konnte nicht geladen werden";
         logger.warn({ err, url: rawUrl, docId: doc.id }, "URL-Ingestion fehlgeschlagen");
@@ -274,6 +306,21 @@ router.post(
     })();
   },
 );
+
+async function triggerMetadataExtraction(docId: string): Promise<void> {
+  try {
+    const meta = await extractDocumentMetadata(docId);
+    if (meta) {
+      await db
+        .update(knowledgeDocumentsTable)
+        .set({ metaPending: meta })
+        .where(eq(knowledgeDocumentsTable.id, docId));
+      logger.info({ docId }, "Metadaten-Extraktion abgeschlossen, steht zur Bestätigung bereit");
+    }
+  } catch (err) {
+    logger.warn({ err, docId }, "Metadaten-Extraktion nach Ingestion fehlgeschlagen");
+  }
+}
 
 router.post(
   "/knowledge/:id/ingest",
@@ -289,7 +336,10 @@ router.post(
       res.status(404).json({ error: "Dokument nicht gefunden" });
       return;
     }
-    void ingestKnowledgeDoc(id);
+    void (async () => {
+      await ingestKnowledgeDoc(id);
+      void triggerMetadataExtraction(id);
+    })();
     res.json({ accepted: true });
   },
 );
@@ -318,29 +368,186 @@ router.post(
   },
 );
 
-// PATCH /knowledge/:id — update category (and optionally title) for a single doc
+router.post(
+  "/knowledge/:id/extract-metadata",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const [doc] = await db
+      .select({ id: knowledgeDocumentsTable.id, status: knowledgeDocumentsTable.status })
+      .from(knowledgeDocumentsTable)
+      .where(eq(knowledgeDocumentsTable.id, id));
+    if (!doc) {
+      res.status(404).json({ error: "Dokument nicht gefunden" });
+      return;
+    }
+    if (doc.status !== "ready") {
+      res.status(400).json({ error: "Dokument ist noch nicht bereit (status != ready)" });
+      return;
+    }
+    res.json({ accepted: true });
+    void triggerMetadataExtraction(id);
+  },
+);
+
+router.post(
+  "/knowledge/:id/confirm-metadata",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const body = req.body as {
+      metaTitel?: string | null;
+      metaAutoren?: string | null;
+      metaJahr?: number | null;
+      metaHerausgeber?: string | null;
+      metaUrl?: string | null;
+      tierStufe?: number | null;
+      topics?: string[];
+    };
+
+    // Always validate topics; empty array is valid (clears existing)
+    const validTopics = (body.topics ?? []).filter((t) =>
+      (KNOWLEDGE_TOPICS as readonly string[]).includes(t),
+    );
+
+    try {
+      await confirmDocumentMetadata(id, {
+        metaTitel: body.metaTitel ?? null,
+        metaAutoren: body.metaAutoren ?? null,
+        metaJahr: body.metaJahr ?? null,
+        metaHerausgeber: body.metaHerausgeber ?? null,
+        metaUrl: body.metaUrl ?? null,
+        tierStufe: body.tierStufe ?? null,
+        topics: validTopics,
+      });
+      logger.info({ docId: id, topics: validTopics }, "Metadaten bestätigt");
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error({ err, docId: id }, "Metadaten-Bestätigung fehlgeschlagen");
+      res.status(500).json({ error: "Metadaten konnten nicht gespeichert werden" });
+    }
+  },
+);
+
+router.post(
+  "/knowledge/:id/dismiss-metadata",
+  requireAuth,
+  requireOperator,
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    await db
+      .update(knowledgeDocumentsTable)
+      .set({ metaPending: null })
+      .where(eq(knowledgeDocumentsTable.id, id));
+    res.json({ ok: true });
+  },
+);
+
+router.post(
+  "/knowledge/batch-extract-metadata",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      res.status(503).json({ error: "ANTHROPIC_API_KEY nicht konfiguriert" });
+      return;
+    }
+
+    const docs = await db
+      .select({ id: knowledgeDocumentsTable.id })
+      .from(knowledgeDocumentsTable)
+      .where(
+        and(
+          eq(knowledgeDocumentsTable.status, "ready"),
+          isNull(knowledgeDocumentsTable.tierStufe),
+          isNull(knowledgeDocumentsTable.metaPending),
+        ),
+      );
+
+    if (docs.length === 0) {
+      res.json({ queued: 0, message: "Alle Dokumente haben bereits Metadaten oder stehen zur Bestätigung" });
+      return;
+    }
+
+    res.json({ queued: docs.length, message: `${docs.length} Dokumente werden im Hintergrund verarbeitet` });
+
+    void runBatchMetadataExtraction().then(({ processed, incomplete }) => {
+      logger.info({ processed, incomplete }, "Batch-Metadaten-Extraktion abgeschlossen");
+    });
+  },
+);
+
+router.get(
+  "/knowledge/incomplete-metadata",
+  requireAuth,
+  requireOperator,
+  async (_req: Request, res: Response) => {
+    // Return docs in two categories:
+    // 1. "incomplete" — extraction ran but couldn't determine bibliographic fields
+    // 2. "never_extracted" — ready but no metaPending and no confirmed tierStufe
+    const docs = await db
+      .select()
+      .from(knowledgeDocumentsTable)
+      .where(
+        and(
+          eq(knowledgeDocumentsTable.status, "ready"),
+          isNull(knowledgeDocumentsTable.tierStufe),
+        ),
+      )
+      .orderBy(desc(knowledgeDocumentsTable.createdAt));
+
+    const withStatus = docs.map((d) => {
+      const pending = d.metaPending as { _extractionStatus?: string } | null;
+      const extractionStatus =
+        pending?._extractionStatus === "incomplete"
+          ? "incomplete"
+          : pending === null
+            ? "never_extracted"
+            : "pending_review";
+      return { ...serializeDoc(d), extractionStatus };
+    });
+
+    res.json(withStatus);
+  },
+);
+
 router.patch(
   "/knowledge/:id",
   requireAuth,
   requireOperator,
   async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const { category, title, documentType } = req.body as {
+    const { category, title, documentType, metaTitel, metaAutoren, metaJahr, metaHerausgeber, metaUrl, tierStufe, topics } = req.body as {
       category?: string;
       title?: string;
       documentType?: string | null;
+      metaTitel?: string | null;
+      metaAutoren?: string | null;
+      metaJahr?: number | null;
+      metaHerausgeber?: string | null;
+      metaUrl?: string | null;
+      tierStufe?: number | null;
+      topics?: string[];
     };
     const patch: Record<string, unknown> = {};
     if (typeof category === "string") patch.category = category || null;
     if (typeof title === "string" && title.trim()) patch.title = title.trim();
     if (documentType !== undefined) patch.documentType = documentType || null;
-    if (Object.keys(patch).length === 0) {
+    if (metaTitel !== undefined) patch.metaTitel = metaTitel || null;
+    if (metaAutoren !== undefined) patch.metaAutoren = metaAutoren || null;
+    if (metaJahr !== undefined) patch.metaJahr = metaJahr || null;
+    if (metaHerausgeber !== undefined) patch.metaHerausgeber = metaHerausgeber || null;
+    if (metaUrl !== undefined) patch.metaUrl = metaUrl || null;
+    if (tierStufe !== undefined) patch.tierStufe = tierStufe || null;
+
+    if (Object.keys(patch).length === 0 && topics === undefined) {
       res.status(400).json({ error: "Nichts zu aktualisieren" });
       return;
     }
 
-    // SINGLE_ACTIVE_TYPES: if setting a type that only allows one active doc,
-    // clear the same type from all other documents first.
     const SINGLE_ACTIVE_TYPES = ["benchmark_reference", "dairycomp_manual", "farm_abbreviations", "app_faq"] as const;
     if (
       typeof documentType === "string" &&
@@ -356,21 +563,44 @@ router.patch(
         );
     }
 
-    const [updated] = await db
-      .update(knowledgeDocumentsTable)
-      .set(patch)
-      .where(eq(knowledgeDocumentsTable.id, id))
-      .returning();
-    if (!updated) {
-      res.status(404).json({ error: "Dokument nicht gefunden" });
-      return;
+    let updated: typeof knowledgeDocumentsTable.$inferSelect | undefined;
+    if (Object.keys(patch).length > 0) {
+      const [result] = await db
+        .update(knowledgeDocumentsTable)
+        .set(patch)
+        .where(eq(knowledgeDocumentsTable.id, id))
+        .returning();
+      updated = result;
+      if (!updated) {
+        res.status(404).json({ error: "Dokument nicht gefunden" });
+        return;
+      }
     }
-    logger.info({ docId: id, documentType: updated.documentType }, "Knowledge-Dokument Typ aktualisiert");
-    res.json({ ok: true, category: updated.category ?? null, documentType: updated.documentType ?? null });
+
+    if (topics !== undefined) {
+      const validTopics = topics.filter((t) =>
+        (KNOWLEDGE_TOPICS as readonly string[]).includes(t),
+      );
+      await db
+        .delete(knowledgeDocumentTopicsTable)
+        .where(eq(knowledgeDocumentTopicsTable.docId, id));
+      if (validTopics.length > 0) {
+        await db.insert(knowledgeDocumentTopicsTable).values(
+          validTopics.map((topic) => ({ docId: id, topic })),
+        );
+      }
+    }
+
+    const [finalDoc] = await db
+      .select()
+      .from(knowledgeDocumentsTable)
+      .where(eq(knowledgeDocumentsTable.id, id));
+
+    logger.info({ docId: id }, "Knowledge-Dokument aktualisiert");
+    res.json({ ok: true, ...(finalDoc ? serializeDoc(finalDoc) : {}) });
   },
 );
 
-// POST /knowledge/categorize-all — AI categorizes all ready documents that have no category yet
 router.post(
   "/knowledge/categorize-all",
   requireAuth,
@@ -382,7 +612,6 @@ router.post(
       return;
     }
 
-    // Fetch all ready docs (already categorised docs will be re-categorised on force, skip here)
     const docs = await db
       .select({
         id: knowledgeDocumentsTable.id,
@@ -398,7 +627,6 @@ router.post(
       return;
     }
 
-    // Fetch first chunk text for each doc to give Claude context
     const docIds = uncategorized.map((d) => d.id);
     const chunks = await db
       .select({
@@ -489,7 +717,6 @@ router.delete(
       .from(knowledgeDocumentsTable)
       .where(eq(knowledgeDocumentsTable.id, id));
     if (!doc) {
-      // Idempotent: already deleted — return success so double-clicks don't show an error
       res.status(204).end();
       return;
     }
@@ -497,6 +724,9 @@ router.delete(
     await db
       .delete(knowledgeChunksTable)
       .where(eq(knowledgeChunksTable.docId, id));
+    await db
+      .delete(knowledgeDocumentTopicsTable)
+      .where(eq(knowledgeDocumentTopicsTable.docId, id));
 
     try {
       const file = await objectStorage.getObjectEntityFile(doc.objectPath);

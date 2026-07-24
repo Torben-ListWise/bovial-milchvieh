@@ -2202,20 +2202,46 @@ const ResultCard = memo(function ResultCard({
                       c.sourceType === "pdf" ? "📄" :
                       c.sourceType === "wissen" ? "📚" :
                       c.sourceType === "web" ? "🌐" : "📌";
+
+                    // Build bibliographic display string for wissen sources
+                    let biblioText: string | null = null;
+                    if (c.sourceType === "wissen" && c.metaTitel) {
+                      const parts: string[] = [c.metaTitel];
+                      if (c.metaAutoren) {
+                        const jahr = c.metaJahr ? ` (${c.metaJahr})` : "";
+                        parts.push(`${c.metaAutoren}${jahr}`);
+                      } else if (c.metaJahr) {
+                        parts.push(String(c.metaJahr));
+                      }
+                      if (c.metaHerausgeber) parts.push(c.metaHerausgeber);
+                      biblioText = parts.join(" · ");
+                    }
+
+                    const tierBadge = c.tierStufe
+                      ? <span className="text-[9px] font-bold bg-primary/10 text-primary/70 px-1 rounded shrink-0">T{c.tierStufe}</span>
+                      : null;
+
                     return (
                       <span
                         key={i}
                         id={`cite-${msg.id}-${i + 1}`}
-                        title={c.basis ?? undefined}
-                        className="inline-flex items-center gap-1 text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full"
+                        title={c.basis ?? (biblioText ?? undefined)}
+                        className="inline-flex items-center gap-1 text-xs bg-primary/5 border border-primary/20 text-primary px-2 py-0.5 rounded-full max-w-xs"
                       >
                         <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0">[{i + 1}]</span>
-                        <span>{icon}</span>
-                        <span className="font-medium">{c.label}</span>
-                        <span className="text-muted-foreground/70">·</span>
-                        <span className="text-muted-foreground">{c.value}</span>
+                        <span className="shrink-0">{icon}</span>
+                        {tierBadge}
+                        {biblioText ? (
+                          <span className="text-muted-foreground truncate" title={biblioText}>{biblioText}</span>
+                        ) : (
+                          <>
+                            <span className="font-medium truncate">{c.label}</span>
+                            <span className="text-muted-foreground/70 shrink-0">·</span>
+                            <span className="text-muted-foreground truncate">{c.value}</span>
+                          </>
+                        )}
                         {c.basis && (
-                          <span className="text-[10px] text-muted-foreground/50 ml-0.5">({c.basis})</span>
+                          <span className="text-[10px] text-muted-foreground/50 ml-0.5 shrink-0">({c.basis})</span>
                         )}
                       </span>
                     );

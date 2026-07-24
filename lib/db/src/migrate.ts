@@ -772,4 +772,45 @@ export async function setupAnalystSandbox(): Promise<void> {
       ('Technik/Digitalisierung', 'cyan','["https://dairy.extension.wisc.edu/article-topic/emerging-technologies-and-facilities/"]', 60)
     `);
   }
+
+  // Migration: structured bibliographic metadata on knowledge_documents
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS meta_titel TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS meta_autoren TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS meta_jahr SMALLINT"
+  );
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS meta_herausgeber TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS meta_url TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS tier_stufe SMALLINT"
+  );
+  await pool.query(
+    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS meta_pending JSONB"
+  );
+
+  // Migration: knowledge_document_topics — many-to-many topics per document
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS knowledge_document_topics (
+      id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      doc_id   UUID NOT NULL,
+      topic    TEXT NOT NULL
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS knowledge_document_topics_doc_idx ON knowledge_document_topics (doc_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS knowledge_document_topics_topic_idx ON knowledge_document_topics (topic)"
+  );
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS knowledge_document_topics_unique_idx ON knowledge_document_topics (doc_id, topic)"
+  );
 }
