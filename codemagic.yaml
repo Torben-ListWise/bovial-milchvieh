@@ -120,6 +120,22 @@ workflows:
           echo "=== BUNDLE_FORMAT section (context) ==="
           grep -n -A2 -B2 "BUNDLE_FORMAT" "$SH_LINK"
 
+      - name: Resolve Swift Package dependencies (ClerkKit)
+        script: |
+          # xcodebuild archive on a fresh CI runner does NOT reliably resolve
+          # SPM packages that CocoaPods attached to the Pods project (ClerkKit
+          # via ClerkExpo's spm_dependency). Xcode's GUI resolves them when
+          # opening the workspace; on CI we must do it explicitly, otherwise
+          # the ClerkExpo target is silently skipped and the app target fails
+          # with "no such module 'ClerkExpo'".
+          cd artifacts/bovial-mobile/ios
+          xcodebuild -resolvePackageDependencies \
+            -workspace Bovial.xcworkspace \
+            -scheme Bovial
+          echo "=== Resolved SPM packages ==="
+          find ~/Library/Developer/Xcode/DerivedData -maxdepth 4 -type d -name "clerk-ios*" 2>/dev/null || true
+          ls Pods/Bovial.xcworkspace 2>/dev/null || true
+
       - name: Fetch signing files
         script: |
           keychain initialize

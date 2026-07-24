@@ -35,10 +35,12 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "static",
+            "deploymentTarget": "17.0"
           }
         }
       ],
+      "@clerk/expo",
       "./plugins/withSpmPostInstallFix.js",
       "./plugins/withBundleFormatFix.js"
     ],
