@@ -302,6 +302,7 @@ export default function ChatScreen() {
         esRef.current = null;
         streamingTextRef.current = "";
         setStreaming(null);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         refetch();
         fetchDiaryPreview();
       });
