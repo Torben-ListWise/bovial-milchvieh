@@ -40,6 +40,7 @@ export function deriveFileKind(
   const l = name.toLowerCase();
   if (l.endsWith(".xlsx") || l.endsWith(".xls")) return "excel";
   if (l.endsWith(".csv") || l.endsWith(".tsv")) return "csv";
+  if (l.endsWith(".dat")) return "herd_export";
   if (l.endsWith(".pdf")) return "pdf";
   if (l.endsWith(".pptx") || l.endsWith(".ppt")) return "ppt";
   return "other";

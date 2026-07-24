@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import {
   UploadCloud, AlertCircle, CheckCircle, Clock, Trash2,
   FileText, FileSpreadsheet, Sheet, Plus, RefreshCw, X, Info, Activity,
-  Sparkles, ArrowRight, Loader2, AlertTriangle,
+  Sparkles, ArrowRight, Loader2, AlertTriangle, Database,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -49,6 +49,7 @@ function isInProgress(status: string): status is InProgressStatus {
 function fileKindIcon(contentType?: string | null, name?: string, kind?: string | null) {
   if (kind === "livestock_events") return <Activity className="w-8 h-8 text-violet-500" />;
   const lower = (name ?? "").toLowerCase();
+  if (kind === "herd_export" || lower.endsWith(".dat")) return <Database className="w-8 h-8 text-sky-600" />;
   if (lower.endsWith(".pdf")) return <FileText className="w-8 h-8 text-red-400" />;
   if (lower.endsWith(".csv")) return <FileSpreadsheet className="w-8 h-8 text-green-500" />;
   if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".ods"))
@@ -106,6 +107,62 @@ function EventSummaryCard({ summary }: { summary: EventSummary }) {
       )}
       {summary.skippedDuplicates > 0 && (
         <p className="text-[10px] text-violet-500">{summary.skippedDuplicates.toLocaleString("de-DE")} Duplikate übersprungen</p>
+      )}
+    </div>
+  );
+}
+
+interface CowfileSummary {
+  farmName: string | null;
+  versionInfo: string | null;
+  totalSlots: number;
+  occupiedSlots: number;
+  cows: number;
+  lactations: number;
+  eventsInserted: number;
+  eventsSkippedDuplicates: number;
+  topEvents: { type: string; count: number }[];
+  dateRange: { from: string; to: string } | null;
+}
+
+function CowfileSummaryCard({ summary }: { summary: CowfileSummary }) {
+  return (
+    <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-800">
+        <Database className="w-3.5 h-3.5" />
+        DairyComp-Herdendatei importiert{summary.farmName ? ` — ${summary.farmName}` : ""}
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="bg-white rounded-md border border-sky-100 px-2 py-1.5 text-center">
+          <div className="font-bold text-sky-900 text-base leading-tight">{summary.cows.toLocaleString("de-DE")}</div>
+          <div className="text-sky-600 text-[10px] mt-0.5">Tiere</div>
+        </div>
+        <div className="bg-white rounded-md border border-sky-100 px-2 py-1.5 text-center">
+          <div className="font-bold text-sky-900 text-base leading-tight">{summary.eventsInserted.toLocaleString("de-DE")}</div>
+          <div className="text-sky-600 text-[10px] mt-0.5">Ereignisse</div>
+        </div>
+        <div className="bg-white rounded-md border border-sky-100 px-2 py-1.5 text-center">
+          <div className="font-bold text-sky-900 text-base leading-tight">{summary.lactations.toLocaleString("de-DE")}</div>
+          <div className="text-sky-600 text-[10px] mt-0.5">Laktationen</div>
+        </div>
+      </div>
+      {summary.dateRange && (
+        <p className="text-[10px] text-sky-600">
+          Zeitraum: {summary.dateRange.from} – {summary.dateRange.to}
+        </p>
+      )}
+      {summary.topEvents.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {summary.topEvents.slice(0, 6).map((e) => (
+            <span key={e.type} className="inline-flex items-center gap-1 text-[10px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded">
+              <span className="font-semibold">{e.type}</span>
+              <span className="text-sky-500">{e.count.toLocaleString("de-DE")}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {summary.eventsSkippedDuplicates > 0 && (
+        <p className="text-[10px] text-sky-500">{summary.eventsSkippedDuplicates.toLocaleString("de-DE")} Duplikate übersprungen</p>
       )}
     </div>
   );
@@ -382,16 +439,19 @@ export function UploadPage() {
   };
 
   const MAX_FILE_SIZE_MB = 50;
+  const MAX_DAT_FILE_SIZE_MB = 150;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+    const isDatFile = file.name.toLowerCase().endsWith(".dat");
+    const maxSizeMb = isDatFile ? MAX_DAT_FILE_SIZE_MB : MAX_FILE_SIZE_MB;
+    if (file.size > maxSizeMb * 1024 * 1024) {
       toast({
         variant: "destructive",
         title: "Datei zu groß",
-        description: `Maximale Dateigröße: ${MAX_FILE_SIZE_MB} MB. Deine Datei hat ${(file.size / 1024 / 1024).toFixed(1)} MB.`,
+        description: `Maximale Dateigröße: ${maxSizeMb} MB. Deine Datei hat ${(file.size / 1024 / 1024).toFixed(1)} MB.`,
       });
       if (e.target) e.target.value = "";
       return;
@@ -505,8 +565,8 @@ export function UploadPage() {
               <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card p-3">
                 <FileSpreadsheet className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">CSV-Export</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">herde_export.csv</span></p>
+                  <p className="text-sm font-semibold text-foreground">CSV / DairyComp</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">z.&nbsp;B. <span className="font-mono">herde.csv</span>, <span className="font-mono">COWFILE1.DAT</span></p>
                   <p className="text-xs text-muted-foreground/70 mt-0.5">Herdenmanagement-System</p>
                 </div>
               </div>
@@ -563,7 +623,7 @@ export function UploadPage() {
               </Button>
               <input
                 type="file"
-                accept=".xlsx,.xls,.csv,.ods,.pdf"
+                accept=".xlsx,.xls,.csv,.ods,.pdf,.dat,.DAT"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={handleFileSelect}
                 disabled={isUploading}
@@ -592,7 +652,7 @@ export function UploadPage() {
               </Button>
               <input
                 type="file"
-                accept=".xlsx,.xls,.csv,.ods,.pdf"
+                accept=".xlsx,.xls,.csv,.ods,.pdf,.dat,.DAT"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={handleFileSelect}
                 disabled={isUploading}
@@ -652,8 +712,9 @@ export function UploadPage() {
             )}
             {files.map(f => {
               const fileKind = (f as any).kind as string | null;
-              const previewRows = ((f as any).previewRows ?? []) as { eventSummary?: EventSummary }[];
+              const previewRows = ((f as any).previewRows ?? []) as { eventSummary?: EventSummary; cowfileSummary?: CowfileSummary }[];
               const eventSummary = fileKind === "livestock_events" ? previewRows[0]?.eventSummary : undefined;
+              const cowfileSummary = fileKind === "herd_export" ? previewRows[0]?.cowfileSummary : undefined;
               return (
               <Card key={f.id} className="hover:border-primary/50 transition-colors group">
                 <CardContent className="p-3 md:p-4 flex flex-col gap-1">
@@ -666,6 +727,8 @@ export function UploadPage() {
                       {f.size ? <span>{(f.size / 1024 / 1024).toFixed(2)} MB</span> : null}
                       {fileKind === "livestock_events"
                         ? <span className="text-violet-600 font-medium">Event-CSV</span>
+                        : fileKind === "herd_export"
+                        ? <span className="text-sky-600 font-medium">DairyComp-Herdendatei</span>
                         : f.rowCount ? <span>{f.rowCount.toLocaleString("de-DE")} Zeilen</span> : null}
                     </div>
                   </div>
@@ -708,6 +771,7 @@ export function UploadPage() {
                   </div>
                   </div>
                   {eventSummary && <EventSummaryCard summary={eventSummary} />}
+                  {cowfileSummary && <CowfileSummaryCard summary={cowfileSummary} />}
                 </CardContent>
               </Card>
               );

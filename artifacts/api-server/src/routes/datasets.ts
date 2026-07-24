@@ -5,6 +5,7 @@ import {
   datasetsTable,
   sourceFilesTable,
   dataRowsTable,
+  cowEventsTable,
   warningsTable,
   contextFactsTable,
   analysesTable,
@@ -226,6 +227,7 @@ router.delete("/datasets/:datasetId", requireAuth, async (req: Request, res: Res
   await db.delete(analysesTable).where(eq(analysesTable.datasetId, datasetId));
   await db.delete(reportsTable).where(eq(reportsTable.datasetId, datasetId));
   await db.delete(dataRowsTable).where(eq(dataRowsTable.datasetId, datasetId));
+  await db.delete(cowEventsTable).where(eq(cowEventsTable.datasetId, datasetId));
   await db.delete(sourceFilesTable).where(eq(sourceFilesTable.datasetId, datasetId));
   await db.delete(warningsTable).where(eq(warningsTable.datasetId, datasetId));
   await db.delete(contextFactsTable).where(eq(contextFactsTable.datasetId, datasetId));

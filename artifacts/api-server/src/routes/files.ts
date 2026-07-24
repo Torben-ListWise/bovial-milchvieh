@@ -5,6 +5,7 @@ import {
   datasetsTable,
   sourceFilesTable,
   dataRowsTable,
+  cowEventsTable,
   usersTable,
   type SourceFile,
 } from "@workspace/db";
@@ -154,6 +155,7 @@ router.delete("/files/:fileId", requireAuth, async (req: Request, res: Response)
     return;
   }
   await db.delete(dataRowsTable).where(eq(dataRowsTable.fileId, fileId));
+  await db.delete(cowEventsTable).where(eq(cowEventsTable.fileId, fileId));
   await db.delete(sourceFilesTable).where(eq(sourceFilesTable.id, fileId));
   await refreshDatasetStatus(f.datasetId);
   res.status(204).end();

@@ -35,6 +35,7 @@ import {
   type EventImportSummary,
 } from "@workspace/db";
 import { detectEventColumns, parseEventRows } from "./parseEvents";
+import { createHash } from "node:crypto";
 import { chunkText, embedTexts, LOCAL_MODEL_NAME } from "./embeddings";
 import {
   ObjectStorageService,
@@ -46,6 +47,16 @@ import {
   CANONICAL_FIELD_MAP,
 } from "./canonical";
 import { detectFarmType } from "./farmTypeDetector";
+import {
+  parseCowfile,
+  CowfileParseError,
+  type CowfileParseResult,
+} from "./parseCowfile";
+import * as fsSync from "node:fs";
+import * as fsp from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { evaluateWarnings } from "./warnings";
 import { analysesTable, messagesTable } from "@workspace/db";
 import { processQuestion } from "./analysisService";
@@ -53,7 +64,7 @@ import { logger } from "./logger";
 
 const objectStorage = new ObjectStorageService();
 
-export type FileKind = "spreadsheet" | "document" | "unknown";
+export type FileKind = "spreadsheet" | "document" | "cowfile" | "unknown";
 
 export interface ColumnInfo {
   header: string;
@@ -73,6 +84,7 @@ export interface AnalyzeResult {
 
 function detectKind(name: string, contentType?: string | null): FileKind {
   const lower = name.toLowerCase();
+  if (lower.endsWith(".dat")) return "cowfile";
   const ct = (contentType ?? "").toLowerCase();
   if (
     lower.endsWith(".xlsx") ||
@@ -510,6 +522,189 @@ export async function materializeRows(
   return inserts.length;
 }
 
+export interface CowfileSummary {
+  farmName: string | null;
+  versionInfo: string | null;
+  totalSlots: number;
+  occupiedSlots: number;
+  cows: number;
+  lactations: number;
+  eventsInserted: number;
+  eventsSkippedDuplicates: number;
+  topEvents: { type: string; count: number }[];
+  dateRange: { from: string; to: string } | null;
+}
+
+// Ingest a DairyComp-305 COWFILE1.DAT: stream to a temp file, parse the binary
+// format, and materialize cows/lactations into data_rows plus events into cow_events.
+// Fails loudly: on any insert error all partially written rows for this file are
+// removed and the error is rethrown (no silent partial imports).
+async function ingestCowfileFile(file: SourceFile): Promise<CowfileSummary> {
+  const tmpPath = path.join(
+    os.tmpdir(),
+    `cowfile-${file.id}-${Date.now()}.dat`,
+  );
+  const storageFile = await objectStorage.getObjectEntityFile(file.objectPath);
+  await pipeline(
+    storageFile.createReadStream(),
+    fsSync.createWriteStream(tmpPath),
+  );
+
+  try {
+    const parsed: CowfileParseResult = parseCowfile(tmpPath);
+
+    // Re-ingest support: remove any previous rows from this file first.
+    await db.delete(dataRowsTable).where(eq(dataRowsTable.fileId, file.id));
+    await db.delete(cowEventsTable).where(eq(cowEventsTable.fileId, file.id));
+
+    let eventsInserted = 0;
+    let eventsSkippedDuplicates = 0;
+
+    try {
+      // Cows → data_rows (one row per animal, recordDate = birth date)
+      const cowRows = parsed.cows.map((c) => {
+        const data: Record<string, number | string> = {
+          animal_id: c.animalId,
+        };
+        if (c.lactationNumber != null) data.lactation_number = c.lactationNumber;
+        if (c.birthDate) data.birth_date = c.birthDate;
+        if (c.breed) data.breed = c.breed;
+        if (c.pen != null) data.pen = c.pen;
+        if (c.reproCode != null) data.repro_code = c.reproCode;
+        if (c.registration) data.registration = c.registration;
+        if (c.freshDate) data.fresh_date = c.freshDate;
+        if (c.conceptionDate) data.conception_date = c.conceptionDate;
+        if (c.dryDate) data.dry_date = c.dryDate;
+        return {
+          datasetId: file.datasetId,
+          fileId: file.id,
+          recordDate: c.birthDate,
+          data,
+        };
+      });
+
+      // Lactation history → data_rows (one row per lactation, recordDate = fresh date)
+      const lactRows = parsed.lactations.map((l) => {
+        const data: Record<string, number | string> = {
+          animal_id: l.animalId,
+          lactation_number: l.lactationNumber,
+        };
+        if (l.freshDate) data.fresh_date = l.freshDate;
+        if (l.conceptionDate) data.conception_date = l.conceptionDate;
+        if (l.dryDate) data.dry_date = l.dryDate;
+        return {
+          datasetId: file.datasetId,
+          fileId: file.id,
+          recordDate: l.freshDate,
+          data,
+        };
+      });
+
+      const BATCH = 500;
+      const allDataRows = [...cowRows, ...lactRows];
+      for (let i = 0; i < allDataRows.length; i += BATCH) {
+        await db.insert(dataRowsTable).values(allDataRows.slice(i, i + BATCH));
+      }
+
+      // Events → cow_events (deduped via rowHash)
+      const eventRows = parsed.events.map((e) => {
+        const remark = e.remark ?? null;
+        const hashInput = `${file.datasetId}|${e.animalId}|${e.eventDate}|${e.eventType}|${remark ?? ""}`;
+        return {
+          datasetId: file.datasetId,
+          fileId: file.id,
+          animalId: e.animalId,
+          eventDate: e.eventDate,
+          eventType: e.eventType,
+          dim: null as number | null,
+          remark,
+          result: null as string | null,
+          technician: null as string | null,
+          rawExtra: { code: e.eventCode, protocol: e.protocol },
+          rowHash: createHash("sha256").update(hashInput).digest("hex"),
+        };
+      });
+      for (let i = 0; i < eventRows.length; i += BATCH) {
+        const batch = eventRows.slice(i, i + BATCH);
+        const inserted = await db
+          .insert(cowEventsTable)
+          .values(batch)
+          .onConflictDoNothing()
+          .returning({ id: cowEventsTable.id });
+        eventsInserted += inserted.length;
+        eventsSkippedDuplicates += batch.length - inserted.length;
+      }
+    } catch (err) {
+      // Loud failure: never leave a partial import behind.
+      await db
+        .delete(dataRowsTable)
+        .where(eq(dataRowsTable.fileId, file.id))
+        .catch(() => {});
+      await db
+        .delete(cowEventsTable)
+        .where(eq(cowEventsTable.fileId, file.id))
+        .catch(() => {});
+      throw err;
+    }
+
+    // Set the farm name as dataset description if none is set yet.
+    if (parsed.farmName) {
+      const [ds] = await db
+        .select({ description: datasetsTable.description })
+        .from(datasetsTable)
+        .where(eq(datasetsTable.id, file.datasetId));
+      if (ds && !ds.description) {
+        await db
+          .update(datasetsTable)
+          .set({ description: parsed.farmName, updatedAt: new Date() })
+          .where(eq(datasetsTable.id, file.datasetId));
+      }
+    }
+
+    const typeCounts = new Map<string, number>();
+    let minDate: string | null = null;
+    let maxDate: string | null = null;
+    for (const e of parsed.events) {
+      typeCounts.set(e.eventType, (typeCounts.get(e.eventType) ?? 0) + 1);
+      if (!minDate || e.eventDate < minDate) minDate = e.eventDate;
+      if (!maxDate || e.eventDate > maxDate) maxDate = e.eventDate;
+    }
+    const topEvents = [...typeCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([type, count]) => ({ type, count }));
+
+    const summary: CowfileSummary = {
+      farmName: parsed.farmName,
+      versionInfo: parsed.versionInfo,
+      totalSlots: parsed.totalSlots,
+      occupiedSlots: parsed.occupiedSlots,
+      cows: parsed.cows.length,
+      lactations: parsed.lactations.length,
+      eventsInserted,
+      eventsSkippedDuplicates,
+      topEvents,
+      dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
+    };
+
+    logger.info(
+      {
+        datasetId: file.datasetId,
+        fileId: file.id,
+        farmName: parsed.farmName,
+        cows: parsed.cows.length,
+        lactations: parsed.lactations.length,
+        eventsInserted,
+      },
+      "COWFILE-Import abgeschlossen",
+    );
+
+    return summary;
+  } finally {
+    await fsp.unlink(tmpPath).catch(() => {});
+  }
+}
+
 // Full background ingestion: analyze, auto-apply suggested mapping, materialize.
 export async function ingestFile(fileId: string): Promise<void> {
   const [file] = await db
@@ -524,9 +719,44 @@ export async function ingestFile(fileId: string): Promise<void> {
       .set({ status: "processing" })
       .where(eq(sourceFilesTable.id, fileId));
 
-    const result = await analyzeFile(file);
+    const preKind = detectKind(file.name, file.contentType);
 
-    if (result.kind === "document") {
+    let result: AnalyzeResult | null = null;
+    if (preKind === "cowfile") {
+      const cowfileSummary = await ingestCowfileFile(file);
+      await db
+        .update(sourceFilesTable)
+        .set({
+          status: "ready",
+          kind: "herd_export",
+          rowCount: cowfileSummary.cows + cowfileSummary.lactations,
+          previewRows: [{ cowfileSummary }],
+        })
+        .where(eq(sourceFilesTable.id, fileId));
+
+      // COWFILE1.DAT is a DairyComp-305 herd file — definitively a dairy farm.
+      const [existing] = await db
+        .select({ c: (datasetsTable as any).detectedFocusAreaConfidence })
+        .from(datasetsTable)
+        .where(eq(datasetsTable.id, file.datasetId));
+      const existingConf = (existing?.c as number | null) ?? 0;
+      if (existingConf < 0.9) {
+        await db
+          .update(datasetsTable)
+          .set({
+            detectedFocusArea: "milchvieh",
+            detectedFocusAreaConfidence: 0.9,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(datasetsTable.id, file.datasetId));
+      }
+    } else {
+      result = await analyzeFile(file);
+    }
+
+    if (result === null) {
+      // cowfile: handled above
+    } else if (result.kind === "document") {
       await db
         .update(sourceFilesTable)
         .set({
@@ -569,7 +799,7 @@ export async function ingestFile(fileId: string): Promise<void> {
 
     // Detect farm type and persist on dataset (only updates if better signal than existing).
     try {
-      const detection = detectFarmType({
+      const detection = result === null ? null : detectFarmType({
         canonicalKeys: Object.values(result.suggestedMapping),
         rawHeaders: result.columns.map((c) => c.header),
         documentText: result.kind === "document" && result.text
@@ -626,7 +856,7 @@ export async function ingestFile(fileId: string): Promise<void> {
       if (!process.env.ANTHROPIC_API_KEY) {
         logger.warn({ datasetId: file.datasetId }, "Automatische Erstanalyse übersprungen: ANTHROPIC_API_KEY nicht gesetzt");
       } else if (!alreadyExists) {
-        const isPdfDocument = result.kind === "document";
+        const isPdfDocument = result?.kind === "document";
 
         const betriebsspiegelPrompt = isPdfDocument
           ? `Du erstellst jetzt eine automatische Erstanalyse eines hochgeladenen PDF-Dokuments. Gehe strukturiert vor:
