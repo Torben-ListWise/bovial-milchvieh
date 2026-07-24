@@ -1,0 +1,93 @@
+
+== Gathering artifacts ==
+
+== Publishing artifacts ==
+
+Publishing artifact Bovial.ipa
+Publishing artifact bovial-milchvieh_41_artifacts.zip
+Publishing Bovial.ipa to App Store Connect
+> app-store-connect publish --path /Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa --key-id ******** --issuer-id ******** --private-key @env:APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY
+
+Publish "/Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa" to App Store Connect
+App name: Bovial
+Bundle identifier: com.bovial.app
+Certificate expires: 2027-07-23T09:50:04.000+0000
+Distribution type: App Store
+Min OS version: 17.0
+Provisioned devices: N/A
+Provisions all devices: No
+Supported platforms: iPhoneOS
+Version code: 1000
+Version: 1.0.0
+
+Upload "/Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa" to App Store Connect
+Running altool at path '/Applications/Xcode-26.4.app/Contents/SharedFrameworks/ContentDelivery.framework/Resources/altool'...
+
+26.30.4 (173004)
+Running altool at path '/Applications/Xcode-26.4.app/Contents/SharedFrameworks/ContentDelivery.framework/Resources/altool'...
+
+2026-07-24 14:40:55.558 ERROR: [ContentDelivery.Uploader.918C40900] The provided entity includes an attribute with a value that has already been used (-19232) The bundle version must be higher than the previously uploaded version: ‘1000’. (ID: 183768ee-aa6d-4d51-ac95-bf484a6b0137)
+   NSUnderlyingError : The provided entity includes an attribute with a value that has already been used (-19241) The bundle version must be higher than the previously uploaded version.
+      status : 409
+      detail : The bundle version must be higher than the previously uploaded version.
+      source : 
+         pointer : /data/attributes/cfBundleVersion
+      id : 183768ee-aa6d-4d51-ac95-bf484a6b0137
+      code : ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE
+      title : The provided entity includes an attribute with a value that has already been used
+      meta : 
+         previousBundleVersion : 1000
+   previousBundleVersion : 1000
+   iris-code : ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE
+2026-07-24 14:40:55.559 ERROR: [altool.918C40900] Failed to upload package.
+2026-07-24 14:40:55.561 ERROR: [altool.100FE2C10] ExitFailure (31)
+{
+  "os-version" : "Version 26.4.1 (Build 25E253)",
+  "product-errors" : [
+    {
+      "code" : -19232,
+      "message" : "The provided entity includes an attribute with a value that has already been used",
+      "underlying-errors" : [
+        {
+          "code" : -19241,
+          "message" : "The provided entity includes an attribute with a value that has already been used",
+          "underlying-errors" : [
+
+          ],
+          "user-info" : {
+            "NSLocalizedDescription" : "The provided entity includes an attribute with a value that has already been used",
+            "NSLocalizedFailureReason" : "The bundle version must be higher than the previously uploaded version.",
+            "code" : "ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE",
+            "detail" : "The bundle version must be higher than the previously uploaded version.",
+            "id" : "183768ee-aa6d-4d51-ac95-bf484a6b0137",
+            "meta" : "{\n    previousBundleVersion = 1000;\n}",
+            "source" : "{\n    pointer = \"/data/attributes/cfBundleVersion\";\n}",
+            "status" : "409",
+            "title" : "The provided entity includes an attribute with a value that has already been used"
+          }
+        }
+      ],
+      "user-info" : {
+        "NSLocalizedDescription" : "The provided entity includes an attribute with a value that has already been used",
+        "NSLocalizedFailureReason" : "The bundle version must be higher than the previously uploaded version: ‘1000’. (ID: 183768ee-aa6d-4d51-ac95-bf484a6b0137)",
+        "NSUnderlyingError" : "Error Domain=IrisAPI Code=-19241 \"The provided entity includes an attribute with a value that has already been used\" UserInfo={status=409, detail=The bundle version must be higher than the previously uploaded version., source={\n    pointer = \"/data/attributes/cfBundleVersion\";\n}, id=183768ee-aa6d-4d51-ac95-bf484a6b0137, code=ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE, title=The provided entity includes an attribute with a value that has already been used, meta={\n    previousBundleVersion = 1000;\n}, NSLocalizedDescription=The provided entity includes an attribute with a value that has already been used, NSLocalizedFailureReason=The bundle version must be higher than the previously uploaded version.}",
+        "iris-code" : "ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE",
+        "previousBundleVersion" : "1000"
+      }
+    }
+  ],
+  "tool-path" : "/Applications/Xcode-26.4.app/Contents/SharedFrameworks/ContentDelivery.framework/Resources",
+  "tool-version" : "26.30.4 (173004)"
+}
+
+Failed to upload archive at "/Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa":
+The provided entity includes an attribute with a value that has already been used
+Failed to publish /Users/builder/clone/artifacts/bovial-mobile/build/ios/ipa/Bovial.ipa
+
+Failed to publish Bovial.ipa to App Store Connect.
+
+Build failed :|
+
+
+Publishing failed :|
+Failed to publish Bovial.ipa to App Store Connect.
