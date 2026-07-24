@@ -147,6 +147,7 @@ import { CrossFarmPatternsOperatorPage } from "@/pages/operator/cross-farm-patte
 import { UserManagementPage } from "@/pages/operator/user-management";
 import { WeatherConceptionPage } from "@/pages/app/weather-conception";
 import { BIDashboardPage } from "@/pages/operator/bi-dashboard";
+import { DairycompWhitelistPage } from "@/pages/operator/dairycomp-whitelist";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -384,6 +385,7 @@ function AppPortal() {
         <Route path="/app/cross-farm-patterns" component={CrossFarmPatternsOperatorPage} />
         <Route path="/app/user-management" component={UserManagementPage} />
         <Route path="/app/bi-dashboard" component={BIDashboardPage} />
+        <Route path="/app/dairycomp-whitelist" component={DairycompWhitelistPage} />
         <Route path="/app/weather-correlation" component={WeatherConceptionPage} />
         <Route path="/app/upgrade" component={UpgradePage} />
         <Route path="/app/semen-planning">

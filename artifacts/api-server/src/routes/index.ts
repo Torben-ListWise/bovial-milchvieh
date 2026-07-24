@@ -31,6 +31,7 @@ import referenceAnalysesRouter from "./reference-analyses";
 import healthAlertsRouter from "./health-alerts";
 import weatherConceptionRouter from "./weather-conception";
 import crossFarmPatternsRouter from "./cross-farm-patterns";
+import dairycompWhitelistRouter from "./dairycomp-whitelist";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(referenceAnalysesRouter);
 router.use(healthAlertsRouter);
 router.use(weatherConceptionRouter);
 router.use(crossFarmPatternsRouter);
+router.use(dairycompWhitelistRouter);
 
 export default router;

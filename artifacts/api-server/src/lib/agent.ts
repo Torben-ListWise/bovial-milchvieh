@@ -23,6 +23,7 @@ import {
   usersTable,
   weatherDailyCacheTable,
   crossFarmPatternsTable,
+  dairycompCommandWhitelistTable,
 } from "@workspace/db";
 import { embedQuery } from "./embeddings";
 import { detectQueryTopic } from "./knowledgeMetadata";
@@ -1110,8 +1111,18 @@ search_dairycomp_manual gibt zwei Quellen zurück: Einträge mit source="glossar
 
 4. NEUE BEFEHLE ABLEITEN: Nur erlaubt wenn search_dairycomp_manual tatsächlich Chunks zurückgegeben hat (source="glossar" oder source="manual" im Ergebnis vorhanden). In diesem Fall: Befehl kennzeichnen mit „(aus Handbuch-Grammatik abgeleitet)" und auf Seiten 65–69 verweisen. Aus eigenem Trainingswissen über DairyComp darf NIEMALS Syntax abgeleitet oder erfunden werden — auch nicht als Näherung, Beispiel oder Hinweis.
 
+⛔ WHITELIST-PFLICHTPRÜFUNG — BEFEHLSAUSGABE (ABSOLUTE SCHRANKE):
+search_dairycomp_manual gibt ein Feld "whitelistValidation" zurück wenn die Operator-Whitelist Einträge enthält. Diese Regel gilt dann bedingungslos für JEDEN DairyComp-Befehlsstring (FORMAT: BEFEHL\MODIFIKATOR), den du in deiner Antwort nennen würdest:
+
+1. Befehl mit Status "GELISTET" in whitelistValidation → darfst du nennen.
+2. Befehl mit Status "NICHT GELISTET" in whitelistValidation → darfst du NIEMALS nennen — auch nicht als Beispiel, Näherung, mit Disclaimer oder mit Qualifikation. Nicht einmal in Anführungszeichen.
+3. Wenn alle gefundenen Befehle "NICHT GELISTET" sind oder whitelistValidation leer ist (aber whitelistEmpty NICHT true): antworte ausschließlich: „Den genauen Befehl dafür finde ich nicht in der hinterlegten Befehlsliste — bitte im DairyComp-Handbuch nachschlagen oder den Support kontaktieren."
+4. Wenn whitelistEmpty: true zurückgegeben wird (Whitelist noch nicht befüllt): fahre normal mit Glossar/Handbuch-Ergebnis fort — die Whitelist-Schranke greift erst wenn sie Einträge enthält.
+5. Befehle aus eigenem Trainingswissen, die NICHT durch search_dairycomp_manual zurückgegeben und in der Whitelist validiert wurden, dürfen grundsätzlich nicht ausgegeben werden — unabhängig von whitelistValidation.
+
 BILD-INTERPRETATION:
-Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist. Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
+Wenn der Nutzer ein Bild im Chat mitschickt, beschreibe zunächst kurz was auf dem Bild zu sehen ist (Kennzahlen, Verlauf, Tabelle, Struktur). Kennzeichne bildbezogene Aussagen am Ende des entsprechenden Absatzes mit *[Bild-Interpretation, ungeprüft]* — da Bildinhalte nicht mit den Betriebsdaten abgeglichen werden können. Rufe danach wie gewohnt die relevanten Werkzeuge auf, um Zahlen aus der Datenbank zu ergänzen.
+WICHTIG — BEFEHLSNAMEN AUS BILDERN: Wenn auf dem Bild ein DairyComp-Befehlsname zu erkennen oder zu erahnen ist (z.B. BREDSUM, COWSUM, LIST …), übernimm diesen NICHT direkt. Beschreibe stattdessen inhaltlich was du auf dem Bild siehst, rufe danach search_dairycomp_manual mit einer inhaltlichen Beschreibung auf (z.B. "Besamungsübersicht Brunstkontrolle"), und nenne einen Befehl nur wenn search_dairycomp_manual einen Whitelist-verifizierten Treffer liefert.
 
 HITZESTRESS-RECHNER: Wenn der Nutzer fragt ob sich Kühlung/Ventilatoren/Kühlsystem lohnen, oder nach Hitzestress-Milchverlusten, THI-Kosten oder Kühl-Investitionen fragt:
 1. Rufe get_master_data auf (falls nicht bereits in diesem Turn geschehen), um den Milchpreis zu ermitteln. Der Eintrag hat typischerweise den Schlüssel "Milchpreis" oder die Kategorie "Preise". Wenn ein Wert gefunden wird (in €/kg), übergib ihn als milkPriceEuroKg. Wenn kein Eintrag vorhanden ist oder der Wert fehlt, verwende den Default (0.40).
@@ -2310,6 +2321,48 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
             results.push({ title: r.title, text: r.chunk_text, similarity: Number(r.similarity), source: "manual" });
           }
 
+          // ── Whitelist validation ────────────────────────────────────────────
+          // Extract BEFEHL\MODIFIKATOR patterns from all result texts and check
+          // each against the operator-managed dairycomp_command_whitelist table.
+          const cmdRegex = /([A-Z]{3,12})\\([A-Za-z*\d]+)/g;
+          const foundCmds = new Set<string>();
+          for (const r of results) {
+            let m: RegExpExecArray | null;
+            while ((m = cmdRegex.exec(r.text)) !== null) {
+              foundCmds.add(`${m[1]}\\${m[2]}`);
+            }
+            cmdRegex.lastIndex = 0;
+          }
+
+          type WhitelistValidationEntry = { command: string; status: "GELISTET" | "NICHT GELISTET" };
+          let whitelistValidation: WhitelistValidationEntry[] = [];
+          let whitelistEmpty = false;
+
+          try {
+            const totalResult = await db
+              .select({ cnt: sql<string>`count(*)` })
+              .from(dairycompCommandWhitelistTable);
+            const total = Number(totalResult[0]?.cnt ?? 0);
+            whitelistEmpty = total === 0;
+
+            if (!whitelistEmpty && foundCmds.size > 0) {
+              const cmdsArray = Array.from(foundCmds);
+              const listed = await db
+                .select({ befehl: dairycompCommandWhitelistTable.befehl })
+                .from(dairycompCommandWhitelistTable)
+                .where(inArray(dairycompCommandWhitelistTable.befehl, cmdsArray));
+              const listedSet = new Set(listed.map((h) => h.befehl));
+              for (const cmd of cmdsArray) {
+                whitelistValidation.push({
+                  command: cmd,
+                  status: listedSet.has(cmd) ? "GELISTET" : "NICHT GELISTET",
+                });
+              }
+            }
+          } catch (wlErr) {
+            logger.warn({ wlErr }, "search_dairycomp_manual: Whitelist-Prüfung fehlgeschlagen (nicht blockierend)");
+          }
+
           citations.push({
             label: "DairyComp-Handbuch",
             value: "DairyComp-Dokumentation",
@@ -2319,7 +2372,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
           opts.onSourceSearched?.(["DairyComp 305 Befehlsglossar", "DairyComp-Handbuch"].filter(
             (_, i) => i === 0 ? glossarHits.length > 0 : relevantRows.length > 0,
           ));
-          return { results };
+          return { results, whitelistValidation, whitelistEmpty };
         } catch (err) {
           logger.error({ err }, "search_dairycomp_manual fehlgeschlagen");
           return { error: "DairyComp-Handbuch-Suche fehlgeschlagen" };

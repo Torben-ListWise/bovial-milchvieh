@@ -37,6 +37,7 @@ import {
   Thermometer,
   TrendingUp,
   LineChart,
+  Terminal,
 } from "lucide-react";
 import { AiIcon } from "@/components/AiIcon";
 import { useTheme } from "@/hooks/useTheme";
@@ -269,6 +270,7 @@ export function AppLayout({ children, role, viewMode, onSwitchView, basePath }: 
     { name: "BI-Dashboard", href: "/app/bi-dashboard", icon: LineChart, preserveDataset: false },
     { name: "Gesundheitswarnungen", href: "/app/health-alerts", icon: ShieldAlert, preserveDataset: false },
     { name: "Betr.übergr. Muster", href: "/app/cross-farm-patterns", icon: TrendingUp, preserveDataset: false },
+    { name: "DC-Befehlsliste", href: "/app/dairycomp-whitelist", icon: Terminal, preserveDataset: false },
     { name: "Nutzerverwaltung", href: "/app/user-management", icon: Users, preserveDataset: false },
   ];
 
