@@ -58,10 +58,12 @@ workflows:
         script: |
           cd artifacts/bovial-mobile
           npx expo prebuild --platform ios --clean --no-install
-          # Override CFBundleVersion with Codemagic's auto-incrementing build number
-          # so App Store Connect always gets a unique, higher value.
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $CM_BUILD_NUMBER" ios/Bovial/Info.plist
-          echo "=== CFBundleVersion set to: $CM_BUILD_NUMBER ==="
+          # Override CFBundleVersion with an offset build number so it is always
+          # higher than any previously manually-set value (1, 2, ...).
+          # Offset 1000 ensures we start at 1001+ regardless of CM_BUILD_NUMBER.
+          BUILD_VERSION=$((CM_BUILD_NUMBER + 1000))
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_VERSION" ios/Bovial/Info.plist
+          echo "=== CFBundleVersion set to: $BUILD_VERSION (CM_BUILD_NUMBER=$CM_BUILD_NUMBER) ==="
 
       - name: Create .xcode.env (node path for Xcode script phases)
         script: |
