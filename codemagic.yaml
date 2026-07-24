@@ -59,9 +59,10 @@ workflows:
           cd artifacts/bovial-mobile
           npx expo prebuild --platform ios --clean --no-install
           # Override CFBundleVersion with an offset build number so it is always
-          # higher than any previously manually-set value (1, 2, ...).
-          # Offset 1000 ensures we start at 1001+ regardless of CM_BUILD_NUMBER.
-          BUILD_VERSION=$((CM_BUILD_NUMBER + 1000))
+          # higher than any previously uploaded value.
+          # Offset 1001: CM_BUILD_NUMBER=0 on first/retry run → 1001, which clears
+          # the App Store Connect duplicate-1000 block. Subsequent runs increment further.
+          BUILD_VERSION=$((CM_BUILD_NUMBER + 1001))
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_VERSION" ios/Bovial/Info.plist
           echo "=== CFBundleVersion set to: $BUILD_VERSION (CM_BUILD_NUMBER=$CM_BUILD_NUMBER) ==="
 
