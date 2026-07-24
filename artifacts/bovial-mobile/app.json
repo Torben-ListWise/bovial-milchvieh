@@ -40,7 +40,12 @@
           }
         }
       ],
-      "@clerk/expo",
+      [
+        "@clerk/expo",
+        {
+          "appleSignIn": false
+        }
+      ],
       "./plugins/withSpmPostInstallFix.js",
       "./plugins/withBundleFormatFix.js"
     ],
