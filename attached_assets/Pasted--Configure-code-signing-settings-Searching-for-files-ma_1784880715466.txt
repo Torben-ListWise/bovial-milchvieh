@@ -1,0 +1,69 @@
+
+Configure code signing settings
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Provisioning Profiles/*.mobileprovision
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Provisioning Profiles/*.provisionprofile
+Searching for files matching /Users/builder/Library/MobileDevice/Provisioning Profiles/*.mobileprovision
+Searching for files matching /Users/builder/Library/MobileDevice/Provisioning Profiles/*.provisionprofile
+List available code signing certificates in keychain /Users/builder/Library/codemagic-cli-tools/keychains/24-07-26_nucxj37g.keychain-db
+Searching for files matching /Users/builder/clone/artifacts/bovial-mobile/**/*.xcodeproj
+Completed configuring code signing settings
+ - Using profile "Bovial ios_app_store 1784800806" [9c08e087-e16e-4579-9f60-99c8dcc6e6dc] for target "Bovial" [Debug] from project "Bovial"
+ - Using profile "Bovial ios_app_store 1784800806" [9c08e087-e16e-4579-9f60-99c8dcc6e6dc] for target "Bovial" [Release] from project "Bovial"
+Generated options for exporting the project
+ - Method: app-store
+ - Provisioning Profiles:
+     - com.bovial.app: Bovial ios_app_store 1784800806
+ - Signing Certificate: Apple Distribution
+ - Signing Style: manual
+ - Team Id: W65GNXZJFL
+Saved export options to /Users/builder/export_options.plist
+Using Xcode 26.4.1 (17E202)
+Check Bovial.xcworkspace build settings
+Execute "xcodebuild -workspace ios/Bovial.xcworkspace -scheme Bovial -showBuildSettings"
+
+Archive Bovial.xcworkspace
+Execute "xcodebuild -workspace ios/Bovial.xcworkspace -scheme Bovial -archivePath /Users/builder/clone/artifacts/bovial-mobile/build/ios/xcarchive/Bovial_13e3o51p.xcarchive archive COMPILER_INDEX_STORE_ENABLE=NO DEVELOPMENT_TEAM=W65GNXZJFL 'CODE_SIGN_IDENTITY=Apple Distribution' CODE_SIGN_STYLE=Manual"
+
+Configure code signing settings
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Provisioning Profiles/*.mobileprovision
+Searching for files matching /Users/builder/Library/Developer/Xcode/UserData/Provisioning Profiles/*.provisionprofile
+Searching for files matching /Users/builder/Library/MobileDevice/Provisioning Profiles/*.mobileprovision
+Searching for files matching /Users/builder/Library/MobileDevice/Provisioning Profiles/*.provisionprofile
+List available code signing certificates in keychain /Users/builder/Library/codemagic-cli-tools/keychains/24-07-26_nucxj37g.keychain-db
+Searching for files matching /Users/builder/clone/artifacts/bovial-mobile/**/*.xcodeproj
+Completed configuring code signing settings
+ - Using profile "Bovial ios_app_store 1784800806" [9c08e087-e16e-4579-9f60-99c8dcc6e6dc] for target "Bovial" [Debug] from project "Bovial"
+ - Using profile "Bovial ios_app_store 1784800806" [9c08e087-e16e-4579-9f60-99c8dcc6e6dc] for target "Bovial" [Release] from project "Bovial"
+Generated options for exporting the project
+ - Method: app-store
+ - Provisioning Profiles:
+     - com.bovial.app: Bovial ios_app_store 1784800806
+ - Signing Certificate: Apple Distribution
+ - Signing Style: manual
+ - Team Id: W65GNXZJFL
+Saved export options to /Users/builder/export_options.plist
+Using Xcode 26.4.1 (17E202)
+Check Bovial.xcworkspace build settings
+Execute "xcodebuild -workspace ios/Bovial.xcworkspace -scheme Bovial -showBuildSettings"
+
+Archive Bovial.xcworkspace
+Execute "xcodebuild -workspace ios/Bovial.xcworkspace -scheme Bovial -archivePath /Users/builder/clone/artifacts/bovial-mobile/build/ios/xcarchive/Bovial_13e3o51p.xcarchive archive COMPILER_INDEX_STORE_ENABLE=NO DEVELOPMENT_TEAM=W65GNXZJFL 'CODE_SIGN_IDENTITY=Apple Distribution' CODE_SIGN_STYLE=Manual"
+
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNWorklets' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNReanimated' from project 'Pods')
+    Run script build phase '[CP-User] [Hermes] Replace Hermes for the right configuration, if needed' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'hermes-engine' from project 'Pods')
+Failed to archive ios/Bovial.xcworkspace
+
+
+Build failed :|
+Step 11 script `Build IPA` exited with status code 65
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNWorklets' from project 'Pods')
+    Run script build phase 'Create Symlinks to Header Folders' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'RNReanimated' from project 'Pods')
+    Run script build phase '[CP-User] [Hermes] Replace Hermes for the right configuration, if needed' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'hermes-engine' from project 'Pods')
+Failed to archive ios/Bovial.xcworkspace
+
+
+Build failed :|
+Step 11 script `Build IPA` exited with status code 65
