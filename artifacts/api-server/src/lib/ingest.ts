@@ -176,7 +176,7 @@ function parseSpreadsheet(buf: Buffer, name: string): string[][] {
   return json.map((r) => r.map((c) => (c == null ? "" : String(c))));
 }
 
-export async function extractPdfText(buf: Buffer): Promise<string> {
+async function getPdfjsDoc(buf: Buffer) {
   const { getDocument, GlobalWorkerOptions } = await import(
     "pdfjs-dist/legacy/build/pdf.mjs"
   );
@@ -184,10 +184,12 @@ export async function extractPdfText(buf: Buffer): Promise<string> {
   const req = createRequire(import.meta.url);
   const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
   GlobalWorkerOptions.workerSrc = workerPath;
-
   const data = new Uint8Array(buf);
-  const loadingTask = getDocument({ data, useSystemFonts: true });
-  const doc = await loadingTask.promise;
+  return getDocument({ data, useSystemFonts: true }).promise;
+}
+
+export async function extractPdfText(buf: Buffer): Promise<string> {
+  const doc = await getPdfjsDoc(buf);
   const parts: string[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
@@ -199,6 +201,20 @@ export async function extractPdfText(buf: Buffer): Promise<string> {
     parts.push(pageText);
   }
   return parts.join("\n\n");
+}
+
+export async function extractPdfMeta(buf: Buffer): Promise<{ title?: string; author?: string }> {
+  try {
+    const doc = await getPdfjsDoc(buf);
+    const meta = await doc.getMetadata();
+    const info = (meta?.info ?? {}) as Record<string, unknown>;
+    return {
+      title: typeof info["Title"] === "string" && info["Title"] ? info["Title"] : undefined,
+      author: typeof info["Author"] === "string" && info["Author"] ? info["Author"] : undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 async function extractPptxText(buf: Buffer): Promise<string> {

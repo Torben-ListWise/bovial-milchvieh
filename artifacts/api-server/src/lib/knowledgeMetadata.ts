@@ -7,7 +7,7 @@ import {
   KNOWLEDGE_TOPICS,
   type MetaPendingData,
 } from "@workspace/db";
-import { extractPdfText } from "./ingest";
+import { extractPdfText, extractPdfMeta } from "./ingest";
 import { ObjectStorageService } from "./objectStorage";
 import { getModelForTask } from "./agent";
 import { logger } from "./logger";
@@ -40,15 +40,22 @@ export async function extractDocumentMetadata(docId: string): Promise<MetaPendin
   if (!doc || doc.status !== "ready") return null;
 
   let textSnippet = "";
+  let pdfTitle: string | undefined;
+  let pdfAuthor: string | undefined;
   try {
     const file = await objectStorage.getObjectEntityFile(doc.objectPath);
     const [buf] = await file.download();
     const lower = doc.filename.toLowerCase();
     if (lower.endsWith(".pdf") || doc.fileType === "pdf") {
-      const fullText = await extractPdfText(buf);
-      textSnippet = fullText.slice(0, 3000);
+      const [fullText, pdfMeta] = await Promise.all([
+        extractPdfText(buf),
+        extractPdfMeta(buf),
+      ]);
+      textSnippet = fullText.slice(0, 6000);
+      pdfTitle = pdfMeta.title;
+      pdfAuthor = pdfMeta.author;
     } else {
-      textSnippet = buf.toString("utf-8").slice(0, 3000);
+      textSnippet = buf.toString("utf-8").slice(0, 6000);
     }
   } catch (err) {
     logger.warn({ err, docId }, "Textextraktion für Metadaten fehlgeschlagen");
@@ -57,20 +64,24 @@ export async function extractDocumentMetadata(docId: string): Promise<MetaPendin
 
   const topicsList = KNOWLEDGE_TOPICS.join(", ");
   const sourceUrlHint = doc.sourceUrl ? `\nQuelle-URL des Dokuments: "${doc.sourceUrl}"` : "";
+  const pdfMetaHint = [
+    pdfTitle ? `PDF-Metadaten Titel: "${pdfTitle}"` : "",
+    pdfAuthor ? `PDF-Metadaten Autor: "${pdfAuthor}"` : "",
+  ].filter(Boolean).join("\n");
 
   const prompt = `Du bist ein Bibliograph für wissenschaftliche Fachliteratur im Agrarbereich. Analysiere den folgenden Dokumententitel und Textauszug und extrahiere die bibliografischen Metadaten.
 
 Dokumententitel: "${doc.title}"
 Dateiname: "${doc.filename}"${sourceUrlHint}
-
-Textauszug (erste 3000 Zeichen):
+${pdfMetaHint ? `\n${pdfMetaHint}\n` : ""}
+Textauszug (erste 6000 Zeichen):
 ${textSnippet || "(kein Text verfügbar)"}
 
 Verfügbare Themen-Kategorien: ${topicsList}
 
 Extrahiere die folgenden Informationen:
-- metaTitel: Der echte Titel des Dokuments/Papers (aus dem Text, nicht Dateiname)
-- metaAutoren: Autoren (kommagetrennt, z.B. "Müller, H.; Schmidt, A.")
+- metaTitel: Der echte Titel des Dokuments/Papers. Bevorzuge PDF-Metadaten Titel wenn vorhanden, sonst aus dem Textauszug.
+- metaAutoren: Autoren (kommagetrennt, z.B. "Müller, H.; Schmidt, A."). Bevorzuge PDF-Metadaten Autor wenn vorhanden, sonst aus dem Textauszug.
 - metaJahr: Erscheinungsjahr (4-stellige Zahl)
 - metaHerausgeber: Journal, Verlag oder herausgebende Institution
 - metaUrl: DOI oder kanonische URL des Dokuments/Papers (falls im Text gefunden, z.B. "https://doi.org/..." oder direkte URL). Nicht die Upload-URL oder sourceUrl, sondern die offizielle Veröffentlichungs-URL.
