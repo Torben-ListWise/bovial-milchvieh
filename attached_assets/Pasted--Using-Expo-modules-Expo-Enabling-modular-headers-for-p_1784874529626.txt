@@ -1,0 +1,155 @@
+
+Using Expo modules
+[Expo] Enabling modular headers for pod ExpoModulesCore
+[Expo] Enabling modular headers for pod GoogleSignIn
+[Expo] Enabling modular headers for pod GoogleUtilities
+[Expo] Enabling modular headers for pod RecaptchaInterop
+[Expo] Enabling modular headers for pod React-Core
+[Expo] Enabling modular headers for pod React-RCTFabric
+[Expo] Enabling modular headers for pod ReactCodegen
+[Expo] Enabling modular headers for pod RCTRequired
+[Expo] Enabling modular headers for pod RCTTypeSafety
+[Expo] Enabling modular headers for pod ReactCommon
+[Expo] Enabling modular headers for pod React-NativeModulesApple
+[Expo] Enabling modular headers for pod Yoga
+[Expo] Enabling modular headers for pod React-Fabric
+[Expo] Enabling modular headers for pod React-graphics
+[Expo] Enabling modular headers for pod React-utils
+[Expo] Enabling modular headers for pod React-featureflags
+[Expo] Enabling modular headers for pod React-debug
+[Expo] Enabling modular headers for pod React-ImageManager
+[Expo] Enabling modular headers for pod React-rendererdebug
+[Expo] Enabling modular headers for pod React-jsi
+[Expo] Enabling modular headers for pod React-renderercss
+[Expo] Enabling modular headers for pod hermes-engine
+[Expo] Enabling modular headers for pod glog
+[Expo] Enabling modular headers for pod boost
+[Expo] Enabling modular headers for pod DoubleConversion
+[Expo] Enabling modular headers for pod fast_float
+[Expo] Enabling modular headers for pod fmt
+[Expo] Enabling modular headers for pod RCT-Folly
+[Expo] Enabling modular headers for pod SocketRocket
+[Expo] Enabling modular headers for pod React-RCTAppDelegate
+[Expo] Enabling modular headers for pod ReactAppDependencyProvider
+[Expo] Enabling modular headers for pod SDWebImage
+[Expo] Enabling modular headers for pod SDWebImageAVIFCoder
+[Expo] Enabling modular headers for pod SDWebImageSVGCoder
+[Expo] Enabling modular headers for pod SDWebImageWebPCoder
+[Expo] Enabling modular headers for pod libavif
+[Expo] Enabling modular headers for pod RNScreens
+Found 9 modules for target `Bovial`
+link_native_modules! {:ios_packages=>[{:configurations=>[], :name=>"expo", :root=>"/Users/builder/clone/node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.0_@expo+metro-runtime@6.1.2_expo-router@6.0.24_react-nati_fc1428bce9eece513ab4aba6f37e0036/node_modules/expo", :path=>"../../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.0_@expo+metro-runtime@6.1.2_expo-router@6.0.24_react-nati_fc1428bce9eece513ab4aba6f37e0036/node_modules/expo", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.0_@expo+metro-runtime@6.1.2_expo-router@6.0.24_react-nati_fc1428bce9eece513ab4aba6f37e0036/node_modules/expo/Expo.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"@react-native-async-storage/async-storage", :root=>"/Users/builder/clone/node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.81.5_patch_hash=1a4c4d15_e2e021b987d8509b4c60fa15f33df7ac/node_modules/@react-native-async-storage/async-storage", :path=>"../../../node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.81.5_patch_hash=1a4c4d15_e2e021b987d8509b4c60fa15f33df7ac/node_modules/@react-native-async-storage/async-storage", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.81.5_patch_hash=1a4c4d15_e2e021b987d8509b4c60fa15f33df7ac/node_modules/@react-native-async-storage/async-storage/RNCAsyncStorage.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-gesture-handler", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c63_c2320b35a96e5cccd8bfe5c31cc643ca/node_modules/react-native-gesture-handler", :path=>"../../../node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c63_c2320b35a96e5cccd8bfe5c31cc643ca/node_modules/react-native-gesture-handler", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c63_c2320b35a96e5cccd8bfe5c31cc643ca/node_modules/react-native-gesture-handler/RNGestureHandler.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-keyboard-controller", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-keyboard-controller@1.18.5_react-native-reanimated@4.1.7_react-native-work_6a40489fed02c9f6d6800b9058908bb4/node_modules/react-native-keyboard-controller", :path=>"../../../node_modules/.pnpm/react-native-keyboard-controller@1.18.5_react-native-reanimated@4.1.7_react-native-work_6a40489fed02c9f6d6800b9058908bb4/node_modules/react-native-keyboard-controller", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-keyboard-controller@1.18.5_react-native-reanimated@4.1.7_react-native-work_6a40489fed02c9f6d6800b9058908bb4/node_modules/react-native-keyboard-controller/react-native-keyboard-controller.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-reanimated", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.5.1_@babel+core@7.29.0_react-nati_97e81da3c824ab6f6f3a9c1f7d0a62c8/node_modules/react-native-reanimated", :path=>"../../../node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.5.1_@babel+core@7.29.0_react-nati_97e81da3c824ab6f6f3a9c1f7d0a62c8/node_modules/react-native-reanimated", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.5.1_@babel+core@7.29.0_react-nati_97e81da3c824ab6f6f3a9c1f7d0a62c8/node_modules/react-native-reanimated/RNReanimated.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-safe-area-context", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-safe-area-context@5.6.2_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c6_4efc8328ed923324c0c68ed2225571c5/node_modules/react-native-safe-area-context", :path=>"../../../node_modules/.pnpm/react-native-safe-area-context@5.6.2_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c6_4efc8328ed923324c0c68ed2225571c5/node_modules/react-native-safe-area-context", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-safe-area-context@5.6.2_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c6_4efc8328ed923324c0c68ed2225571c5/node_modules/react-native-safe-area-context/react-native-safe-area-context.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-screens", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc_57461df80b3f5ed3bfbec1bcd1f033b9/node_modules/react-native-screens", :path=>"../../../node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc_57461df80b3f5ed3bfbec1bcd1f033b9/node_modules/react-native-screens", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc_57461df80b3f5ed3bfbec1bcd1f033b9/node_modules/react-native-screens/RNScreens.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-svg", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-svg@15.12.1_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc556_0a22be02d88fe5517f75c868dfea3ad5/node_modules/react-native-svg", :path=>"../../../node_modules/.pnpm/react-native-svg@15.12.1_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc556_0a22be02d88fe5517f75c868dfea3ad5/node_modules/react-native-svg", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-svg@15.12.1_react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc556_0a22be02d88fe5517f75c868dfea3ad5/node_modules/react-native-svg/RNSVG.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-worklets", :root=>"/Users/builder/clone/node_modules/.pnpm/react-native-worklets@0.5.1_@babel+core@7.29.0_react-native@0.81.5_patch_hash=1a4c4d151_a8883ec02f564927a9423523bfc91cc9/node_modules/react-native-worklets", :path=>"../../../node_modules/.pnpm/react-native-worklets@0.5.1_@babel+core@7.29.0_react-native@0.81.5_patch_hash=1a4c4d151_a8883ec02f564927a9423523bfc91cc9/node_modules/react-native-worklets", :podspec_path=>"/Users/builder/clone/node_modules/.pnpm/react-native-worklets@0.5.1_@babel+core@7.29.0_react-native@0.81.5_patch_hash=1a4c4d151_a8883ec02f564927a9423523bfc91cc9/node_modules/react-native-worklets/RNWorklets.podspec", :script_phases=>[]}], :ios_project_root_path=>"/Users/builder/clone/artifacts/bovial-mobile/ios", :react_native_path=>"../../../node_modules/.pnpm/react-native@0.81.5_patch_hash=1a4c4d151346ab3a0c632406bbbc5569ce36132b6a1db547a145dfa5_ff9793056ad51ad07ab63c80d6f2c2b9/node_modules/react-native"}
+Auto-linking React Native modules for target `Bovial`: RNCAsyncStorage, RNGestureHandler, RNReanimated, RNSVG, RNScreens, RNWorklets, react-native-keyboard-controller, and react-native-safe-area-context
+Framework build type is static framework
+[ReactNativeDependencies] Setting up ReactNativeDependencies...
+[ReactNativeDependencies] Building from source: false
+[ReactNativeDependencies] Using release tarball
+[ReactNativeDependencies] Using tarball from URL: https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-dependencies-debug.tar.gz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+ 66 18.3M   66 12.2M    0     0  69.8M      0 --:--:-- --:--:-- --:--:-- 69.8M
+100 18.3M  100 18.3M    0     0  79.8M      0 --:--:-- --:--:-- --:--:-- 79.7M
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100  9.9M  100  9.9M    0     0  65.0M      0 --:--:-- --:--:-- --:--:-- 65.2M
+[ReactNativeDependencies] Source: {:http=>"https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-dependencies-debug.tar.gz"}
+[ReactNativeCore] Setting up ReactNativeCore...
+[ReactNativeCore] Building from source: false
+[ReactNativeCore] Using tarball from URL: https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-core-debug.tar.gz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+ 90 78.5M   90 71.3M    0     0   103M      0 --:--:-- --:--:-- --:--:--  103M
+100 78.5M  100 78.5M    0     0   103M      0 --:--:-- --:--:-- --:--:--  103M
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100 26.3M  100 26.3M    0     0  86.5M      0 --:--:-- --:--:-- --:--:-- 86.5M
+[ReactNativeCore] Source: {:http=>"https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-core-debug.tar.gz"}
+Configuring the target with the New Architecture
+[ReactNativeCore] Using React Native Core and React Native Dependencies prebuilt versions.
+[Codegen] Analyzing /Users/builder/clone/artifacts/bovial-mobile/package.json
+[Codegen] Searching for codegen-enabled libraries in the app.
+[Codegen] The "codegenConfig" field is not defined in package.json. Assuming there is nothing to generate at the app level.
+[Codegen] Searching for codegen-enabled libraries in react-native.config.js
+[Codegen] Found @react-native-async-storage/async-storage
+[Codegen] Found react-native-gesture-handler
+[Codegen] Found react-native-keyboard-controller
+[Codegen] Found react-native-reanimated
+[Codegen] Found react-native-safe-area-context
+[Codegen] Found react-native-screens
+[Codegen] Found react-native-svg
+[Codegen] Found react-native-worklets
+[Codegen] Processing rnasyncstorage
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, macos, tvos, visionos for rnasyncstorage
+[Codegen] Processing rngesturehandler_codegen
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, macos, tvos, visionos for rngesturehandler_codegen
+[Codegen] Processing reactnativekeyboardcontroller
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios for reactnativekeyboardcontroller
+[Codegen] Processing rnreanimated
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, macos, tvos, visionos for rnreanimated
+[Codegen] Processing safeareacontext
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, macos, tvos, visionos for safeareacontext
+[Codegen] Processing rnscreens
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, tvos, visionos for rnscreens
+[Codegen] Processing rnsvg
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, macos, tvos, visionos for rnsvg
+[Codegen] Processing rnworklets
+[Codegen] Searching for podspec in the project dependencies.
+[Codegen] Supported Apple platforms: ios, macos, tvos, visionos for rnworklets
+[Codegen] Generating Native Code for rnasyncstorage - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for rngesturehandler_codegen - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for reactnativekeyboardcontroller - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for rnreanimated - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for safeareacontext - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for rnscreens - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for rnsvg - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating Native Code for rnworklets - ios
+[Codegen] Generated artifacts: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios
+[Codegen] Generating RCTThirdPartyComponentsProvider.h
+[Codegen] Generated artifact: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/RCTThirdPartyComponentsProvider.h
+[Codegen] Generating RCTThirdPartyComponentsProvider.mm
+[Codegen] Generated artifact: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/RCTThirdPartyComponentsProvider.mm
+[Codegen] Generating RCTModulesProvider.h
+[Codegen] Generated artifact: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/RCTModuleProviders.h
+[Codegen] Generating RCTModuleProviders.mm
+[Codegen] Generated artifact: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/RCTModuleProviders.mm
+[Codegen] Generating RCTAppDependencyProvider
+[Codegen] Generated artifact: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/RCTAppDependencyProvider.h
+[Codegen] Generated artifact: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/RCTAppDependencyProvider.mm
+[Codegen] Generated podspec: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/ReactAppDependencyProvider.podspec
+[Codegen] Generated podspec: /Users/builder/clone/artifacts/bovial-mobile/ios/build/generated/ios/ReactCodegen.podspec
+[Codegen] Done.
+
+[!] Invalid `Podfile` file: [!] Specifying multiple `post_install` hooks is unsupported..
+
+ #  from /Users/builder/clone/artifacts/bovial-mobile/ios/Podfile:126
+ #  -------------------------------------------
+ #  # BUNDLE_FORMAT=shallow when running the script phase.
+ >  post_install do |installer|
+ #    installer.pods_project.targets.each do |target|
+ #  -------------------------------------------
+
+
+Build failed :|
+Step 7 script `Install CocoaPods` exited with status code 1
