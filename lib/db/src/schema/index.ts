@@ -30,3 +30,4 @@ export * from "./diseaseCatalog";
 export * from "./weatherCache";
 export * from "./crossFarmPatterns";
 export * from "./referralBonuses";
+export * from "./dairycompWhitelist";

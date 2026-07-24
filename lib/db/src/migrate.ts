@@ -813,4 +813,57 @@ export async function setupAnalystSandbox(): Promise<void> {
   await pool.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS knowledge_document_topics_unique_idx ON knowledge_document_topics (doc_id, topic)"
   );
+
+  // Migration: dairycomp_command_whitelist — operator-managed command allowlist
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dairycomp_command_whitelist (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      befehl TEXT NOT NULL,
+      befehlsfamilie TEXT NOT NULL,
+      beschreibung TEXT,
+      kategorie TEXT,
+      benoetigt_zeitraum BOOLEAN NOT NULL DEFAULT false,
+      benoetigt_jungrinder_filter BOOLEAN NOT NULL DEFAULT false,
+      quelle_referenz TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS dairycomp_command_whitelist_befehl_unique ON dairycomp_command_whitelist (befehl)"
+  );
+
+  // Seed: 52 BREDSUM-Befehle (Basis + \D + \* + \D* Varianten)
+  const bredBaseDescriptions: Record<string, { de: string; benZeitraum: boolean; benJungrinder: boolean }> = {
+    "B":  { de: "Besamungsübersicht nach Bulle/Besamungsdienstleister",      benZeitraum: true,  benJungrinder: true  },
+    "C":  { de: "Konzeptionsrate-Auswertung (Conception Rate)",               benZeitraum: true,  benJungrinder: true  },
+    "E":  { de: "Besamungsdaten-Eingabe und Bearbeitung (Edit/Entry)",        benZeitraum: true,  benJungrinder: true  },
+    "H":  { de: "Brunstkontroll-Bericht (Heat Detection Report)",             benZeitraum: true,  benJungrinder: true  },
+    "I":  { de: "Einzeltier-Besamungsliste (Individual Animal List)",         benZeitraum: true,  benJungrinder: true  },
+    "M":  { de: "Monatsbericht Besamung (Monthly Breeding Report)",           benZeitraum: true,  benJungrinder: true  },
+    "N":  { de: "Besamungsnotizen-Übersicht (Breeding Notes Summary)",        benZeitraum: true,  benJungrinder: true  },
+    "O":  { de: "Offene Kühe ohne bestätigte Trächtigkeit (Open Cows)",       benZeitraum: true,  benJungrinder: true  },
+    "P":  { de: "Trächtigkeitsprüfungs-Zusammenfassung (Preg Check Summary)", benZeitraum: true,  benJungrinder: true  },
+    "S":  { de: "Standard-Besamungszusammenfassung",                          benZeitraum: true,  benJungrinder: true  },
+    "Sn": { de: "Status-Notizen-Übersicht (Status Notes)",                    benZeitraum: false, benJungrinder: false },
+    "T":  { de: "Tabellarische Besamungsauswertung (Tabular Report)",         benZeitraum: true,  benJungrinder: true  },
+    "W":  { de: "Wochenbericht Besamung (Weekly Breeding Report)",            benZeitraum: true,  benJungrinder: true  },
+    "Y":  { de: "Jahresübersicht Besamung (Annual Breeding Overview)",        benZeitraum: true,  benJungrinder: true  },
+  };
+  const bredEntries: { befehl: string; beschreibung: string; benZeitraum: boolean; benJungrinder: boolean }[] = [];
+  for (const [mod, meta] of Object.entries(bredBaseDescriptions)) {
+    bredEntries.push({ befehl: `BREDSUM\\${mod}`, beschreibung: meta.de, benZeitraum: false, benJungrinder: false });
+    if (mod !== "Sn") {
+      bredEntries.push({ befehl: `BREDSUM\\${mod}D`,  beschreibung: `${meta.de} — mit Zeitraumfilter (\\D)`,               benZeitraum: true,  benJungrinder: false });
+      bredEntries.push({ befehl: `BREDSUM\\${mod}*`,  beschreibung: `${meta.de} — inkl. Jungrinder (\\*)`,                 benZeitraum: false, benJungrinder: true  });
+      bredEntries.push({ befehl: `BREDSUM\\${mod}D*`, beschreibung: `${meta.de} — mit Zeitraumfilter + Jungrinder (\\D*)`, benZeitraum: true,  benJungrinder: true  });
+    }
+  }
+  for (const e of bredEntries) {
+    await pool.query(
+      `INSERT INTO dairycomp_command_whitelist (befehl, befehlsfamilie, beschreibung, kategorie, benoetigt_zeitraum, benoetigt_jungrinder_filter, quelle_referenz)
+       VALUES ($1, 'BREDSUM', $2, 'Fruchtbarkeit & Besamung', $3, $4, 'DairyComp 305 Handbuch')
+       ON CONFLICT (befehl) DO NOTHING`,
+      [e.befehl, e.beschreibung, e.benZeitraum, e.benJungrinder]
+    );
+  }
 }
