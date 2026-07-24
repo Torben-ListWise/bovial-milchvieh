@@ -14,6 +14,7 @@ workflows:
         APP_STORE_APP_ID: "6788433068"
         APPLE_TEAM_ID: W65GNXZJFL
         EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: $CLERK_PUBLISHABLE_KEY
+        EXPO_PUBLIC_DOMAIN: bovial.com
     scripts:
       - name: Enable pnpm via corepack
         script: |
