@@ -105,7 +105,18 @@ router.get(
   }
 
   const writer: SseWriter = {
-    sendDelta: (text) => sendSseEvent("delta", { text }),
+    sendDelta: (text) => {
+      const now = Date.now() - _diagStart;
+      _diagDeltaCount++;
+      if (_diagFirstDeltaMs < 0) {
+        _diagFirstDeltaMs = now;
+        logger.info({ analysisId, firstDeltaMs: now }, "SSE-DIAG: first delta written to socket");
+      }
+      if (_diagDeltaCount % 50 === 0) {
+        logger.info({ analysisId, count: _diagDeltaCount, ms: now }, "SSE-DIAG: delta milestone");
+      }
+      sendSseEvent("delta", { text });
+    },
     sendSources: (sources) => sendSseEvent("sources", { sources }),
     sendProgress: (step) => sendSseEvent("progress", { step }),
     sendChart: (chart) => sendSseEvent("chart", { chart }),

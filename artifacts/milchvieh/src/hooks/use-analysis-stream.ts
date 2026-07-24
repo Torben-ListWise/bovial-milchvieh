@@ -233,6 +233,10 @@ export function useStreamingState() {
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [charts, setCharts] = useState<Chart[]>([]);
   const [sources, setSources] = useState<string[]>([]);
+  // True once the "done" SSE event is received. Cleared on next stream start.
+  // Used to hide the streaming cursor while waiting for the DB to confirm the
+  // final result (the brief window between "done" and the query refetch).
+  const [streamingComplete, setStreamingComplete] = useState(false);
 
   const prevStepRef = useRef<string | null>(null);
 
@@ -273,6 +277,17 @@ export function useStreamingState() {
     setCompletedSteps([]);
     setCharts([]);
     setSources([]);
+    setStreamingComplete(false);
+  }, []);
+
+  // Partial reset called when the "done" SSE event arrives.
+  // Clears progress/spinner state but keeps text, charts, and sources visible
+  // so the user can keep reading the answer while waiting for the DB to confirm
+  // the final result (the brief window between "done" and query refetch).
+  const resetProgress = useCallback(() => {
+    prevStepRef.current = null;
+    setProgressStep(null);
+    setStreamingComplete(true);
   }, []);
 
   // Resets only the text buffer (not progress/charts/sources).
@@ -288,11 +303,13 @@ export function useStreamingState() {
     completedSteps,
     charts,
     sources,
+    streamingComplete,
     onDelta,
     onProgress,
     onChart,
     onSources,
     reset,
     resetText,
+    resetProgress,
   };
 }

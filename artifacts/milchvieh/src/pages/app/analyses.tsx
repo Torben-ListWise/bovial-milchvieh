@@ -871,7 +871,7 @@ function inferAnswerType(content: string, charts?: Chart[]): AnswerType {
 
 // ── Streaming Result Card ─────────────────────────────────────────────────────
 
-function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] }) {
+function StreamingResultCard({ text, charts, done }: { text: string; charts?: Chart[]; done?: boolean }) {
   const answerType = useMemo(() => inferAnswerType(text, charts), [charts]);
   const badgeColor = BADGE_COLORS[answerType];
   const hasCharts = charts && charts.length > 0;
@@ -915,7 +915,7 @@ function StreamingResultCard({ text, charts }: { text: string; charts?: Chart[] 
         {text ? (
           <div className="text-sm leading-relaxed">
             <MarkdownContent text={text} />
-            <span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+            {!done && <span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 align-text-bottom animate-pulse" />}
           </div>
         ) : !hasCharts ? (
           /* Show cursor only when no charts yet */
@@ -2400,6 +2400,7 @@ function AnalysisResultsPanel({
   pendingQuestion,
   streamingText,
   streamingCharts,
+  streamingComplete,
   currentStep,
   completedSteps,
   onFollowUpClick,
@@ -2410,6 +2411,7 @@ function AnalysisResultsPanel({
   pendingQuestion?: string;
   streamingText?: string;
   streamingCharts?: Chart[];
+  streamingComplete?: boolean;
   currentStep?: string | null;
   completedSteps?: string[];
   onFollowUpClick?: (q: string) => void;
@@ -2520,11 +2522,21 @@ function AnalysisResultsPanel({
     };
   }, [lastWidgetSpec?.type]);
 
-  // Streaming card is always at the top — scroll there as soon as the agent starts.
+  // Scroll to top when streaming TEXT first arrives — not when the agent merely
+  // starts. This lets the user keep reading previous results while the agent
+  // works through its steps, and only jumps to the new answer once text flows.
+  const streamScrolledRef = useRef(false);
   useEffect(() => {
-    if (!isWorking) return;
+    if (!streamingText) {
+      // Text cleared (new stream starting or done) — reset the guard so the
+      // next stream triggers the scroll when its first delta arrives.
+      streamScrolledRef.current = false;
+      return;
+    }
+    if (streamScrolledRef.current) return;
+    streamScrolledRef.current = true;
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [isWorking]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [streamingText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to top when switching analyses (newest result is always at top).
   useEffect(() => {
@@ -2568,12 +2580,17 @@ function AnalysisResultsPanel({
   if (resultPairs.length === 0 && isWorking) {
     return (
       <div className="h-full overflow-y-auto px-4 py-4 space-y-4">
-        {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
-          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
-        ) : (completedSteps && completedSteps.length > 0) ? (
-          <AgentStepsTimeline completedSteps={completedSteps} currentStep={currentStep ?? null} />
+        {/* Steps remain visible even after text starts — Punkt 3 fix */}
+        {(completedSteps && completedSteps.length > 0) ? (
+          <AgentStepsTimeline
+            completedSteps={completedSteps}
+            currentStep={streamingText ? null : (currentStep ?? null)}
+          />
         ) : (
           <AgentWorkingBanner currentStep={currentStep ?? null} />
+        )}
+        {(streamingText || (streamingCharts && streamingCharts.length > 0)) && (
+          <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} done={streamingComplete} />
         )}
         <div className="h-2" />
       </div>
@@ -2633,13 +2650,18 @@ function AnalysisResultsPanel({
     <div className="relative h-full flex flex-col">
       <div ref={scrollRef} onScroll={handleResultScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {isWorking && (
-          <div ref={streamingCardRef}>
-            {(streamingText || (streamingCharts && streamingCharts.length > 0)) ? (
-              <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} />
-            ) : (completedSteps && completedSteps.length > 0) ? (
-              <AgentStepsTimeline completedSteps={completedSteps} currentStep={currentStep ?? null} />
+          <div ref={streamingCardRef} className="space-y-4">
+            {/* Steps remain visible alongside streaming text — Punkt 3 fix */}
+            {(completedSteps && completedSteps.length > 0) ? (
+              <AgentStepsTimeline
+                completedSteps={completedSteps}
+                currentStep={streamingText ? null : (currentStep ?? null)}
+              />
             ) : (
               <AgentWorkingBanner currentStep={currentStep ?? null} />
+            )}
+            {(streamingText || (streamingCharts && streamingCharts.length > 0)) && (
+              <StreamingResultCard text={streamingText ?? ""} charts={streamingCharts} done={streamingComplete} />
             )}
           </div>
         )}
@@ -2948,7 +2970,10 @@ export function AnalysesPage() {
     onTurnReset: () => streaming.resetText(),
     onDone: () => {
       const id = streamingAnalysisIdRef.current;
-      streaming.reset();
+      // Partial reset: clear progress/spinner but keep text + charts visible so
+      // the user can keep reading while the query refetch arrives (avoids a
+      // "blank flash" between the SSE done event and the result card appearing).
+      streaming.resetProgress();
       streamingAnalysisIdRef.current = null;
       if (id) {
         sseStartedForRef.current.delete(id);
@@ -4354,7 +4379,7 @@ export function AnalysesPage() {
             )}
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} currentStep={currentStep} completedSteps={completedSteps} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
+            <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} streamingComplete={streaming.streamingComplete} currentStep={currentStep} completedSteps={completedSteps} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
           </div>
         </div>
       </div>
@@ -4376,7 +4401,7 @@ export function AnalysesPage() {
             </>
           ) : (
             <div className="flex-1 min-h-0">
-              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} currentStep={currentStep} completedSteps={completedSteps} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
+              <AnalysisResultsPanel analysis={analysis} isWorking={isAgentWorking} pendingQuestion={pendingQuestionRef.current} streamingText={streaming.text} streamingCharts={streaming.charts} streamingComplete={streaming.streamingComplete} currentStep={currentStep} completedSteps={completedSteps} onFollowUpClick={(q) => { handleSubmit(q); }} highlightMessageId={highlightMessageId} />
             </div>
           )}
         </div>
